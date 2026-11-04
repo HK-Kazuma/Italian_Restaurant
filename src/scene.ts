@@ -77,6 +77,9 @@ function disposeTree(obj: THREE.Object3D): void {
 
 // --- 手持ち・皿の見た目 ---
 
+// お玉ですくう具材（手に持つとお玉で表示する）
+const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce']);
+
 function buildItemMesh(item: Item): THREE.Group {
   const g = new THREE.Group();
   switch (item.kind) {
@@ -85,8 +88,22 @@ function buildItemMesh(item: Item): THREE.Group {
       break;
     case 'ingredient': {
       const color = INGREDIENTS[item.id].color;
-      if (item.id === 'noodle') g.add(cyl(0.14, 0.14, 0.07, color, 0, 0.035, 0));
-      else g.add(box(0.14, 0.05, 0.18, color, 0, 0.025, 0));
+      if (item.id === 'noodle') {
+        g.add(cyl(0.14, 0.14, 0.07, color, 0, 0.035, 0));
+      } else if (LADLED.has(item.id)) {
+        g.add(cyl(0.012, 0.012, 0.3, 0x8a8f94, 0, 0.17, 0)); // 柄
+        g.add(cyl(0.06, 0.04, 0.05, 0xc9ced3, 0, 0.025, 0)); // お玉の器
+        g.add(cyl(0.05, 0.05, 0.01, color, 0, 0.05, 0)); // すくったソース
+      } else {
+        g.add(box(0.14, 0.05, 0.18, color, 0, 0.025, 0));
+      }
+      break;
+    }
+    case 'pot': {
+      const top = item.pot.contents.at(-1);
+      g.add(cyl(0.15, 0.15, 0.14, item.pot.dirty ? 0x8d7b68 : 0xc9ced3, 0, 0.07, 0)); // 胴
+      g.add(cyl(0.125, 0.125, 0.02, top ? INGREDIENTS[top].color : 0x2a2d31, 0, 0.145, 0)); // 内側（中身の色）
+      g.add(box(0.04, 0.025, 0.14, 0x55595e, 0, 0.1, 0.22)); // 取っ手（手前向き）
       break;
     }
     case 'plate': {
@@ -117,6 +134,8 @@ function itemSignature(item: Item | null): string {
       return `ing:${item.id}`;
     case 'plate':
       return `plate:${item.contents.join(',')}`;
+    case 'pot':
+      return `pot:${item.pot.dirty}:${item.pot.contents.join(',')}`;
   }
 }
 
@@ -146,6 +165,8 @@ class ItemView {
 
 // --- 茹で麺器 ---
 
+// 茹で麺器はIHコンロ（z: -2.3〜-1.3）の奥に隙間なく接する（奥行き1.1）
+const BOILER_Z = -2.85;
 const BASKET_UP = 1.53;
 const BASKET_DOWN = 1.22;
 
@@ -161,6 +182,19 @@ type BoilerView = {
   noodle: THREE.Mesh;
   button: THREE.Mesh;
   label: Label;
+};
+
+const BURNER_COLORS = {
+  cold: 0x1c1c1f,
+  heating: 0xe0501f,
+  ready: 0x2e8b57, // 加熱完了
+} as const;
+
+type BurnerView = {
+  disc: THREE.Mesh;
+  button: THREE.Mesh;
+  label: Label;
+  pot: ItemView;
 };
 
 function boilerLabel(b: Boiler): { text: string; color: string } {
@@ -205,18 +239,79 @@ export function createKitchen(cfg: GameConfig): Kitchen {
     scene.add(l.sprite);
   };
 
-  // --- 正面：IHコンロ（未実装のプレースホルダー）---
-  scene.add(box(3, 0.8, 1, 0x8c8f94, 0, 0.4, -1.8));
-  for (let i = 0; i < 4; i++) scene.add(cyl(0.2, 0.2, 0.02, 0x1c1c1f, (i - 1.5) * 0.7, 0.81, -1.8));
-  decor('IHコンロ（未実装）', 0, 0.55, -1.28, 1.0);
-  decor('鍋収納・洗浄機（未実装）', 0, 0.25, -1.28, 1.0);
+  // --- 正面：IHコンロ（上面は未実装のプレースホルダー）と、その下の鍋洗浄機・鍋置き場 ---
+  const CAB = 0x8c8f94;
+  scene.add(box(3, 0.08, 1, CAB, 0, 0.76, -1.8)); // 天板
+  scene.add(box(3, 0.72, 0.04, CAB, 0, 0.36, -2.28)); // 背板
+  scene.add(box(0.04, 0.72, 1, CAB, -1.48, 0.36, -1.8)); // 左側板
+  scene.add(box(0.04, 0.72, 1, CAB, 1.48, 0.36, -1.8)); // 右側板
+  scene.add(box(3, 0.06, 1, 0x5d6065, 0, 0.03, -1.8)); // 底
+
+  // IHの各口：鍋を置く場所と加熱ボタン
+  const burnerViews: BurnerView[] = [];
+  for (let i = 0; i < cfg.ihBurnerCount; i++) {
+    const x = (i - (cfg.ihBurnerCount - 1) / 2) * 0.7;
+    const burner = new THREE.Group();
+    const disc = cyl(0.2, 0.2, 0.02, BURNER_COLORS.cold, 0, -0.01, 0);
+    burner.add(disc);
+    burner.position.set(x, 0.82, -1.8);
+    setTarget(burner, { kind: 'ihBurner', index: i });
+    scene.add(burner);
+    interactables.push(burner);
+
+    const button = cyl(0.06, 0.06, 0.03, 0xc0392b, x, 0.815, -1.42);
+    setTarget(button, { kind: 'ihButton', index: i });
+    scene.add(button);
+    interactables.push(button);
+
+    const label = makeLabel('', 0.6);
+    label.sprite.position.set(x, 1.08, -1.8);
+    label.sprite.visible = false;
+    scene.add(label.sprite);
+
+    burnerViews.push({ disc, button, label, pot: new ItemView(burner) });
+  }
+
+  // 鍋洗浄機（左）：ステンレスの箱に洗い槽。洗い槽が鍋を入れる場所
+  const washer = new THREE.Group();
+  washer.add(box(1, 0.3, 0.4, 0xc9ced3, 0, 0.21, 0));
+  washer.add(box(0.6, 0.02, 0.3, 0x2f3a44, 0, 0.37, 0)); // 洗い槽
+  washer.position.set(-0.93, 0, -1.5);
+  setTarget(washer, { kind: 'washer' });
+  scene.add(washer);
+  interactables.push(washer);
+  const washerPotAnchor = new THREE.Group();
+  washerPotAnchor.position.set(0, 0.38, 0);
+  washer.add(washerPotAnchor);
+  const washerView = new ItemView(washerPotAnchor);
+  scene.add(cyl(0.025, 0.025, 0.3, 0xaab0b6, -0.93, 0.5, -1.68)); // 蛇口の柱
+  scene.add(box(0.05, 0.05, 0.18, 0xaab0b6, -0.93, 0.63, -1.6)); // 蛇口の先
+  const washerLabel = makeLabel('鍋洗浄機', 0.6);
+  washerLabel.sprite.position.set(-0.93, 0.76, -1.27);
+  scene.add(washerLabel.sprite);
+
+  // 鍋置き場（右）：棚に鍋を横一列に並べる。取っ手は手前向き
+  const POT_X = 0.53;
+  const POT_PITCH = 0.34;
+  scene.add(box(1.9, 0.03, 0.55, 0xb89f7a, POT_X, 0.285, -1.58)); // 棚板
+  const potViews: ItemView[] = [];
+  for (let i = 0; i < cfg.potCount; i++) {
+    const slot = new THREE.Group();
+    slot.add(cyl(0.17, 0.17, 0.01, 0xa08760, 0, 0.005, 0)); // 置き場の印
+    slot.position.set(POT_X + (i - (cfg.potCount - 1) / 2) * POT_PITCH, 0.3, -1.55);
+    setTarget(slot, { kind: 'potSlot', index: i });
+    scene.add(slot);
+    interactables.push(slot);
+    potViews.push(new ItemView(slot));
+  }
+  decor('鍋置き場', POT_X, 0.76, -1.27, 0.6);
 
   // --- 奥：茹で麺器（IHの奥で一段高い）---
-  scene.add(box(3, 1.15, 1.1, 0x9aa3ab, 0, 0.575, -3.2));
+  scene.add(box(3, 1.15, 1.1, 0x9aa3ab, 0, 0.575, BOILER_Z));
   const boilerViews: BoilerView[] = [];
   for (let i = 0; i < cfg.boilerCount; i++) {
     const x = (i - (cfg.boilerCount - 1) / 2) * 0.7;
-    scene.add(box(0.55, 0.02, 0.62, 0x3b82c4, x, 1.16, -3.2)); // お湯
+    scene.add(box(0.55, 0.02, 0.62, 0x3b82c4, x, 1.16, BOILER_Z)); // お湯
 
     const basket = new THREE.Group();
     basket.add(box(0.4, 0.03, 0.4, 0xb4bac0, 0, 0, 0));
@@ -227,18 +322,18 @@ export function createKitchen(cfg: GameConfig): Kitchen {
     basket.add(box(0.05, 0.05, 0.3, 0x55595e, 0, 0.2, 0.33)); // 持ち手
     const noodle = cyl(0.15, 0.15, 0.1, NOODLE_COLORS.set, 0, 0.08, 0);
     basket.add(noodle);
-    basket.position.set(x, BASKET_UP, -3.2);
+    basket.position.set(x, BASKET_UP, BOILER_Z);
     setTarget(basket, { kind: 'boilerBasket', index: i });
     scene.add(basket);
     interactables.push(basket);
 
-    const button = cyl(0.07, 0.07, 0.05, 0xc0392b, x, 1.175, -2.7);
+    const button = cyl(0.07, 0.07, 0.05, 0xc0392b, x, 1.175, BOILER_Z + 0.5);
     setTarget(button, { kind: 'boilerButton', index: i });
     scene.add(button);
     interactables.push(button);
 
     const label = makeLabel('空', 0.66);
-    label.sprite.position.set(x, 1.95, -3.2);
+    label.sprite.position.set(x, 1.95, BOILER_Z);
     scene.add(label.sprite);
 
     boilerViews.push({ basket, noodle, button, label });
@@ -248,15 +343,17 @@ export function createKitchen(cfg: GameConfig): Kitchen {
   const rack = new THREE.Group();
   rack.add(box(2, 0.06, 0.5, 0x8a6a4b));
   for (let i = 0; i < 5; i++) rack.add(cyl(0.05, 0.05, 0.36, 0xf3e9c0, (i - 2) * 0.35, 0.12, 0).rotateX(Math.PI / 2));
-  rack.position.set(0, 2.15, -3.5);
+  rack.position.set(0, 2.15, BOILER_Z - 0.3);
   setTarget(rack, { kind: 'noodleRack' });
   scene.add(rack);
   interactables.push(rack);
-  decor('生麺', 0, 2.55, -3.5, 0.7);
+  decor('生麺', 0, 2.55, BOILER_Z - 0.3, 0.7);
 
   // --- 左：皿とトッピングの台、提供台 ---
+  // 手前の列（LX）：皿・盛り付け場所・提供台、奥の列（TX）：トッピング
   const LX = -2.4;
-  scene.add(box(1, 0.9, 4.4, 0xb89f7a, LX, 0.45, 0.2));
+  const TX = -3.0;
+  scene.add(box(1.4, 0.9, 3.6, 0xb89f7a, -2.6, 0.45, -0.2));
 
   const stack = new THREE.Group();
   for (let i = 0; i < 6; i++) stack.add(cyl(0.23, 0.2, 0.03, 0xf5f5f5, 0, 0.015 + i * 0.032, 0));
@@ -277,32 +374,61 @@ export function createKitchen(cfg: GameConfig): Kitchen {
     slotViews.push(new ItemView(slot));
   }
 
-  const toppingIds: IngredientId[] = ['tarakoSauce', 'nori'];
+  const toppingIds: IngredientId[] = ['tarakoSauce', 'nori', 'cheese', 'parsley'];
   toppingIds.forEach((id, i) => {
-    const z = 1.0 + i * 0.55;
+    const z = -0.75 + i * 0.5;
     const t = new THREE.Group();
     t.add(box(0.4, 0.12, 0.4, 0xdad3c2, 0, 0.06, 0));
     t.add(box(0.3, 0.04, 0.3, INGREDIENTS[id].color, 0, 0.14, 0));
-    t.position.set(LX, 0.9, z);
+    t.position.set(TX, 0.9, z);
     setTarget(t, { kind: 'topping', id });
     scene.add(t);
     interactables.push(t);
-    decor(INGREDIENTS[id].name, LX, 1.3, z, 0.6);
+    decor(INGREDIENTS[id].name, TX, 1.3, z, 0.6);
   });
 
   const pass = new THREE.Group();
   pass.add(box(0.7, 0.04, 0.7, 0x58b368, 0, 0.02, 0));
-  pass.position.set(LX, 0.9, 2.1);
+  pass.position.set(LX, 0.9, 1.0);
   setTarget(pass, { kind: 'servePass' });
   scene.add(pass);
   interactables.push(pass);
-  decor('提供台', LX, 1.3, 2.1, 0.5);
+  decor('提供台', LX, 1.3, 1.0, 0.5);
 
-  // --- 右：サラダ台と冷蔵庫（未実装のプレースホルダー）---
-  scene.add(box(1, 0.9, 2.6, 0xa9b4a0, 2.4, 0.45, -0.7));
-  decor('サラダ台（未実装）', 2.4, 1.3, -0.7, 1.4);
-  scene.add(box(1, 1.9, 1.2, 0xc9d3d9, 2.4, 0.95, 1.5));
-  decor('冷蔵庫（未実装）', 2.4, 2.2, 1.5, 1.4);
+  // --- 右：冷蔵庫（扉を開けてある）とサラダ台（未実装のプレースホルダー）---
+  // 正面のIHから右に90度向くと冷蔵庫。棚は下段・中段・上段で、中段にミートソース缶を置く
+  const FRIDGE_FRONT = 2.25;
+  const STEEL = 0xd5dde2;
+  scene.add(box(0.04, 1.9, 1, 0xbfc9cf, 3.03, 0.95, 0)); // 背板
+  scene.add(box(0.8, 1.9, 0.04, STEEL, 2.65, 0.95, -0.48)); // 側板
+  scene.add(box(0.8, 1.9, 0.04, STEEL, 2.65, 0.95, 0.48));
+  scene.add(box(0.8, 0.04, 1, STEEL, 2.65, 1.88, 0)); // 天板
+  scene.add(box(0.8, 0.06, 1, 0x9aa3ab, 2.65, 0.03, 0)); // 底
+  const MIDDLE_SHELF_Y = 0.95;
+  for (const y of [0.5, MIDDLE_SHELF_Y, 1.4]) scene.add(box(0.76, 0.03, 0.92, 0xf1f5f7, 2.65, y, 0)); // 棚（下・中・上段）
+
+  const door = new THREE.Group(); // 奥側（z=+0.5）を蝶番にして、プレイヤー側へ90度開く
+  door.add(box(0.05, 1.9, 1, 0xe9eef1, 0, 0.95, -0.5));
+  door.add(box(0.04, 0.5, 0.05, 0x8a9096, -0.04, 1.0, -0.9)); // 取っ手
+  door.position.set(FRIDGE_FRONT, 0, 0.5);
+  door.rotation.y = Math.PI / 2;
+  scene.add(door);
+
+  // ミートソース缶（中段）。クリックでお玉1杯すくう
+  const can = new THREE.Group();
+  can.add(cyl(0.1, 0.1, 0.18, INGREDIENTS.meatSauce.color, 0, 0.09, 0)); // 缶
+  can.add(cyl(0.101, 0.101, 0.012, 0xcfd3d6, 0, 0.186, 0)); // ふた
+  can.add(cyl(0.012, 0.012, 0.26, 0x8a8f94, 0.04, 0.3, 0).rotateZ(-0.35)); // お玉の柄
+  can.add(cyl(0.045, 0.03, 0.04, 0xc9ced3, 0.09, 0.42, 0)); // お玉の器
+  can.position.set(2.62, MIDDLE_SHELF_Y + 0.015, 0);
+  setTarget(can, { kind: 'meatSauceCan' });
+  scene.add(can);
+  interactables.push(can);
+  decor('ミートソース缶', FRIDGE_FRONT + 0.02, 1.32, 0, 0.8);
+  decor('冷蔵庫', FRIDGE_FRONT + 0.02, 2.05, 0, 0.5);
+
+  scene.add(box(1, 0.9, 1.4, 0xa9b4a0, 2.5, 0.45, -1.45));
+  decor('サラダ台（未実装）', 2.5, 1.3, -1.45, 1.2);
 
   // --- 手持ちの表示（カメラの右下）---
   const handAnchor = new THREE.Group();
@@ -335,6 +461,33 @@ export function createKitchen(cfg: GameConfig): Kitchen {
       const contents = state.plateSlots[i];
       v.show(contents ? { kind: 'plate', contents } : null);
     });
+
+    potViews.forEach((v, i) => {
+      const pot = state.potSlots[i];
+      v.show(pot ? { kind: 'pot', pot } : null);
+    });
+    burnerViews.forEach((v, i) => {
+      const pot = state.ihBurners[i];
+      v.pot.show(pot ? { kind: 'pot', pot } : null);
+
+      const heat = pot?.heat ?? 'cold';
+      (v.disc.material as THREE.MeshLambertMaterial).color.setHex(BURNER_COLORS[heat]);
+
+      const hasContents = !!pot && pot.contents.length > 0;
+      v.label.sprite.visible = hasContents;
+      if (pot && hasContents) {
+        if (heat === 'cold') v.label.setText('ボタンで加熱', '#ffe08a');
+        else if (heat === 'heating') v.label.setText(`加熱中 ${Math.ceil(pot.heatTimer)}`, '#ffffff');
+        else v.label.setText('完成！', '#8be28b');
+      }
+      (v.button.material as THREE.MeshLambertMaterial).color.setHex(hasContents && heat === 'cold' ? 0x2ecc71 : 0xc0392b);
+    });
+
+    const w = state.washer;
+    washerView.show(w.pot ? { kind: 'pot', pot: w.pot } : null);
+    if (!w.pot) washerLabel.setText('鍋洗浄機');
+    else if (w.pot.dirty) washerLabel.setText(`洗浄中 ${Math.ceil(w.timer)}`, '#ffe08a');
+    else washerLabel.setText('洗い終わり！', '#8be28b');
 
     handView.show(state.hand);
   };

@@ -25,7 +25,7 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['noodle', 'meatSauce', 'meatSauce', 'cheese', 'parsley'],
     basePoints: 50,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'parma',

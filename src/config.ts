@@ -8,6 +8,13 @@ export type GameConfig = {
   graceTime: number; // 麺が上がってからの猶予（秒）
   shortBoilTime: number; // ショート茹で（秒）
 
+  // 鍋とIH
+  ihBurnerCount: number; // IHコンロの口数
+  potCount: number; // 鍋の総数（未決。6で余裕、4で標準、3以下で洗浄が勝負）
+  potWashTime: number; // 鍋の洗浄時間（秒、1個ずつ）
+  maxPotContents: number; // 鍋に入れられる中身の上限
+  sauceHeatTime: number; // ソースの加熱時間（秒、仮）。麺より短くして、仕掛ける順番に意味を持たせる
+
   // 左の台
   plateSlotCount: number; // 皿を置いて盛り付ける場所の数
   maxPlateContents: number; // 皿に載せられる中身の上限
@@ -37,9 +44,15 @@ export const DEFAULT_CONFIG: GameConfig = {
   gameDuration: 300,
 
   boilerCount: 4,
-  boilTime: 60,
+  boilTime: 50,
   graceTime: 30,
   shortBoilTime: 3,
+
+  ihBurnerCount: 4,
+  potCount: 5,
+  potWashTime: 5,
+  maxPotContents: 8,
+  sauceHeatTime: 30,
 
   plateSlotCount: 3,
   maxPlateContents: 8,

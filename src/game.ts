@@ -1,6 +1,22 @@
 import { createBoiler, pressButton, setNoodle, startShortBoil, takeNoodle, updateBoiler } from './boiler';
 import { DEFAULT_CONFIG, type GameConfig } from './config';
 import { INGREDIENTS } from './ingredients';
+import {
+  addIngredient,
+  canAddIngredient,
+  canInsert,
+  canPour,
+  canStartHeating,
+  createPot,
+  createWasher,
+  insertPot,
+  isWashing,
+  pourOnto,
+  startHeating,
+  takeWashedPot,
+  updateHeat,
+  updateWasher,
+} from './pot';
 import { MENU, findMatchingTicket, getMenu } from './recipe';
 import { serveScore } from './score';
 import { createTicket, nextTicketInterval, pickMenu } from './tickets';
@@ -28,6 +44,9 @@ export class Game {
       hand: null,
       boilers: Array.from({ length: this.cfg.boilerCount }, createBoiler),
       plateSlots: Array.from({ length: this.cfg.plateSlotCount }, () => null),
+      potSlots: Array.from({ length: this.cfg.potCount }, createPot),
+      ihBurners: Array.from({ length: this.cfg.ihBurnerCount }, () => null),
+      washer: createWasher(),
       tickets: [],
       nextTicketAt: this.cfg.firstTicketAt,
       nextTicketId: 1,
@@ -58,6 +77,8 @@ export class Game {
 
     s.time += dt;
     for (const b of s.boilers) updateBoiler(b, dt, this.cfg);
+    updateWasher(s.washer, dt);
+    for (const pot of s.ihBurners) if (pot) updateHeat(pot, dt); // 加熱が進むのはIHに載っている間だけ
     this.spawnTickets();
 
     if (s.time >= this.cfg.gameDuration) {
@@ -92,6 +113,11 @@ export class Game {
   discard(): void {
     const s = this.state;
     if (s.phase !== 'playing' || !s.hand) return;
+    if (s.hand.kind === 'pot') {
+      // 鍋は総数が決まっているので、捨てると循環から消えてしまう
+      this.say('鍋は捨てられない', 'info');
+      return;
+    }
     s.hand = null;
     this.say('捨てた', 'info');
   }
@@ -161,12 +187,85 @@ export class Game {
             s.hand = null;
           };
         }
+        // 加熱し終えた鍋の中身（ソース、または麺とソース）を皿にかける。鍋は手に残る
+        if (hand?.kind === 'pot' && slot && canPour(hand.pot, slot, this.cfg.maxPlateContents)) {
+          return () => pourOnto(hand.pot, slot);
+        }
         return null;
       }
 
       case 'servePass':
         if (hand?.kind !== 'plate') return null;
         return () => this.serve(hand);
+
+      case 'potSlot': {
+        const pot = s.potSlots[target.index];
+        if (!hand && pot) {
+          return () => {
+            s.hand = { kind: 'pot', pot };
+            s.potSlots[target.index] = null;
+          };
+        }
+        // 戻せるのは洗い済みの鍋だけ
+        if (hand?.kind === 'pot' && !hand.pot.dirty && !pot) {
+          return () => {
+            s.potSlots[target.index] = hand.pot;
+            s.hand = null;
+          };
+        }
+        return null;
+      }
+
+      case 'ihBurner': {
+        const pot = s.ihBurners[target.index];
+        if (!hand && pot) {
+          return () => {
+            s.hand = { kind: 'pot', pot };
+            s.ihBurners[target.index] = null;
+          };
+        }
+        if (hand?.kind === 'pot' && !pot) {
+          return () => {
+            s.ihBurners[target.index] = hand.pot;
+            s.hand = null;
+          };
+        }
+        // 載せた鍋に、ソース（加熱前）や麺（加熱完了後）を入れる
+        if (hand?.kind === 'ingredient' && pot && canAddIngredient(pot, hand.id, this.cfg.maxPotContents)) {
+          return () => {
+            addIngredient(pot, hand.id);
+            s.hand = null;
+          };
+        }
+        return null;
+      }
+
+      case 'ihButton': {
+        const pot = s.ihBurners[target.index];
+        if (!pot || !canStartHeating(pot)) return null;
+        return () => startHeating(pot, this.cfg);
+      }
+
+      case 'meatSauceCan':
+        if (hand) return null;
+        return () => (s.hand = { kind: 'ingredient', id: 'meatSauce' }); // お玉1杯
+
+      case 'washer': {
+        const w = s.washer;
+        if (hand?.kind === 'pot' && canInsert(w, hand.pot)) {
+          return () => {
+            insertPot(w, hand.pot, this.cfg);
+            s.hand = null;
+          };
+        }
+        if (!hand && w.pot && !isWashing(w)) {
+          return () => {
+            const pot = takeWashedPot(w);
+            if (pot) s.hand = { kind: 'pot', pot };
+          };
+        }
+        return null;
+      }
     }
   }
 
@@ -219,6 +318,12 @@ export function describeItem(item: Item | null): string {
       return '生麺';
     case 'ingredient':
       return INGREDIENTS[item.id].name;
+    case 'pot': {
+      const { pot } = item;
+      if (pot.contents.length === 0) return pot.dirty ? '鍋（使用済み）' : '鍋';
+      const heat = { cold: '未加熱', heating: '加熱中', ready: '完成' }[pot.heat];
+      return `鍋（${heat}：${pot.contents.map((id) => INGREDIENTS[id].name).join('・')}）`;
+    }
     case 'plate':
       return item.contents.length === 0
         ? '皿（空）'

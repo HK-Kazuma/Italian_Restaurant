@@ -13,7 +13,7 @@ const plateStack: Target = { kind: 'plateStack' };
 const pass: Target = { kind: 'servePass' };
 
 function newGame() {
-  const g = new Game(cfg, () => 0.5);
+  const g = new Game(cfg, () => 0); // 伝票は先頭のメニュー（たらこ）になる
   g.start();
   return g;
 }
@@ -113,6 +113,197 @@ describe('Game: のびかけとショート茹で', () => {
     g.update(cfg.shortBoilTime + 0.1);
     g.interact(basket(0));
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'noodle' });
+  });
+});
+
+const potSlot = (index: number): Target => ({ kind: 'potSlot', index });
+const burner = (index: number): Target => ({ kind: 'ihBurner', index });
+const ihButton = (index: number): Target => ({ kind: 'ihButton', index });
+const washer: Target = { kind: 'washer' };
+const can: Target = { kind: 'meatSauceCan' };
+const cheese: Target = { kind: 'topping', id: 'cheese' };
+const parsley: Target = { kind: 'topping', id: 'parsley' };
+
+// 鍋置き場から鍋を取ってIHに置き、ミートソースを n 杯入れる
+function setPot(g: Game, slotIndex: number, burnerIndex: number, scoops = 2) {
+  g.interact(potSlot(slotIndex));
+  g.interact(burner(burnerIndex));
+  for (let i = 0; i < scoops; i++) {
+    g.interact(can);
+    g.interact(burner(burnerIndex));
+  }
+}
+
+describe('Game: 鍋の循環', () => {
+  it('鍋置き場から取ってIHに置き、取り直せる', () => {
+    const g = newGame();
+    g.interact(potSlot(0));
+    expect(g.state.hand?.kind).toBe('pot');
+    expect(g.state.potSlots[0]).toBeNull();
+
+    g.interact(burner(2));
+    expect(g.state.hand).toBeNull();
+    expect(g.state.ihBurners[2]?.dirty).toBe(false); // 置いただけでは使用済みにならない
+
+    g.interact(burner(2));
+    expect(g.state.hand?.kind).toBe('pot');
+    expect(g.state.ihBurners[2]).toBeNull();
+  });
+
+  it('使用済みの鍋は鍋置き場に戻せない。洗えば戻せる', () => {
+    const g = newGame();
+    setPot(g, 0, 0, 1);
+    g.interact(burner(0)); // 具材を入れた鍋を手に取る
+    expect(g.state.hand?.kind === 'pot' && g.state.hand.pot.dirty).toBe(true);
+    expect(g.planInteract(potSlot(0))).toBeNull();
+
+    g.interact(washer);
+    expect(g.state.hand).toBeNull();
+    expect(g.planInteract(washer)).toBeNull(); // 洗浄中は取り出せない
+
+    g.update(cfg.potWashTime + 0.1);
+    g.interact(washer);
+    expect(g.state.hand?.kind).toBe('pot');
+
+    g.interact(potSlot(0));
+    expect(g.state.hand).toBeNull();
+    expect(g.state.potSlots[0]?.dirty).toBe(false);
+    expect(g.state.potSlots[0]?.contents).toEqual([]);
+  });
+
+  it('洗浄機は1台：使用済みの鍋が重なると2個目は入れられない', () => {
+    const g = newGame();
+    setPot(g, 0, 0, 1);
+    setPot(g, 1, 1, 1);
+    g.interact(burner(0));
+    g.interact(washer);
+    g.interact(burner(1));
+    expect(g.planInteract(washer)).toBeNull();
+    expect(g.state.hand?.kind).toBe('pot'); // 2個目は手に持ったまま待つ
+  });
+
+  it('使っていない（洗い済みの）鍋は洗浄機に入らない', () => {
+    const g = newGame();
+    g.interact(potSlot(0));
+    expect(g.planInteract(washer)).toBeNull();
+  });
+
+  it('鍋は捨てられない', () => {
+    const g = newGame();
+    g.interact(potSlot(0));
+    g.discard();
+    expect(g.state.hand?.kind).toBe('pot');
+  });
+
+  it('手に持てるのは1つだけ（鍋を持ったまま別の鍋は取れない）', () => {
+    const g = newGame();
+    g.interact(potSlot(0));
+    expect(g.planInteract(potSlot(1))).toBeNull();
+  });
+});
+
+describe('Game: ミートソースの加熱', () => {
+  it('缶をクリックするたびにお玉1杯。手が埋まっていると取れない', () => {
+    const g = newGame();
+    g.interact(can);
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'meatSauce' });
+    expect(g.planInteract(can)).toBeNull();
+  });
+
+  it('2杯入れてボタンを押すと加熱が始まり、40秒で自動で完了する', () => {
+    const g = newGame();
+    setPot(g, 0, 0, 2);
+    const pot = g.state.ihBurners[0]!;
+    expect(pot.contents).toEqual(['meatSauce', 'meatSauce']);
+
+    g.interact(ihButton(0));
+    expect(pot.heat).toBe('heating');
+    g.update(cfg.sauceHeatTime - 1);
+    expect(pot.heat).toBe('heating');
+    g.update(1.1);
+    expect(pot.heat).toBe('ready');
+  });
+
+  it('空の鍋や、鍋のない口ではボタンが効かない', () => {
+    const g = newGame();
+    expect(g.planInteract(ihButton(0))).toBeNull();
+    g.interact(potSlot(0));
+    g.interact(burner(0));
+    expect(g.planInteract(ihButton(0))).toBeNull();
+  });
+
+  it('加熱が進むのはIHに載っている間だけ', () => {
+    const g = newGame();
+    setPot(g, 0, 0, 2);
+    g.interact(ihButton(0));
+    const pot = g.state.ihBurners[0]!;
+    g.update(10);
+    g.interact(burner(0)); // 鍋を持ち上げる
+    g.update(100);
+    expect(pot.heat).toBe('heating');
+    expect(pot.heatTimer).toBeCloseTo(cfg.sauceHeatTime - 10);
+  });
+
+  it('加熱前に麺は入らず、完了前に皿へかけられない', () => {
+    const g = newGame();
+    setPot(g, 0, 0, 1);
+    g.interact(rack);
+    g.interact(basket(0));
+    g.interact(button(0));
+    g.update(cfg.boilTime + 1);
+    g.interact(basket(0)); // 茹で上がった麺を持つ
+    expect(g.planInteract(burner(0))).toBeNull(); // 鍋が未加熱
+
+    g.discard(); // 麺を捨てて手を空ける
+    g.interact(burner(0)); // 鍋を持つ
+    g.interact(plateStack); // 手が埋まっていて取れない
+    expect(g.state.hand?.kind).toBe('pot');
+  });
+});
+
+describe('Game: ミートパスタを1皿出す（Aパターン）', () => {
+  it('ソースを加熱し、麺を鍋に入れ、皿にかけ、粉チーズとパセリを振って提供する', () => {
+    const g = new Game(cfg, () => 0.99); // 伝票はミートパスタ
+    g.start();
+    setPot(g, 0, 0, 2);
+    g.interact(ihButton(0));
+    g.interact(plateStack);
+    g.interact(slot(0)); // 皿を台に置く
+    boilNoodle(g); // 麺が茹で上がる頃にはソースも完成している
+    expect(g.state.ihBurners[0]?.heat).toBe('ready');
+    expect(g.state.tickets.some((t) => t.menuId === 'meat')).toBe(true);
+
+    g.interact(basket(0)); // 麺を取る
+    g.interact(burner(0)); // 加熱済みの鍋に入れる
+    g.interact(burner(0)); // 鍋を手に取る
+    g.interact(slot(0)); // 皿にかける
+    expect(g.state.plateSlots[0]).toEqual(['meatSauce', 'meatSauce', 'noodle']);
+
+    g.interact(washer); // 使い終わった鍋を洗浄機へ
+    expect(g.state.hand).toBeNull();
+    g.interact(cheese);
+    g.interact(slot(0));
+    g.interact(parsley);
+    g.interact(slot(0));
+
+    g.interact(slot(0)); // 皿を手に取る
+    g.interact(pass);
+    expect(g.state.served).toBe(1);
+    expect(g.state.score).toBeGreaterThan(0);
+    expect(g.state.mistakes).toBe(0);
+  });
+
+  it('加熱済みのソースを皿にかけ、麺を載せない（Bパターン）形でも中身は同じように移る', () => {
+    const g = newGame();
+    setPot(g, 0, 0, 2);
+    g.interact(ihButton(0));
+    g.update(cfg.sauceHeatTime + 1);
+    g.interact(plateStack);
+    g.interact(slot(0));
+    g.interact(burner(0));
+    g.interact(slot(0));
+    expect(g.state.plateSlots[0]).toEqual(['meatSauce', 'meatSauce']);
+    expect(g.state.hand?.kind === 'pot' && g.state.hand.pot.contents).toEqual([]);
   });
 });
 

@@ -28,6 +28,21 @@ export type Boiler = {
   timer: number; // boiling/shortBoil: 残り茹で時間、lifted: 残り猶予
 };
 
+export type PotHeat = 'cold' | 'heating' | 'ready'; // 未加熱 / 加熱中 / 加熱完了（焦げは未実装）
+
+export type Pot = {
+  contents: IngredientId[];
+  heat: PotHeat;
+  heatTimer: number; // heating: 残り加熱時間（秒）
+  dirty: boolean; // 使用済み（具材を入れた）。洗浄機で洗うまで鍋置き場に戻せない
+};
+
+// 鍋洗浄機は1台・1個ずつ。dirty な鍋が入っている間が洗浄中、洗い終わると dirty が false になる
+export type Washer = {
+  pot: Pot | null;
+  timer: number; // 洗浄の残り時間（秒）
+};
+
 export type Station = 'pasta' | 'salad';
 
 export type Ticket = {
@@ -41,7 +56,8 @@ export type Ticket = {
 export type Item =
   | { kind: 'rawNoodle' }
   | { kind: 'ingredient'; id: IngredientId }
-  | { kind: 'plate'; contents: IngredientId[] };
+  | { kind: 'plate'; contents: IngredientId[] }
+  | { kind: 'pot'; pot: Pot };
 
 // 視点の先にあるクリック可能な設備
 export type Target =
@@ -51,7 +67,12 @@ export type Target =
   | { kind: 'boilerBasket'; index: number }
   | { kind: 'boilerButton'; index: number }
   | { kind: 'plateSlot'; index: number }
-  | { kind: 'servePass' };
+  | { kind: 'servePass' }
+  | { kind: 'potSlot'; index: number } // 鍋置き場の1か所
+  | { kind: 'ihBurner'; index: number }
+  | { kind: 'ihButton'; index: number }
+  | { kind: 'meatSauceCan' }
+  | { kind: 'washer' };
 
 export type Phase = 'title' | 'playing' | 'paused' | 'result';
 
@@ -67,6 +88,9 @@ export type GameState = {
   hand: Item | null;
   boilers: Boiler[];
   plateSlots: (IngredientId[] | null)[]; // null = 皿なし
+  potSlots: (Pot | null)[]; // 鍋置き場。null = 空き
+  ihBurners: (Pot | null)[];
+  washer: Washer;
   tickets: Ticket[];
   nextTicketAt: number;
   nextTicketId: number;
