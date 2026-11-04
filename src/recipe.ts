@@ -33,7 +33,7 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['noodle', 'tomatoSauce', 'pancetta', 'cheese'],
     basePoints: 50,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'carbonara',
@@ -41,7 +41,7 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['noodle', 'carbonaraSauce', 'cheese', 'blackPepper'],
     basePoints: 50,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'penne',

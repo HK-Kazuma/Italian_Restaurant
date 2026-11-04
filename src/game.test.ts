@@ -7,8 +7,8 @@ const rack: Target = { kind: 'noodleRack' };
 const basket = (index: number): Target => ({ kind: 'boilerBasket', index });
 const button = (index: number): Target => ({ kind: 'boilerButton', index });
 const slot = (index: number): Target => ({ kind: 'plateSlot', index });
-const tarakoSauce: Target = { kind: 'topping', id: 'tarakoSauce' };
-const nori: Target = { kind: 'topping', id: 'nori' };
+const tarakoSauce: Target = { kind: 'stock', id: 'tarakoSauce' };
+const nori: Target = { kind: 'stock', id: 'nori' };
 const plateStack: Target = { kind: 'plateStack' };
 const pass: Target = { kind: 'servePass' };
 
@@ -120,9 +120,9 @@ const potSlot = (index: number): Target => ({ kind: 'potSlot', index });
 const burner = (index: number): Target => ({ kind: 'ihBurner', index });
 const ihButton = (index: number): Target => ({ kind: 'ihButton', index });
 const washer: Target = { kind: 'washer' };
-const can: Target = { kind: 'meatSauceCan' };
-const cheese: Target = { kind: 'topping', id: 'cheese' };
-const parsley: Target = { kind: 'topping', id: 'parsley' };
+const can: Target = { kind: 'stock', id: 'meatSauce' };
+const cheese: Target = { kind: 'stock', id: 'cheese' };
+const parsley: Target = { kind: 'stock', id: 'parsley' };
 
 // 鍋置き場から鍋を取ってIHに置き、ミートソースを n 杯入れる
 function setPot(g: Game, slotIndex: number, burnerIndex: number, scoops = 2) {
@@ -263,7 +263,7 @@ describe('Game: ミートソースの加熱', () => {
 
 describe('Game: ミートパスタを1皿出す（Aパターン）', () => {
   it('ソースを加熱し、麺を鍋に入れ、皿にかけ、粉チーズとパセリを振って提供する', () => {
-    const g = new Game(cfg, () => 0.99); // 伝票はミートパスタ
+    const g = new Game(cfg, () => 0.3); // 伝票はミートパスタ（有効なメニューの2番目）
     g.start();
     setPot(g, 0, 0, 2);
     g.interact(ihButton(0));
@@ -304,6 +304,116 @@ describe('Game: ミートパスタを1皿出す（Aパターン）', () => {
     g.interact(slot(0));
     expect(g.state.plateSlots[0]).toEqual(['meatSauce', 'meatSauce']);
     expect(g.state.hand?.kind === 'pot' && g.state.hand.pot.contents).toEqual([]);
+  });
+});
+
+const hotWater = (index: number): Target => ({ kind: 'hotWaterSlot', index });
+const tomatoSauce: Target = { kind: 'stock', id: 'tomatoSauce' };
+const pancetta: Target = { kind: 'stock', id: 'pancetta' };
+const carbonaraPack: Target = { kind: 'stock', id: 'carbonaraSauce' };
+const blackPepper: Target = { kind: 'stock', id: 'blackPepper' };
+
+describe('Game: パルマ風パスタを1皿出す（Aパターン）', () => {
+  it('トマトソースのパックとパンチェッタを鍋に入れて加熱し、麺と合わせ、粉チーズを振って提供する', () => {
+    const g = new Game(cfg, () => 0.6); // 伝票はパルマ風（有効なメニューの3番目）
+    g.start();
+    g.interact(potSlot(0));
+    g.interact(burner(0));
+    g.interact(tomatoSauce); // 冷蔵庫の容器からパックを取る
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'tomatoSauce' });
+    g.interact(burner(0));
+    g.interact(pancetta); // サラダ台の具材コーナーからトングで1掴み
+    g.interact(burner(0));
+    expect(g.state.ihBurners[0]?.contents).toEqual(['tomatoSauce', 'pancetta']);
+
+    g.interact(ihButton(0));
+    g.interact(plateStack);
+    g.interact(slot(0));
+    boilNoodle(g);
+    expect(g.state.ihBurners[0]?.heat).toBe('ready');
+    expect(g.state.tickets.some((t) => t.menuId === 'parma')).toBe(true);
+
+    g.interact(basket(0));
+    g.interact(burner(0)); // 麺を鍋へ
+    g.interact(burner(0)); // 鍋を持つ
+    g.interact(slot(0)); // 皿にかける
+    g.interact(washer);
+    g.interact(cheese);
+    g.interact(slot(0));
+    g.interact(slot(0));
+    g.interact(pass);
+    expect(g.state.served).toBe(1);
+    expect(g.state.mistakes).toBe(0);
+  });
+});
+
+describe('Game: カルボナーラを1皿出す（Bパターン）', () => {
+  it('パックは熱湯に浸けて温めるまで鍋に入れられない', () => {
+    const g = newGame();
+    g.interact(potSlot(0));
+    g.interact(burner(0));
+
+    g.interact(carbonaraPack);
+    expect(g.state.hand?.kind === 'pack' && g.state.hand.pack.warm).toBe(false);
+    expect(g.planInteract(burner(0))).toBeNull(); // 冷たいままは入れられない
+
+    g.interact(hotWater(0));
+    expect(g.state.hand).toBeNull();
+    g.update(cfg.carbonaraWarmTime - 1);
+    g.interact(hotWater(0)); // 早く出すと冷たいまま
+    expect(g.planInteract(burner(0))).toBeNull();
+
+    g.interact(hotWater(1)); // 別の場所に戻して続きを浸ける（累計で数える）
+    g.update(1.1);
+    g.interact(hotWater(1));
+    expect(g.state.hand?.kind === 'pack' && g.state.hand.pack.warm).toBe(true);
+
+    g.interact(burner(0));
+    expect(g.state.ihBurners[0]?.contents).toEqual(['carbonaraSauce']);
+    expect(g.state.hand).toBeNull();
+  });
+
+  it('温めたパックを鍋で加熱し、麺を皿に盛ってソースをかけ、粉チーズとブラックペッパーを振って提供する', () => {
+    const g = new Game(cfg, () => 0.99); // 伝票はカルボナーラ（有効なメニューの4番目）
+    g.start();
+    g.interact(potSlot(0));
+    g.interact(burner(0));
+    g.interact(carbonaraPack);
+    g.interact(hotWater(0));
+    g.update(cfg.carbonaraWarmTime + 0.1);
+    g.interact(hotWater(0));
+    g.interact(burner(0));
+    g.interact(ihButton(0));
+
+    g.interact(plateStack);
+    g.interact(slot(0));
+    boilNoodle(g);
+    expect(g.state.ihBurners[0]?.heat).toBe('ready');
+    expect(g.state.tickets.some((t) => t.menuId === 'carbonara')).toBe(true);
+
+    g.interact(basket(0));
+    g.interact(slot(0)); // 先に麺を皿に盛る
+    g.interact(burner(0)); // 鍋を持つ
+    g.interact(slot(0)); // ソースをかける
+    expect(g.state.plateSlots[0]).toEqual(['noodle', 'carbonaraSauce']);
+    g.interact(washer);
+    g.interact(cheese);
+    g.interact(slot(0));
+    g.interact(blackPepper);
+    g.interact(slot(0));
+    g.interact(slot(0));
+    g.interact(pass);
+    expect(g.state.served).toBe(1);
+    expect(g.state.mistakes).toBe(0);
+  });
+
+  it('熱湯の場所は1つずつ：埋まっている場所には置けない', () => {
+    const g = newGame();
+    g.interact(carbonaraPack);
+    g.interact(hotWater(0));
+    g.interact(carbonaraPack);
+    expect(g.planInteract(hotWater(0))).toBeNull();
+    expect(g.planInteract(hotWater(1))).not.toBeNull();
   });
 });
 

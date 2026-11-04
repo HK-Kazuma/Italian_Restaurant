@@ -17,6 +17,7 @@ import {
   updateHeat,
   updateWasher,
 } from './pot';
+import { soakPack, stockItem } from './pack';
 import { MENU, findMatchingTicket, getMenu } from './recipe';
 import { serveScore } from './score';
 import { createTicket, nextTicketInterval, pickMenu } from './tickets';
@@ -44,6 +45,7 @@ export class Game {
       hand: null,
       boilers: Array.from({ length: this.cfg.boilerCount }, createBoiler),
       plateSlots: Array.from({ length: this.cfg.plateSlotCount }, () => null),
+      hotWater: Array.from({ length: this.cfg.hotWaterSlotCount }, () => null),
       potSlots: Array.from({ length: this.cfg.potCount }, createPot),
       ihBurners: Array.from({ length: this.cfg.ihBurnerCount }, () => null),
       washer: createWasher(),
@@ -78,6 +80,7 @@ export class Game {
     s.time += dt;
     for (const b of s.boilers) updateBoiler(b, dt, this.cfg);
     updateWasher(s.washer, dt);
+    for (const pack of s.hotWater) if (pack) soakPack(pack, dt, this.cfg); // 熱湯に浸かっている間だけ温まる
     for (const pot of s.ihBurners) if (pot) updateHeat(pot, dt); // 加熱が進むのはIHに載っている間だけ
     this.spawnTickets();
 
@@ -137,9 +140,9 @@ export class Game {
         if (hand) return null;
         return () => (s.hand = { kind: 'plate', contents: [] });
 
-      case 'topping':
+      case 'stock':
         if (hand) return null;
-        return () => (s.hand = { kind: 'ingredient', id: target.id });
+        return () => (s.hand = stockItem(target.id, this.cfg)); // お玉1杯・パック1つ・1掴みなど
 
       case 'boilerBasket': {
         const b = s.boilers[target.index];
@@ -237,6 +240,30 @@ export class Game {
             s.hand = null;
           };
         }
+        // 熱湯で温まったパック（カルボナーラ）は、加熱前の鍋に入れられる
+        if (hand?.kind === 'pack' && hand.pack.warm && pot && canAddIngredient(pot, hand.pack.id, this.cfg.maxPotContents)) {
+          return () => {
+            addIngredient(pot, hand.pack.id);
+            s.hand = null;
+          };
+        }
+        return null;
+      }
+
+      case 'hotWaterSlot': {
+        const pack = s.hotWater[target.index];
+        if (hand?.kind === 'pack' && !pack) {
+          return () => {
+            s.hotWater[target.index] = hand.pack;
+            s.hand = null;
+          };
+        }
+        if (!hand && pack) {
+          return () => {
+            s.hand = { kind: 'pack', pack };
+            s.hotWater[target.index] = null;
+          };
+        }
         return null;
       }
 
@@ -245,10 +272,6 @@ export class Game {
         if (!pot || !canStartHeating(pot)) return null;
         return () => startHeating(pot, this.cfg);
       }
-
-      case 'meatSauceCan':
-        if (hand) return null;
-        return () => (s.hand = { kind: 'ingredient', id: 'meatSauce' }); // お玉1杯
 
       case 'washer': {
         const w = s.washer;
@@ -318,6 +341,8 @@ export function describeItem(item: Item | null): string {
       return '生麺';
     case 'ingredient':
       return INGREDIENTS[item.id].name;
+    case 'pack':
+      return `${INGREDIENTS[item.pack.id].name}パック（${item.pack.warm ? '温まった' : '冷たい'}）`;
     case 'pot': {
       const { pot } = item;
       if (pot.contents.length === 0) return pot.dirty ? '鍋（使用済み）' : '鍋';

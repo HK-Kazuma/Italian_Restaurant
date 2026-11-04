@@ -79,6 +79,8 @@ function disposeTree(obj: THREE.Object3D): void {
 
 // お玉ですくう具材（手に持つとお玉で表示する）
 const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce']);
+// トングでつかむ具材（手に持つとトングで表示する）
+const TONGED: ReadonlySet<IngredientId> = new Set(['pancetta']);
 
 function buildItemMesh(item: Item): THREE.Group {
   const g = new THREE.Group();
@@ -94,11 +96,19 @@ function buildItemMesh(item: Item): THREE.Group {
         g.add(cyl(0.012, 0.012, 0.3, 0x8a8f94, 0, 0.17, 0)); // 柄
         g.add(cyl(0.06, 0.04, 0.05, 0xc9ced3, 0, 0.025, 0)); // お玉の器
         g.add(cyl(0.05, 0.05, 0.01, color, 0, 0.05, 0)); // すくったソース
+      } else if (TONGED.has(item.id)) {
+        g.add(box(0.015, 0.3, 0.015, 0x8a8f94, -0.03, 0.17, 0).rotateZ(-0.1)); // トング
+        g.add(box(0.015, 0.3, 0.015, 0x8a8f94, 0.03, 0.17, 0).rotateZ(0.1));
+        g.add(box(0.08, 0.04, 0.05, color, 0, 0.02, 0)); // つかんだ具材
       } else {
-        g.add(box(0.14, 0.05, 0.18, color, 0, 0.025, 0));
+        g.add(box(0.14, 0.05, 0.18, color, 0, 0.025, 0)); // パック
       }
       break;
     }
+    case 'pack':
+      g.add(box(0.15, 0.04, 0.2, item.pack.warm ? 0xf5c26b : 0xdfe8ee, 0, 0.02, 0)); // 袋（温まると色が変わる）
+      g.add(box(0.1, 0.042, 0.08, INGREDIENTS[item.pack.id].color, 0, 0.021, 0)); // ラベル
+      break;
     case 'pot': {
       const top = item.pot.contents.at(-1);
       g.add(cyl(0.15, 0.15, 0.14, item.pot.dirty ? 0x8d7b68 : 0xc9ced3, 0, 0.07, 0)); // 胴
@@ -134,6 +144,8 @@ function itemSignature(item: Item | null): string {
       return `ing:${item.id}`;
     case 'plate':
       return `plate:${item.contents.join(',')}`;
+    case 'pack':
+      return `pack:${item.pack.id}:${item.pack.warm}`;
     case 'pot':
       return `pot:${item.pot.dirty}:${item.pot.contents.join(',')}`;
   }
@@ -189,6 +201,11 @@ const BURNER_COLORS = {
   heating: 0xe0501f,
   ready: 0x2e8b57, // 加熱完了
 } as const;
+
+type HotWaterView = {
+  pack: ItemView;
+  label: Label;
+};
 
 type BurnerView = {
   disc: THREE.Mesh;
@@ -374,14 +391,14 @@ export function createKitchen(cfg: GameConfig): Kitchen {
     slotViews.push(new ItemView(slot));
   }
 
-  const toppingIds: IngredientId[] = ['tarakoSauce', 'nori', 'cheese', 'parsley'];
+  const toppingIds: IngredientId[] = ['tarakoSauce', 'nori', 'cheese', 'parsley', 'blackPepper'];
   toppingIds.forEach((id, i) => {
     const z = -0.75 + i * 0.5;
     const t = new THREE.Group();
     t.add(box(0.4, 0.12, 0.4, 0xdad3c2, 0, 0.06, 0));
     t.add(box(0.3, 0.04, 0.3, INGREDIENTS[id].color, 0, 0.14, 0));
     t.position.set(TX, 0.9, z);
-    setTarget(t, { kind: 'topping', id });
+    setTarget(t, { kind: 'stock', id });
     scene.add(t);
     interactables.push(t);
     decor(INGREDIENTS[id].name, TX, 1.3, z, 0.6);
@@ -396,7 +413,8 @@ export function createKitchen(cfg: GameConfig): Kitchen {
   decor('提供台', LX, 1.3, 1.0, 0.5);
 
   // --- 右：冷蔵庫（扉を開けてある）とサラダ台（未実装のプレースホルダー）---
-  // 正面のIHから右に90度向くと冷蔵庫。棚は下段・中段・上段で、中段にミートソース缶を置く
+  // 正面のIHから右に90度向くと冷蔵庫。棚は下段・中段・上段。
+  // 中段：ミートソース缶とトマトソースの容器、下段：カルボナーラのパック
   const FRIDGE_FRONT = 2.25;
   const STEEL = 0xd5dde2;
   scene.add(box(0.04, 1.9, 1, 0xbfc9cf, 3.03, 0.95, 0)); // 背板
@@ -420,15 +438,64 @@ export function createKitchen(cfg: GameConfig): Kitchen {
   can.add(cyl(0.101, 0.101, 0.012, 0xcfd3d6, 0, 0.186, 0)); // ふた
   can.add(cyl(0.012, 0.012, 0.26, 0x8a8f94, 0.04, 0.3, 0).rotateZ(-0.35)); // お玉の柄
   can.add(cyl(0.045, 0.03, 0.04, 0xc9ced3, 0.09, 0.42, 0)); // お玉の器
-  can.position.set(2.62, MIDDLE_SHELF_Y + 0.015, 0);
-  setTarget(can, { kind: 'meatSauceCan' });
+  can.position.set(2.62, MIDDLE_SHELF_Y + 0.015, 0.25);
+  setTarget(can, { kind: 'stock', id: 'meatSauce' });
   scene.add(can);
   interactables.push(can);
-  decor('ミートソース缶', FRIDGE_FRONT + 0.02, 1.32, 0, 0.8);
+  // トマトソースのパックが入った食材収納容器（缶の隣）。クリックでパック1つ
+  const tomato = new THREE.Group();
+  tomato.add(box(0.3, 0.1, 0.34, 0xcfe8f5, 0, 0.05, 0));
+  for (let i = -1; i <= 1; i++) tomato.add(box(0.12, 0.14, 0.03, INGREDIENTS.tomatoSauce.color, 0, 0.12, i * 0.09));
+  tomato.position.set(2.62, MIDDLE_SHELF_Y + 0.015, -0.2);
+  setTarget(tomato, { kind: 'stock', id: 'tomatoSauce' });
+  scene.add(tomato);
+  interactables.push(tomato);
+
+  // カルボナーラのパック（下段）。熱湯で温めてから鍋に入れる
+  const carbonara = new THREE.Group();
+  for (let i = 0; i < 3; i++) carbonara.add(box(0.16, 0.04, 0.22, 0xf3e3a1, i * 0.01, 0.02 + i * 0.042, 0));
+  carbonara.position.set(2.62, 0.5 + 0.015, 0);
+  setTarget(carbonara, { kind: 'stock', id: 'carbonaraSauce' });
+  scene.add(carbonara);
+  interactables.push(carbonara);
+
+  decor('ミートソース缶', FRIDGE_FRONT + 0.02, 1.32, 0.25, 0.42);
+  decor('トマトソース', FRIDGE_FRONT + 0.02, 1.32, -0.2, 0.42);
+  decor('カルボナーラ', FRIDGE_FRONT + 0.02, 0.78, 0, 0.5);
   decor('冷蔵庫', FRIDGE_FRONT + 0.02, 2.05, 0, 0.5);
 
-  scene.add(box(1, 0.9, 1.4, 0xa9b4a0, 2.5, 0.45, -1.45));
-  decor('サラダ台（未実装）', 2.5, 1.3, -1.45, 1.2);
+  // サラダ台：熱湯の置き場所を空けて奥へ寄せた。今は具材コーナーのパンチェッタだけ（サラダは未実装）
+  scene.add(box(1, 0.9, 1.4, 0xa9b4a0, 2.9, 0.45, -1.45));
+  const pancetta = new THREE.Group();
+  pancetta.add(box(0.4, 0.1, 0.4, 0xdad3c2, 0, 0.05, 0));
+  pancetta.add(box(0.3, 0.04, 0.3, INGREDIENTS.pancetta.color, 0, 0.12, 0));
+  pancetta.position.set(2.9, 0.9, -1.45);
+  setTarget(pancetta, { kind: 'stock', id: 'pancetta' }); // トングで1掴み
+  scene.add(pancetta);
+  interactables.push(pancetta);
+  decor('サラダ台', 2.9, 1.55, -1.45, 0.6);
+  decor('パンチェッタ', 2.9, 1.3, -1.45, 0.6);
+
+  // 熱湯：サラダ台とIHコンロの間。パックを浸けて余温めする
+  scene.add(box(0.9, 0.8, 1, 0x9aa3ab, 1.95, 0.4, -1.8));
+  scene.add(box(0.8, 0.02, 0.9, 0x5fb7e8, 1.95, 0.81, -1.8)); // 熱湯
+  const hotWaterViews: HotWaterView[] = [];
+  for (let i = 0; i < cfg.hotWaterSlotCount; i++) {
+    const x = 1.95 + (i - (cfg.hotWaterSlotCount - 1) / 2) * 0.27;
+    const slot = new THREE.Group();
+    slot.add(box(0.22, 0.01, 0.34, 0x3a86c0, 0, 0.005, 0)); // 浸ける場所の印
+    slot.position.set(x, 0.82, -1.8);
+    setTarget(slot, { kind: 'hotWaterSlot', index: i });
+    scene.add(slot);
+    interactables.push(slot);
+
+    const label = makeLabel('', 0.4);
+    label.sprite.position.set(x, 1.02, -1.8);
+    label.sprite.visible = false;
+    scene.add(label.sprite);
+    hotWaterViews.push({ pack: new ItemView(slot), label });
+  }
+  decor('熱湯', 1.95, 0.55, -1.27, 0.5);
 
   // --- 手持ちの表示（カメラの右下）---
   const handAnchor = new THREE.Group();
@@ -460,6 +527,16 @@ export function createKitchen(cfg: GameConfig): Kitchen {
     slotViews.forEach((v, i) => {
       const contents = state.plateSlots[i];
       v.show(contents ? { kind: 'plate', contents } : null);
+    });
+
+    hotWaterViews.forEach((v, i) => {
+      const pack = state.hotWater[i];
+      v.pack.show(pack ? { kind: 'pack', pack } : null);
+      v.label.sprite.visible = !!pack;
+      if (pack) {
+        if (pack.warm) v.label.setText('温まった！', '#8be28b');
+        else v.label.setText(`温め中 ${Math.floor(pack.soak)}`, '#ffffff');
+      }
     });
 
     potViews.forEach((v, i) => {

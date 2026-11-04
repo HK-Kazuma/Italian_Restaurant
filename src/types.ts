@@ -28,6 +28,13 @@ export type Boiler = {
   timer: number; // boiling/shortBoil: 残り茹で時間、lifted: 残り猶予
 };
 
+// 熱湯に浸けて温めるパック（カルボナーラ）。soak は浸けた累計秒数、一定時間を超えたら warm
+export type Pack = {
+  id: IngredientId;
+  soak: number;
+  warm: boolean;
+};
+
 export type PotHeat = 'cold' | 'heating' | 'ready'; // 未加熱 / 加熱中 / 加熱完了（焦げは未実装）
 
 export type Pot = {
@@ -57,13 +64,14 @@ export type Item =
   | { kind: 'rawNoodle' }
   | { kind: 'ingredient'; id: IngredientId }
   | { kind: 'plate'; contents: IngredientId[] }
+  | { kind: 'pack'; pack: Pack } // 熱湯で温めてから使うパック
   | { kind: 'pot'; pot: Pot };
 
 // 視点の先にあるクリック可能な設備
 export type Target =
   | { kind: 'noodleRack' }
   | { kind: 'plateStack' }
-  | { kind: 'topping'; id: IngredientId }
+  | { kind: 'stock'; id: IngredientId } // クリックで手に取れる取り出し元（缶・パック・トッピングなど）
   | { kind: 'boilerBasket'; index: number }
   | { kind: 'boilerButton'; index: number }
   | { kind: 'plateSlot'; index: number }
@@ -71,7 +79,7 @@ export type Target =
   | { kind: 'potSlot'; index: number } // 鍋置き場の1か所
   | { kind: 'ihBurner'; index: number }
   | { kind: 'ihButton'; index: number }
-  | { kind: 'meatSauceCan' }
+  | { kind: 'hotWaterSlot'; index: number } // 熱湯に浸けるパックの置き場所
   | { kind: 'washer' };
 
 export type Phase = 'title' | 'playing' | 'paused' | 'result';
@@ -88,6 +96,7 @@ export type GameState = {
   hand: Item | null;
   boilers: Boiler[];
   plateSlots: (IngredientId[] | null)[]; // null = 皿なし
+  hotWater: (Pack | null)[]; // 熱湯に浸けているパック。null = 空き
   potSlots: (Pot | null)[]; // 鍋置き場。null = 空き
   ihBurners: (Pot | null)[];
   washer: Washer;

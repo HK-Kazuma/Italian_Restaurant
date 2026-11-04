@@ -8,6 +8,10 @@ export type GameConfig = {
   graceTime: number; // 麺が上がってからの猶予（秒）
   shortBoilTime: number; // ショート茹で（秒）
 
+  // 熱湯（サラダ台とIHの間）
+  hotWaterSlotCount: number; // パックを浸けられる数
+  carbonaraWarmTime: number; // カルボナーラのパックを余温めする秒数（3秒以上）
+
   // 鍋とIH
   ihBurnerCount: number; // IHコンロの口数
   potCount: number; // 鍋の総数（未決。6で余裕、4で標準、3以下で洗浄が勝負）
@@ -47,6 +51,9 @@ export const DEFAULT_CONFIG: GameConfig = {
   boilTime: 50,
   graceTime: 30,
   shortBoilTime: 3,
+
+  hotWaterSlotCount: 3,
+  carbonaraWarmTime: 3,
 
   ihBurnerCount: 4,
   potCount: 5,
