@@ -17,6 +17,7 @@ export function createPack(id: IngredientId): Pack {
 
 // 冷蔵庫や台の「取り出し元」をクリックしたときに手に持つ物
 export function stockItem(id: IngredientId, cfg: PackConfig): Item {
+  if (id === 'saladBase') return { kind: 'plate', contents: ['saladBase'] }; // お皿にサラダが入ったもの
   return warmTime(id, cfg) === null ? { kind: 'ingredient', id } : { kind: 'pack', pack: createPack(id) };
 }
 

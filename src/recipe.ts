@@ -65,7 +65,7 @@ export const MENU: MenuItem[] = [
     station: 'salad',
     ingredients: ['saladBase', 'shrimp', 'dressing', 'paprika'],
     basePoints: 10,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'chickenSalad',
@@ -73,7 +73,7 @@ export const MENU: MenuItem[] = [
     station: 'salad',
     ingredients: ['saladBase', 'chicken', 'dressing', 'paprika'],
     basePoints: 10,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'cornSoup',

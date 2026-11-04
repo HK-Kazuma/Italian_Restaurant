@@ -6,6 +6,7 @@ import { Input } from './input';
 import { Interactor } from './interaction';
 import { Player } from './player';
 import { createKitchen } from './scene';
+import type { Target } from './types';
 import './style.css';
 
 const cfg = DEFAULT_CONFIG;
@@ -44,7 +45,7 @@ const input = new Input(canvas, {
   onLook: (dx, dy) => game.state.phase === 'playing' && player.look(dx, dy),
   onClick: () => interactor.current && game.interact(interactor.current),
   onDoubleClick: () => interactor.current && game.doubleClick(interactor.current),
-  onDiscard: () => game.discard(),
+  onRightClick: () => game.rightClick(interactor.current),
   onTicketZoom: (on) => hud.setTicketZoom(on),
   onLockChange: (locked) => {
     const { phase } = game.state;
@@ -55,6 +56,14 @@ const input = new Input(canvas, {
 });
 
 const hud = new Hud(document.getElementById('hud')!, cfg, () => input.requestLock());
+
+// 視点が合っている物に対する、左クリック以外の操作の案内
+function hintFor(target: Target | null): string {
+  if (target && (target.kind === 'fridgeDoor' || (target.kind === 'stock' && target.inFridge))) {
+    return `右クリック：冷蔵庫の扉を${game.state.fridgeOpen ? '閉める' : '開ける'}`;
+  }
+  return '';
+}
 
 function resize(): void {
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -96,7 +105,7 @@ function frame(): void {
   if (game.state.phase === 'playing') interactor.update(game);
   else interactor.clear();
   kitchen.sync(game.state, dt);
-  hud.update(game.state, best);
+  hud.update(game.state, best, hintFor(interactor.current));
   renderer.render(kitchen.scene, camera);
   requestAnimationFrame(frame);
 }

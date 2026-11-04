@@ -71,7 +71,8 @@ export type Item =
 export type Target =
   | { kind: 'noodleRack' }
   | { kind: 'plateStack' }
-  | { kind: 'stock'; id: IngredientId } // クリックで手に取れる取り出し元（缶・パック・トッピングなど）
+  | { kind: 'stock'; id: IngredientId; inFridge?: boolean } // クリックで手に取れる取り出し元（缶・パック・トッピングなど）。inFridge は冷蔵庫の中（扉が開いている間だけ取れる）
+  | { kind: 'fridgeDoor' } // 冷蔵庫（扉・本体）。右クリックで開閉
   | { kind: 'boilerBasket'; index: number }
   | { kind: 'boilerButton'; index: number }
   | { kind: 'plateSlot'; index: number }
@@ -95,7 +96,8 @@ export type GameState = {
   time: number; // 経過時間（秒）
   hand: Item | null;
   boilers: Boiler[];
-  plateSlots: (IngredientId[] | null)[]; // null = 皿なし
+  plateSlots: (IngredientId[] | null)[]; // 皿の置き場。左の台（plateSlotCount 個）→ サラダ台（saladSlotCount 個）の順。null = 皿なし
+  fridgeOpen: boolean; // 冷蔵庫の扉（最初は閉まっている）
   hotWater: (Pack | null)[]; // 熱湯に浸けているパック。null = 空き
   potSlots: (Pot | null)[]; // 鍋置き場。null = 空き
   ihBurners: (Pot | null)[];

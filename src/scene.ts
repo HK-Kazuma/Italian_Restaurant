@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { GameConfig } from './config';
 import { INGREDIENTS } from './ingredients';
+import { LAYOUT, type Layout } from './layout';
 import type { Boiler, GameState, IngredientId, Item, Target } from './types';
 
 // 厨房の3Dシーン。見た目はすべてプリミティブ（箱・円柱）で作るローポリのプレースホルダー。
@@ -78,9 +79,11 @@ function disposeTree(obj: THREE.Object3D): void {
 // --- 手持ち・皿の見た目 ---
 
 // お玉ですくう具材（手に持つとお玉で表示する）
-const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce']);
+const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce', 'shrimp']);
 // トングでつかむ具材（手に持つとトングで表示する）
-const TONGED: ReadonlySet<IngredientId> = new Set(['pancetta']);
+const TONGED: ReadonlySet<IngredientId> = new Set(['pancetta', 'chicken']);
+// ボトル・容器から出す物（ドレッシングをかける、パプリカパウダーを振る）
+const BOTTLED: ReadonlySet<IngredientId> = new Set(['dressing', 'paprika']);
 
 function buildItemMesh(item: Item): THREE.Group {
   const g = new THREE.Group();
@@ -96,6 +99,9 @@ function buildItemMesh(item: Item): THREE.Group {
         g.add(cyl(0.012, 0.012, 0.3, 0x8a8f94, 0, 0.17, 0)); // 柄
         g.add(cyl(0.06, 0.04, 0.05, 0xc9ced3, 0, 0.025, 0)); // お玉の器
         g.add(cyl(0.05, 0.05, 0.01, color, 0, 0.05, 0)); // すくったソース
+      } else if (BOTTLED.has(item.id)) {
+        g.add(cyl(0.035, 0.035, 0.16, color, 0, 0.08, 0)); // ボトル
+        g.add(cyl(0.018, 0.022, 0.05, 0xf5f5f5, 0, 0.185, 0)); // 口
       } else if (TONGED.has(item.id)) {
         g.add(box(0.015, 0.3, 0.015, 0x8a8f94, -0.03, 0.17, 0).rotateZ(-0.1)); // トング
         g.add(box(0.015, 0.3, 0.015, 0x8a8f94, 0.03, 0.17, 0).rotateZ(0.1));
@@ -120,7 +126,10 @@ function buildItemMesh(item: Item): THREE.Group {
       g.add(cyl(0.23, 0.18, 0.03, 0xf5f5f5, 0, 0.015, 0));
       let y = 0.03;
       item.contents.forEach((id, i) => {
-        if (id === 'noodle' || id === 'penne') {
+        if (id === 'saladBase') {
+          g.add(cyl(0.17, 0.13, 0.08, INGREDIENTS[id].color, 0, y + 0.04, 0)); // 器に盛ったサラダ
+          y += 0.08;
+        } else if (id === 'noodle' || id === 'penne') {
           g.add(cyl(0.15, 0.17, 0.06, INGREDIENTS[id].color, 0, y + 0.03, 0));
           y += 0.06;
         } else {
@@ -231,7 +240,7 @@ function boilerLabel(b: Boiler): { text: string; color: string } {
   }
 }
 
-export function createKitchen(cfg: GameConfig): Kitchen {
+export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x2b2724);
   const interactables: THREE.Object3D[] = [];
@@ -242,18 +251,27 @@ export function createKitchen(cfg: GameConfig): Kitchen {
   sun.position.set(2, 5, 3);
   scene.add(sun);
 
-  // 部屋
-  scene.add(box(8, 0.1, 8, 0xb9a98f, 0, -0.05, 0)); // 床
-  scene.add(box(8, 3.2, 0.1, 0xe9e2d2, 0, 1.6, -4.1)); // 奥
-  scene.add(box(8, 3.2, 0.1, 0xe9e2d2, 0, 1.6, 4.1)); // 手前
-  scene.add(box(0.1, 3.2, 8, 0xe2dac6, -3.6, 1.6, 0)); // 左
-  scene.add(box(0.1, 3.2, 8, 0xe2dac6, 3.6, 1.6, 0)); // 右
-  scene.add(box(8, 0.1, 8, 0x5c5149, 0, 3.25, 0)); // 天井
+  // 部屋。冷蔵庫・サラダ台（layout.ts）がはみ出さないよう、右と奥の壁は必要なら広げる
+  const roomMinX = -3.6;
+  const roomMaxX = Math.max(3.6, layout.fridge.x + 0.8 + 0.1, layout.saladTable.x + 0.55 + 0.1);
+  const roomMinZ = Math.min(-4.1, layout.saladTable.z - 1.35 - 0.1);
+  const roomMaxZ = 4.1;
+  const roomW = roomMaxX - roomMinX + 0.8; // 床・天井・奥/手前の壁の幅（壁の外へ少しはみ出す）
+  const roomD = roomMaxZ - roomMinZ + 0.8;
+  const roomCx = (roomMaxX + roomMinX) / 2;
+  const roomCz = (roomMaxZ + roomMinZ) / 2;
+  scene.add(box(roomW, 0.1, roomD, 0xb9a98f, roomCx, -0.05, roomCz)); // 床
+  scene.add(box(roomW, 3.2, 0.1, 0xe9e2d2, roomCx, 1.6, roomMinZ)); // 奥
+  scene.add(box(roomW, 3.2, 0.1, 0xe9e2d2, roomCx, 1.6, roomMaxZ)); // 手前
+  scene.add(box(0.1, 3.2, roomD, 0xe2dac6, roomMinX, 1.6, roomCz)); // 左
+  scene.add(box(0.1, 3.2, roomD, 0xe2dac6, roomMaxX, 1.6, roomCz)); // 右
+  scene.add(box(roomW, 0.1, roomD, 0x5c5149, roomCx, 3.25, roomCz)); // 天井
 
   const decor = (text: string, x: number, y: number, z: number, width = 1.4) => {
     const l = makeLabel(text, width);
     l.sprite.position.set(x, y, z);
     scene.add(l.sprite);
+    return l;
   };
 
   // --- 正面：IHコンロ（上面は未実装のプレースホルダー）と、その下の鍋洗浄機・鍋置き場 ---
@@ -412,25 +430,57 @@ export function createKitchen(cfg: GameConfig): Kitchen {
   interactables.push(pass);
   decor('提供台', LX, 1.3, 1.0, 0.5);
 
-  // --- 右：冷蔵庫（扉を開けてある）とサラダ台（未実装のプレースホルダー）---
-  // 正面のIHから右に90度向くと冷蔵庫。棚は下段・中段・上段。
-  // 中段：ミートソース缶とトマトソースの容器、下段：カルボナーラのパック
-  const FRIDGE_FRONT = 2.25;
+  // 位置は layout.ts で決める。以下の座標は、それぞれの基準点からの相対位置。
+  const decorIn = (parent: THREE.Object3D, text: string, x: number, y: number, z: number, width = 1.4) => {
+    const l = makeLabel(text, width);
+    l.sprite.position.set(x, y, z);
+    parent.add(l.sprite);
+    return l;
+  };
+
+  // --- 冷蔵庫（右クリックで扉を開閉。最初は閉まっている）---
+  // 基準点＝前面（扉側）の中央。+x が奥行き、z が幅。棚は下段・中段・上段。
+  // 上段：サラダベース、中段：ミートソース缶とトマトソースの容器、下段：カルボナーラのパック
+  const fridgeSpot = new THREE.Group();
+  fridgeSpot.position.set(layout.fridge.x, 0, layout.fridge.z);
+  scene.add(fridgeSpot);
+
   const STEEL = 0xd5dde2;
-  scene.add(box(0.04, 1.9, 1, 0xbfc9cf, 3.03, 0.95, 0)); // 背板
-  scene.add(box(0.8, 1.9, 0.04, STEEL, 2.65, 0.95, -0.48)); // 側板
-  scene.add(box(0.8, 1.9, 0.04, STEEL, 2.65, 0.95, 0.48));
-  scene.add(box(0.8, 0.04, 1, STEEL, 2.65, 1.88, 0)); // 天板
-  scene.add(box(0.8, 0.06, 1, 0x9aa3ab, 2.65, 0.03, 0)); // 底
+  const fridge = new THREE.Group(); // 本体と扉。視点が合っている間、右クリックで開閉する
+  setTarget(fridge, { kind: 'fridgeDoor' });
+  fridgeSpot.add(fridge);
+  interactables.push(fridge);
+  fridge.add(box(0.04, 1.9, 1, 0xbfc9cf, 0.78, 0.95, 0)); // 背板
+  fridge.add(box(0.8, 1.9, 0.04, STEEL, 0.4, 0.95, -0.48)); // 側板
+  fridge.add(box(0.8, 1.9, 0.04, STEEL, 0.4, 0.95, 0.48));
+  fridge.add(box(0.8, 0.04, 1, STEEL, 0.4, 1.88, 0)); // 天板
+  fridge.add(box(0.8, 0.06, 1, 0x9aa3ab, 0.4, 0.03, 0)); // 底
+  const LOWER_SHELF_Y = 0.5;
   const MIDDLE_SHELF_Y = 0.95;
-  for (const y of [0.5, MIDDLE_SHELF_Y, 1.4]) scene.add(box(0.76, 0.03, 0.92, 0xf1f5f7, 2.65, y, 0)); // 棚（下・中・上段）
+  const UPPER_SHELF_Y = 1.4;
+  for (const y of [LOWER_SHELF_Y, MIDDLE_SHELF_Y, UPPER_SHELF_Y]) fridge.add(box(0.76, 0.03, 0.92, 0xf1f5f7, 0.4, y, 0));
 
   const door = new THREE.Group(); // 奥側（z=+0.5）を蝶番にして、プレイヤー側へ90度開く
   door.add(box(0.05, 1.9, 1, 0xe9eef1, 0, 0.95, -0.5));
   door.add(box(0.04, 0.5, 0.05, 0x8a9096, -0.04, 1.0, -0.9)); // 取っ手
-  door.position.set(FRIDGE_FRONT, 0, 0.5);
-  door.rotation.y = Math.PI / 2;
-  scene.add(door);
+  door.position.set(0, 0, 0.5);
+  fridge.add(door); // 回転は sync で state.fridgeOpen に合わせる
+
+  // 冷蔵庫の中の取り出し元。扉が閉まっている間は取れない（game.ts 側で判定）
+  const addFridgeStock = (obj: THREE.Object3D, id: IngredientId) => {
+    setTarget(obj, { kind: 'stock', id, inFridge: true });
+    fridgeSpot.add(obj);
+    interactables.push(obj);
+  };
+
+  // サラダベース（上段）：お皿にサラダが入ったもの
+  const saladBases = new THREE.Group();
+  for (const z of [-0.17, 0.17]) {
+    saladBases.add(cyl(0.17, 0.13, 0.05, 0xf5f5f5, 0, 0.025, z)); // 器
+    saladBases.add(cyl(0.15, 0.16, 0.07, INGREDIENTS.saladBase.color, 0, 0.085, z)); // サラダ
+  }
+  saladBases.position.set(0.37, UPPER_SHELF_Y + 0.015, 0);
+  addFridgeStock(saladBases, 'saladBase');
 
   // ミートソース缶（中段）。クリックでお玉1杯すくう
   const can = new THREE.Group();
@@ -438,64 +488,101 @@ export function createKitchen(cfg: GameConfig): Kitchen {
   can.add(cyl(0.101, 0.101, 0.012, 0xcfd3d6, 0, 0.186, 0)); // ふた
   can.add(cyl(0.012, 0.012, 0.26, 0x8a8f94, 0.04, 0.3, 0).rotateZ(-0.35)); // お玉の柄
   can.add(cyl(0.045, 0.03, 0.04, 0xc9ced3, 0.09, 0.42, 0)); // お玉の器
-  can.position.set(2.62, MIDDLE_SHELF_Y + 0.015, 0.25);
-  setTarget(can, { kind: 'stock', id: 'meatSauce' });
-  scene.add(can);
-  interactables.push(can);
+  can.position.set(0.37, MIDDLE_SHELF_Y + 0.015, 0.25);
+  addFridgeStock(can, 'meatSauce');
+
   // トマトソースのパックが入った食材収納容器（缶の隣）。クリックでパック1つ
   const tomato = new THREE.Group();
   tomato.add(box(0.3, 0.1, 0.34, 0xcfe8f5, 0, 0.05, 0));
   for (let i = -1; i <= 1; i++) tomato.add(box(0.12, 0.14, 0.03, INGREDIENTS.tomatoSauce.color, 0, 0.12, i * 0.09));
-  tomato.position.set(2.62, MIDDLE_SHELF_Y + 0.015, -0.2);
-  setTarget(tomato, { kind: 'stock', id: 'tomatoSauce' });
-  scene.add(tomato);
-  interactables.push(tomato);
+  tomato.position.set(0.37, MIDDLE_SHELF_Y + 0.015, -0.2);
+  addFridgeStock(tomato, 'tomatoSauce');
 
   // カルボナーラのパック（下段）。熱湯で温めてから鍋に入れる
   const carbonara = new THREE.Group();
   for (let i = 0; i < 3; i++) carbonara.add(box(0.16, 0.04, 0.22, 0xf3e3a1, i * 0.01, 0.02 + i * 0.042, 0));
-  carbonara.position.set(2.62, 0.5 + 0.015, 0);
-  setTarget(carbonara, { kind: 'stock', id: 'carbonaraSauce' });
-  scene.add(carbonara);
-  interactables.push(carbonara);
+  carbonara.position.set(0.37, LOWER_SHELF_Y + 0.015, 0);
+  addFridgeStock(carbonara, 'carbonaraSauce');
 
-  decor('ミートソース缶', FRIDGE_FRONT + 0.02, 1.32, 0.25, 0.42);
-  decor('トマトソース', FRIDGE_FRONT + 0.02, 1.32, -0.2, 0.42);
-  decor('カルボナーラ', FRIDGE_FRONT + 0.02, 0.78, 0, 0.5);
-  decor('冷蔵庫', FRIDGE_FRONT + 0.02, 2.05, 0, 0.5);
+  const fridgeLabels = [
+    decorIn(fridgeSpot, 'サラダベース', 0.02, 1.62, 0, 0.5),
+    decorIn(fridgeSpot, 'ミートソース缶', 0.02, 1.32, 0.25, 0.42),
+    decorIn(fridgeSpot, 'トマトソース', 0.02, 1.32, -0.2, 0.42),
+    decorIn(fridgeSpot, 'カルボナーラ', 0.02, 0.78, 0, 0.5),
+  ];
+  decorIn(fridgeSpot, '冷蔵庫', 0.02, 2.05, 0, 0.5);
 
-  // サラダ台：熱湯の置き場所を空けて奥へ寄せた。今は具材コーナーのパンチェッタだけ（サラダは未実装）
-  scene.add(box(1, 0.9, 1.4, 0xa9b4a0, 2.9, 0.45, -1.45));
-  const pancetta = new THREE.Group();
-  pancetta.add(box(0.4, 0.1, 0.4, 0xdad3c2, 0, 0.05, 0));
-  pancetta.add(box(0.3, 0.04, 0.3, INGREDIENTS.pancetta.color, 0, 0.12, 0));
-  pancetta.position.set(2.9, 0.9, -1.45);
-  setTarget(pancetta, { kind: 'stock', id: 'pancetta' }); // トングで1掴み
-  scene.add(pancetta);
-  interactables.push(pancetta);
-  decor('サラダ台', 2.9, 1.55, -1.45, 0.6);
-  decor('パンチェッタ', 2.9, 1.3, -1.45, 0.6);
+  // --- サラダ台 ---
+  // 基準点＝天板の中心。手前の列（x=-0.2）でサラダを作り、奥の列（x=+0.3）に具材（具材コーナー）を並べる。
+  // z は +0.85 側（プレイヤー寄り）から並べる。
+  const saladSpot = new THREE.Group();
+  saladSpot.position.set(layout.saladTable.x, 0, layout.saladTable.z);
+  scene.add(saladSpot);
+  const SX_WORK = -0.2;
+  const SX_STOCK = 0.3;
+  saladSpot.add(box(1.1, 0.9, 2.7, 0xa9b4a0, 0, 0.45, 0));
 
-  // 熱湯：サラダ台とIHコンロの間。パックを浸けて余温めする
-  scene.add(box(0.9, 0.8, 1, 0x9aa3ab, 1.95, 0.4, -1.8));
-  scene.add(box(0.8, 0.02, 0.9, 0x5fb7e8, 1.95, 0.81, -1.8)); // 熱湯
+  // サラダを作る場所：皿の置き場の続き（state.plateSlots の plateSlotCount 番目以降）
+  for (let j = 0; j < cfg.saladSlotCount; j++) {
+    const slot = new THREE.Group();
+    slot.add(cyl(0.3, 0.3, 0.012, 0xcfc4ae, 0, 0.006, 0));
+    slot.position.set(SX_WORK, 0.9, 0.75 - j * 0.7);
+    setTarget(slot, { kind: 'plateSlot', index: cfg.plateSlotCount + j });
+    saladSpot.add(slot);
+    interactables.push(slot);
+    slotViews.push(new ItemView(slot));
+  }
+  decorIn(saladSpot, 'サラダを作る台', SX_WORK, 1.25, 0.4, 0.7);
+
+  // 具材コーナー：小エビ（お玉）、チキン・パンチェッタ（トング）、ドレッシング・パプリカパウダー（ボトル）
+  const saladStocks: { id: IngredientId; bottle?: boolean }[] = [
+    { id: 'shrimp' },
+    { id: 'chicken' },
+    { id: 'pancetta' },
+    { id: 'dressing', bottle: true },
+    { id: 'paprika', bottle: true },
+  ];
+  saladStocks.forEach(({ id, bottle }, i) => {
+    const z = 0.85 - i * 0.45; // 手前の冷蔵庫の角が、プレイヤーからの視線を遮らない位置から並べる
+    const t = new THREE.Group();
+    if (bottle) {
+      t.add(cyl(0.06, 0.06, 0.22, INGREDIENTS[id].color, 0, 0.11, 0));
+      t.add(cyl(0.03, 0.04, 0.06, 0xf5f5f5, 0, 0.25, 0));
+    } else {
+      t.add(box(0.4, 0.1, 0.4, 0xdad3c2, 0, 0.05, 0));
+      t.add(box(0.3, 0.04, 0.3, INGREDIENTS[id].color, 0, 0.12, 0));
+    }
+    t.position.set(SX_STOCK, 0.9, z);
+    setTarget(t, { kind: 'stock', id });
+    saladSpot.add(t);
+    interactables.push(t);
+    decorIn(saladSpot, INGREDIENTS[id].name, SX_STOCK, 1.3, z, 0.45);
+  });
+
+  // --- 熱湯 ---
+  // 基準点＝中心。パックを浸けて余温めする
+  const hotWaterSpot = new THREE.Group();
+  hotWaterSpot.position.set(layout.hotWater.x, 0, layout.hotWater.z);
+  scene.add(hotWaterSpot);
+  hotWaterSpot.add(box(0.9, 0.8, 1, 0x9aa3ab, 0, 0.4, 0));
+  hotWaterSpot.add(box(0.8, 0.02, 0.9, 0x5fb7e8, 0, 0.81, 0)); // 熱湯
   const hotWaterViews: HotWaterView[] = [];
   for (let i = 0; i < cfg.hotWaterSlotCount; i++) {
-    const x = 1.95 + (i - (cfg.hotWaterSlotCount - 1) / 2) * 0.27;
+    const x = (i - (cfg.hotWaterSlotCount - 1) / 2) * 0.27;
     const slot = new THREE.Group();
     slot.add(box(0.22, 0.01, 0.34, 0x3a86c0, 0, 0.005, 0)); // 浸ける場所の印
-    slot.position.set(x, 0.82, -1.8);
+    slot.position.set(x, 0.82, 0);
     setTarget(slot, { kind: 'hotWaterSlot', index: i });
-    scene.add(slot);
+    hotWaterSpot.add(slot);
     interactables.push(slot);
 
     const label = makeLabel('', 0.4);
-    label.sprite.position.set(x, 1.02, -1.8);
+    label.sprite.position.set(x, 1.02, 0);
     label.sprite.visible = false;
-    scene.add(label.sprite);
+    hotWaterSpot.add(label.sprite);
     hotWaterViews.push({ pack: new ItemView(slot), label });
   }
-  decor('熱湯', 1.95, 0.55, -1.27, 0.5);
+  decorIn(hotWaterSpot, '熱湯', 0, 0.55, 0.53, 0.5);
 
   // --- 手持ちの表示（カメラの右下）---
   const handAnchor = new THREE.Group();
@@ -506,6 +593,9 @@ export function createKitchen(cfg: GameConfig): Kitchen {
   // --- 毎フレームの同期 ---
   const sync = (state: GameState, dt: number) => {
     const follow = Math.min(1, dt * 8);
+
+    door.rotation.y += ((state.fridgeOpen ? Math.PI / 2 : 0) - door.rotation.y) * follow;
+    for (const l of fridgeLabels) l.sprite.visible = state.fridgeOpen;
 
     boilerViews.forEach((v, i) => {
       const b = state.boilers[i];

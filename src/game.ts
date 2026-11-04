@@ -44,7 +44,8 @@ export class Game {
       time: 0,
       hand: null,
       boilers: Array.from({ length: this.cfg.boilerCount }, createBoiler),
-      plateSlots: Array.from({ length: this.cfg.plateSlotCount }, () => null),
+      plateSlots: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => null),
+      fridgeOpen: false,
       hotWater: Array.from({ length: this.cfg.hotWaterSlotCount }, () => null),
       potSlots: Array.from({ length: this.cfg.potCount }, createPot),
       ihBurners: Array.from({ length: this.cfg.ihBurnerCount }, () => null),
@@ -112,7 +113,17 @@ export class Game {
     this.planDoubleClick(target)?.();
   }
 
-  // 右クリック：手に持っている物を捨てる
+  // 右クリック：冷蔵庫に視点が合っていれば扉を開閉、それ以外は手に持っている物を捨てる
+  rightClick(target: Target | null): void {
+    if (this.state.phase !== 'playing') return;
+    if (target && (target.kind === 'fridgeDoor' || (target.kind === 'stock' && target.inFridge))) {
+      this.state.fridgeOpen = !this.state.fridgeOpen;
+      return;
+    }
+    this.discard();
+  }
+
+  // 手に持っている物を捨てる
   discard(): void {
     const s = this.state;
     if (s.phase !== 'playing' || !s.hand) return;
@@ -142,7 +153,13 @@ export class Game {
 
       case 'stock':
         if (hand) return null;
+        if (target.inFridge && !s.fridgeOpen) return null; // 扉が閉まっていると取れない
         return () => (s.hand = stockItem(target.id, this.cfg)); // お玉1杯・パック1つ・1掴みなど
+
+      case 'fridgeDoor':
+        // 左クリックでは開かない（右クリックで開閉）。閉まっている間だけ案内を出す
+        if (s.fridgeOpen) return null;
+        return () => this.say('右クリックで冷蔵庫を開ける', 'info');
 
       case 'boilerBasket': {
         const b = s.boilers[target.index];

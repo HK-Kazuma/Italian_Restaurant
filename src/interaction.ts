@@ -42,9 +42,11 @@ export class Interactor {
     this.root = root;
     this.current = root ? (root.userData[TARGET_KEY] as Target) : null;
 
-    // 皿の中身が作り直されても光り続けるよう、毎フレーム当て直す
+    // 皿の中身が作り直されても光り続けるよう、毎フレーム当て直す。
+    // 冷蔵庫は大きく、左クリックで操作する物でもないので光らせない（ヒントは HUD に出す）
     if (root && this.current) {
-      setEmissive(root, game.planInteract(this.current) ? HIGHLIGHT : 0x000000);
+      const glow = this.current.kind !== 'fridgeDoor' && game.planInteract(this.current);
+      setEmissive(root, glow ? HIGHLIGHT : 0x000000);
     }
   }
 

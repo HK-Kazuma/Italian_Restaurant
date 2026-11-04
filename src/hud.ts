@@ -10,7 +10,7 @@ const CONTROLS_HTML = `
     <tr><th>WASD</th><td>一、二歩寄る</td></tr>
     <tr><th>左クリック</th><td>取る・置く・投入する・ボタンを押す</td></tr>
     <tr><th>ダブルクリック</th><td>のびかけの茹で麺器をショート茹で（3秒）</td></tr>
-    <tr><th>右クリック</th><td>手に持っている物を捨てる</td></tr>
+    <tr><th>右クリック</th><td>冷蔵庫に視点を合わせて：扉の開閉　それ以外：手に持っている物を捨てる</td></tr>
     <tr><th>E（押している間）</th><td>伝票を拡大表示</td></tr>
   </table>
   <p class="recipe">たらこのパスタ：生麺を茹で麺器にセット→ボタン→上がったら取る→皿に盛る→たらこソース→刻みのり→提供台へ</p>
@@ -27,6 +27,7 @@ export class Hud {
   private rail = el('div', 'rail');
   private hand = el('div', 'hand');
   private toast = el('div', 'toast');
+  private hint = el('div', 'hint');
   private overlay = el('div', 'overlay');
   private lastRail = '';
   private lastPhase: Phase | null = null;
@@ -39,7 +40,7 @@ export class Hud {
     const top = el('div', 'top');
     top.append(this.timer, this.score);
     const crosshair = el('div', 'crosshair');
-    root.append(top, this.rail, crosshair, this.hand, this.toast, this.overlay);
+    root.append(top, this.rail, crosshair, this.hint, this.hand, this.toast, this.overlay);
     this.overlay.addEventListener('click', onOverlayClick);
   }
 
@@ -47,7 +48,8 @@ export class Hud {
     this.rail.classList.toggle('zoom', on);
   }
 
-  update(state: GameState, best: number): void {
+  // hint: いま視点が合っている物に対する操作の案内（なければ空）
+  update(state: GameState, best: number, hint = ''): void {
     this.timer.textContent = formatTime(this.cfg.gameDuration - state.time);
     this.timer.classList.toggle('low', this.cfg.gameDuration - state.time <= 30);
     this.score.innerHTML = `<b>${state.score}</b> 点${state.combo >= 2 ? ` <span class="combo">${state.combo} COMBO</span>` : ''}`;
@@ -59,6 +61,7 @@ export class Hud {
     this.toast.textContent = toastVisible ? state.toast!.text : '';
     this.toast.className = `toast ${toastVisible ? state.toast!.kind : ''}`;
 
+    this.hint.textContent = state.phase === 'playing' ? hint : '';
     this.renderRail(state);
     this.renderOverlay(state, best);
   }

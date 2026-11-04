@@ -26,3 +26,9 @@ describe('pack', () => {
     expect(pack.warm).toBe(true);
   });
 });
+
+describe('stockItem: サラダベース', () => {
+  it('お皿にサラダが入ったもの（皿の中身が saladBase）を手に持つ', () => {
+    expect(stockItem('saladBase', cfg)).toEqual({ kind: 'plate', contents: ['saladBase'] });
+  });
+});

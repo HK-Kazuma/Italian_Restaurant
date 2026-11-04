@@ -107,6 +107,16 @@ body {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
 }
 
+.hint {
+  top: calc(50% + 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+  white-space: nowrap;
+  text-shadow: 0 1px 4px #000;
+  color: #ffe08a;
+}
+
 .hand {
   bottom: 18px;
   left: 18px;

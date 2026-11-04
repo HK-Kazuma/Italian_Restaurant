@@ -20,7 +20,8 @@ export type GameConfig = {
   sauceHeatTime: number; // ソースの加熱時間（秒、仮）。麺より短くして、仕掛ける順番に意味を持たせる
 
   // 左の台
-  plateSlotCount: number; // 皿を置いて盛り付ける場所の数
+  plateSlotCount: number; // 左の台：パスタの皿を置いて盛り付ける場所の数
+  saladSlotCount: number; // サラダ台：サラダを作る場所の数
   maxPlateContents: number; // 皿に載せられる中身の上限
 
   // 伝票
@@ -62,6 +63,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   sauceHeatTime: 30,
 
   plateSlotCount: 3,
+  saladSlotCount: 2,
   maxPlateContents: 8,
 
   firstTicketAt: 3,

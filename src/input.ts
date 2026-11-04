@@ -2,7 +2,7 @@ export type InputHandlers = {
   onLook: (dx: number, dy: number) => void;
   onClick: () => void;
   onDoubleClick: () => void;
-  onDiscard: () => void;
+  onRightClick: () => void;
   onLockChange: (locked: boolean) => void;
   onTicketZoom: (on: boolean) => void;
 };
@@ -32,7 +32,7 @@ export class Input {
         // 素早い連打は別の設備への2クリックでも detail=2 になるため、click は常に実行し、追加で doubleClick を呼ぶ
         if (e.detail >= 2) h.onDoubleClick();
       } else if (e.button === 2) {
-        h.onDiscard();
+        h.onRightClick();
       }
     });
 
