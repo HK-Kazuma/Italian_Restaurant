@@ -7,7 +7,7 @@ import type { GameState, Phase } from './types';
 const CONTROLS_HTML = `
   <table class="controls">
     <tr><th>マウス</th><td>視点移動（Escで一時停止）</td></tr>
-    <tr><th>WASD</th><td>一、二歩寄る</td></tr>
+    <tr><th>WASD</th><td>歩く（壁・設備には入れない）</td></tr>
     <tr><th>左クリック</th><td>取る・置く・投入する・ボタンを押す</td></tr>
     <tr><th>ダブルクリック</th><td>のびかけの茹で麺器をショート茹で（3秒）</td></tr>
     <tr><th>右クリック</th><td>冷蔵庫に視点を合わせて：扉の開閉　それ以外：手に持っている物を捨てる</td></tr>

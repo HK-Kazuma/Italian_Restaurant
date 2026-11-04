@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { GameConfig } from './config';
 import { INGREDIENTS } from './ingredients';
 import { LAYOUT, type Layout } from './layout';
+import { type Rect, type World, rectAt } from './world';
 import type { Boiler, GameState, IngredientId, Item, Target } from './types';
 
 // 厨房の3Dシーン。見た目はすべてプリミティブ（箱・円柱）で作るローポリのプレースホルダー。
@@ -12,6 +13,7 @@ type Label = { sprite: THREE.Sprite; setText: (text: string, color?: string) => 
 export type Kitchen = {
   scene: THREE.Scene;
   interactables: THREE.Object3D[]; // userData.target に Target を持つルート
+  world: World; // 歩ける範囲（壁の内側と、設備の当たり判定）
   handAnchor: THREE.Group; // カメラの子にする。手持ちの物の表示位置
   sync: (state: GameState, dt: number) => void;
 };
@@ -532,7 +534,6 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     interactables.push(slot);
     slotViews.push(new ItemView(slot));
   }
-  decorIn(saladSpot, 'サラダを作る台', SX_WORK, 1.25, 0.4, 0.7);
 
   // 具材コーナー：小エビ（お玉）、チキン・パンチェッタ（トング）、ドレッシング・パプリカパウダー（ボトル）
   const saladStocks: { id: IngredientId; bottle?: boolean }[] = [
@@ -583,6 +584,27 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     hotWaterViews.push({ pack: new ItemView(slot), label });
   }
   decorIn(hotWaterSpot, '熱湯', 0, 0.55, 0.53, 0.5);
+
+  // --- 歩ける範囲：壁の内側と、設備の当たり判定（上から見た矩形）---
+  // 設備の位置・大きさを変えたら、ここも合わせる（冷蔵庫・サラダ台・熱湯は layout.ts に追従する）
+  const obstacles: Rect[] = [
+    rectAt(0, -1.8, 3, 1), // IHコンロ（鍋置き場・洗浄機を含む）
+    rectAt(0, BOILER_Z, 3, 1.1), // 茹で麺器
+    rectAt(-2.6, -0.2, 1.4, 3.6), // 左の台（皿・トッピング・提供台）
+    rectAt(layout.hotWater.x, layout.hotWater.z, 0.9, 1), // 熱湯
+    rectAt(layout.saladTable.x, layout.saladTable.z, 1.1, 2.7), // サラダ台
+    rectAt(layout.fridge.x + 0.4, layout.fridge.z, 0.8, 1), // 冷蔵庫（扉は含めない）
+  ];
+  const wallHalf = 0.05; // 壁の厚み(0.1)の半分
+  const world: World = {
+    bounds: {
+      minX: roomMinX + wallHalf,
+      maxX: roomMaxX - wallHalf,
+      minZ: roomMinZ + wallHalf,
+      maxZ: roomMaxZ - wallHalf,
+    },
+    obstacles,
+  };
 
   // --- 手持ちの表示（カメラの右下）---
   const handAnchor = new THREE.Group();
@@ -659,5 +681,5 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     handView.show(state.hand);
   };
 
-  return { scene, interactables, handAnchor, sync };
+  return { scene, interactables, world, handAnchor, sync };
 }

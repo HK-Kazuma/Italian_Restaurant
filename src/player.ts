@@ -1,16 +1,20 @@
 import * as THREE from 'three';
 import type { GameConfig } from './config';
+import { type World, moveInWorld } from './world';
 
 const EYE_HEIGHT = 1.6;
 const MAX_PITCH = Math.PI / 2 - 0.05;
 
-// ほぼ中央に立ったまま視点を振るプレイヤー。WASD は一、二歩寄る程度（半径で制限）
+// 一人称のプレイヤー。視点を振るのが主で、WASD で壁ぎわまで歩ける（壁と設備には入れない）
 export class Player {
   yaw = 0;
   pitch = 0;
   readonly position = new THREE.Vector3(0, EYE_HEIGHT, 0);
 
-  constructor(private cfg: GameConfig) {}
+  constructor(
+    private cfg: GameConfig,
+    private world: World,
+  ) {}
 
   look(dx: number, dy: number): void {
     this.yaw -= dx * this.cfg.mouseSensitivity;
@@ -28,15 +32,11 @@ export class Player {
     const sin = Math.sin(this.yaw);
     const cos = Math.cos(this.yaw);
     // yaw=0 のとき -z が正面
-    this.position.x += (right * cos - forward * sin) * step;
-    this.position.z += (-right * sin - forward * cos) * step;
-
-    const r = Math.hypot(this.position.x, this.position.z);
-    if (r > this.cfg.moveRadius) {
-      const k = this.cfg.moveRadius / r;
-      this.position.x *= k;
-      this.position.z *= k;
-    }
+    const dx = (right * cos - forward * sin) * step;
+    const dz = (-right * sin - forward * cos) * step;
+    const next = moveInWorld(this.position.x, this.position.z, dx, dz, this.cfg.playerRadius, this.world);
+    this.position.x = next.x;
+    this.position.z = next.z;
   }
 
   applyTo(camera: THREE.PerspectiveCamera): void {

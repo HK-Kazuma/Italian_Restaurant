@@ -39,7 +39,7 @@ export type GameConfig = {
   orderMissPenalty: number; // 注文ミスの減点
 
   // プレイヤー
-  moveRadius: number; // 中央から動ける半径（m）
+  playerRadius: number; // 体の半径（m）。壁や設備にこれ以上は近づけない
   moveSpeed: number; // 移動速度（m/s）
   reach: number; // 手が届く距離（m）
   mouseSensitivity: number; // ラジアン/ピクセル
@@ -78,7 +78,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   comboMax: 2,
   orderMissPenalty: 30,
 
-  moveRadius: 0.8,
+  playerRadius: 0.3,
   moveSpeed: 2,
   reach: 5,
   mouseSensitivity: 0.0022,

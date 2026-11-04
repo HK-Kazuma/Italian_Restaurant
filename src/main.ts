@@ -37,7 +37,7 @@ kitchen.scene.add(camera);
 camera.add(kitchen.handAnchor);
 
 const game = new Game(cfg);
-const player = new Player(cfg);
+const player = new Player(cfg, kitchen.world);
 const interactor = new Interactor(camera, kitchen.interactables, cfg.reach);
 let best = loadBest();
 
@@ -75,7 +75,7 @@ resize();
 
 if (import.meta.env.DEV) {
   // 動作確認用：ブラウザのコンソールから game / player / interactor を触れる
-  Object.assign(window, { game, player, interactor });
+  Object.assign(window, { game, player, interactor, world: kitchen.world });
 }
 
 const timer = new THREE.Timer();

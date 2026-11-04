@@ -37,6 +37,7 @@ export type Layout = {
 
 export const LAYOUT: Layout = {
   fridge: { x: 2.25, z: 2.5 },
-  saladTable: { x: 2.00, z: 2.11 },
+  saladTable: { x: 2.00, z: 0.3
+   },
   hotWater: { x: 1.95, z: -1.8*2},
 };
