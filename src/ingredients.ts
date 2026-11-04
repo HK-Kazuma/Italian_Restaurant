@@ -1,0 +1,25 @@
+import type { IngredientId } from './types';
+
+export const INGREDIENTS: Record<IngredientId, { name: string; color: number }> = {
+  noodle: { name: '麺', color: 0xf2c94c },
+  penne: { name: 'ペンネ', color: 0xe8c872 },
+  tarakoSauce: { name: 'たらこソース', color: 0xf08a8a },
+  nori: { name: '刻みのり', color: 0x1d2b22 },
+  meatSauce: { name: 'ミートソース', color: 0x8b2e1f },
+  cheese: { name: '粉チーズ', color: 0xfff4c2 },
+  parsley: { name: 'パセリ', color: 0x3f8f3a },
+  tomatoSauce: { name: 'トマトソース', color: 0xd9381e },
+  pancetta: { name: 'パンチェッタ', color: 0xe9a6a0 },
+  carbonaraSauce: { name: 'カルボナーラソース', color: 0xf3e3a1 },
+  blackPepper: { name: 'ブラックペッパー', color: 0x2a2a2a },
+  garlic: { name: 'ガーリック', color: 0xf5efd2 },
+  chili: { name: '唐辛子', color: 0xc01818 },
+  spinach: { name: 'ほうれん草', color: 0x2f7d32 },
+  sauteSauce: { name: 'ソテーソース', color: 0xb5651d },
+  saladBase: { name: 'サラダベース', color: 0x8fcf6a },
+  shrimp: { name: '小エビ', color: 0xf4a384 },
+  chicken: { name: 'サラダチキン', color: 0xe8d3b0 },
+  dressing: { name: 'ドレッシング', color: 0xe6c36b },
+  paprika: { name: 'パプリカパウダー', color: 0xd2491d },
+  cornSoup: { name: 'コーンスープ', color: 0xf4d03f },
+};

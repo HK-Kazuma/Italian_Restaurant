@@ -1,0 +1,180 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #111;
+  font-family: 'Yu Gothic', 'Meiryo', sans-serif;
+  color: #fff;
+  user-select: none;
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#hud > * {
+  position: absolute;
+}
+
+.top {
+  top: 12px;
+  left: 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  text-shadow: 0 1px 4px #000;
+}
+.top .timer {
+  font-size: 40px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+}
+.top .timer.low {
+  color: #ff6b5e;
+}
+.top .score {
+  font-size: 22px;
+}
+.top .score b {
+  font-size: 32px;
+}
+.top .combo {
+  color: #ffd54a;
+  font-weight: bold;
+}
+
+.rail {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(760px, 56vw);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  transform-origin: top center;
+  transition: transform 0.12s;
+}
+.rail.zoom {
+  transform: translateX(-50%) scale(1.5);
+}
+.ticket {
+  width: 132px;
+  padding: 6px 8px;
+  background: #fffdf3;
+  color: #222;
+  border-top: 5px solid #5aa469;
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+}
+.ticket.mid {
+  border-top-color: #e6b422;
+}
+.ticket.late {
+  border-top-color: #d64535;
+}
+.ticket .name {
+  font-weight: bold;
+  font-size: 14px;
+}
+.ticket .items {
+  color: #555;
+  margin: 2px 0;
+}
+.ticket .wait {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.crosshair {
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.hand {
+  bottom: 18px;
+  left: 18px;
+  font-size: 18px;
+  text-shadow: 0 1px 4px #000;
+}
+
+.toast {
+  bottom: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 26px;
+  font-weight: bold;
+  text-shadow: 0 2px 6px #000;
+  white-space: nowrap;
+}
+.toast.good {
+  color: #8be28b;
+}
+.toast.bad {
+  color: #ff8a80;
+}
+
+.overlay {
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 8, 6, 0.82);
+  text-align: center;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.overlay.hidden {
+  display: none;
+}
+.overlay h1 {
+  font-size: 44px;
+  margin: 0 0 12px;
+}
+.overlay .big {
+  font-size: 56px;
+  font-weight: bold;
+  margin: 8px 0;
+}
+.overlay .cta {
+  margin-top: 24px;
+  font-size: 22px;
+  color: #ffd54a;
+}
+.overlay .recipe {
+  max-width: 560px;
+  color: #cfc7b8;
+  font-size: 14px;
+}
+.controls {
+  margin: 16px 0 8px;
+  text-align: left;
+  border-collapse: collapse;
+}
+.controls th,
+.controls td {
+  padding: 4px 12px;
+  font-size: 15px;
+}
+.controls th {
+  color: #ffd54a;
+  text-align: right;
+  white-space: nowrap;
+}
