@@ -61,6 +61,14 @@ describe('既定のソース（鍋で加熱する分）', () => {
     expect(findSauceRecipe(['spinach', 'spinach', 'pancetta', 'sauteSauce'])?.id).toBe('spinach');
     expect(findSauceRecipe(['spinach', 'pancetta', 'sauteSauce'])).toBeNull();
   });
+  it('ペペロンチーノ：塩オイルソース・ガーリック・唐辛子が、順不同でそろう', () => {
+    expect(findSauceRecipe(['saltOilSauce', 'garlic', 'chili'])?.id).toBe('peperoncino');
+    expect(findSauceRecipe(['chili', 'saltOilSauce', 'garlic'])?.id).toBe('peperoncino');
+    expect(findSauceRecipe(['saltOilSauce', 'garlic'])).toBeNull();
+    expect(isSaucePartial(['saltOilSauce', 'garlic'])).toBe(true);
+    // ペンネ（トマトソース・ガーリック・唐辛子）とは別のソース
+    expect(findSauceRecipe(['tomatoSauce', 'garlic', 'chili'])?.id).toBe('penne');
+  });
   it('無効にしたメニューのソースは対象外', () => {
     const off = MENU.map((m) => (m.id === 'penne' ? { ...m, enabled: false } : m));
     expect(findSauceRecipe(['tomatoSauce', 'garlic', 'chili'], off)).toBeNull();

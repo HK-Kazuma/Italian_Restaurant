@@ -39,7 +39,7 @@ export type Layout = {
 
 export const LAYOUT: Layout = {
   fridge: { x: 2.25, z: 2.5 },
-  saladTable: { x: 2.00, z: 0.3
+  saladTable: { x: 2.20, z: 0.3
    },
   hotWater: { x: 1.95, z: -1.8},
 };
@@ -60,4 +60,5 @@ export const BOTTLE_HOME: Record<BottleId, { surface: SurfaceId; x: number; z: n
   dressing: { surface: 'salad', x: -0.45, z: -0.9 },
   paprika: { surface: 'salad', x: -0.45, z: -1.25 },
   parsley: { surface: 'left', x: -0.4, z: 0.95 },
+  blackPepper: { surface: 'left', x: -0.4, z: 1.45 }, // もとのトッピングの位置
 };

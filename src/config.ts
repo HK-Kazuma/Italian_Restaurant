@@ -21,6 +21,7 @@ export type GameConfig = {
   potCount: number; // 鍋の総数（未決。6で余裕、4で標準、3以下で洗浄が勝負）
   potWashTime: number; // 鍋の洗浄時間（秒、1個ずつ）
   maxPotContents: number; // 鍋に入れられる中身の上限
+  mixClicks: number; // 麺を入れた鍋を混ぜ終わるまでのクリック数（Aパターンのパスタだけ）
   sauceHeatTime: number; // ソースの加熱時間（秒、仮）。麺より短くして、仕掛ける順番に意味を持たせる
 
   // 左の台
@@ -68,6 +69,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   potCount: 5,
   potWashTime: 5,
   maxPotContents: 8,
+  mixClicks: 3,
   sauceHeatTime: 30,
 
   plateSlotCount: 3,

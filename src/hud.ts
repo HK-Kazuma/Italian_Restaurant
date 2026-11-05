@@ -28,6 +28,9 @@ export class Hud {
   private hand = el('div', 'hand');
   private toast = el('div', 'toast');
   private hint = el('div', 'hint');
+  private guide = el('div', 'guide hidden');
+  private guideArrow = el('div', 'arrow');
+  private guideLabel = el('div', 'label');
   private overlay = el('div', 'overlay');
   private lastRail = '';
   private lastPhase: Phase | null = null;
@@ -40,8 +43,20 @@ export class Hud {
     const top = el('div', 'top');
     top.append(this.timer, this.score);
     const crosshair = el('div', 'crosshair');
-    root.append(top, this.rail, crosshair, this.hint, this.hand, this.toast, this.overlay);
+    this.guide.append(this.guideArrow, this.guideLabel);
+    this.guideArrow.textContent = '▲';
+    root.append(top, this.rail, crosshair, this.hint, this.guide, this.hand, this.toast, this.overlay);
     this.overlay.addEventListener('click', onOverlayClick);
+  }
+
+  // 置き場が画面の外にあるときの案内。left / top は画面内の位置（%）、angle は上を0にした時計回りの角度。null で消す
+  setGuide(g: { left: number; top: number; angle: number; label: string } | null): void {
+    this.guide.classList.toggle('hidden', g === null);
+    if (!g) return;
+    this.guide.style.left = `${g.left}%`;
+    this.guide.style.top = `${g.top}%`;
+    this.guideArrow.style.transform = `rotate(${g.angle}rad)`;
+    this.guideLabel.textContent = g.label;
   }
 
   setTicketZoom(on: boolean): void {

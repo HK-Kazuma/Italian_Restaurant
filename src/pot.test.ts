@@ -4,12 +4,16 @@ import {
   addIngredient,
   canAddIngredient,
   canInsert,
+  canMix,
   canPour,
   canStartHeating,
   createPot,
   createWasher,
   insertPot,
+  isMixed,
   isWashing,
+  mixPot,
+  needsMix,
   pourOnto,
   sauceFill,
   startHeating,
@@ -148,5 +152,75 @@ describe('sauceFill（ソースの量）', () => {
     expect(sauceFill(['pancetta', 'tomatoSauce'])).toBe(0.5);
     expect(sauceFill(['tomatoSauce', 'pancetta'])).toBe(0.5);
     expect(sauceFill(['meatSauce', 'noodle'])).toBe(0.5);
+  });
+});
+
+describe('混ぜる', () => {
+  const readyWithNoodle = () => {
+    const pot = createPot(3);
+    addIngredient(pot, 'meatSauce');
+    addIngredient(pot, 'meatSauce');
+    startHeating(pot, cfg);
+    updateHeat(pot, cfg.sauceHeatTime);
+    addIngredient(pot, 'noodle');
+    return pot;
+  };
+
+  it('麺が入っている鍋だけ、混ぜる必要がある', () => {
+    expect(needsMix(readyWithNoodle())).toBe(true);
+    const sauceOnly = createPot();
+    addIngredient(sauceOnly, 'meatSauce');
+    expect(needsMix(sauceOnly)).toBe(false);
+    const penne = createPot();
+    addIngredient(penne, 'tomatoSauce');
+    startHeating(penne, cfg);
+    updateHeat(penne, cfg.sauceHeatTime);
+    addIngredient(penne, 'penne');
+    expect(needsMix(penne)).toBe(true);
+  });
+
+  it('加熱が終わって麺が入っている間、3回まで混ぜられる', () => {
+    const pot = readyWithNoodle();
+    expect(canMix(pot)).toBe(true);
+    expect(mixPot(pot)).toBe(true);
+    expect(mixPot(pot)).toBe(true);
+    expect(isMixed(pot)).toBe(false);
+    expect(mixPot(pot)).toBe(true);
+    expect(isMixed(pot)).toBe(true);
+    expect(canMix(pot)).toBe(false);
+    expect(mixPot(pot)).toBe(false); // 4回目は混ぜない
+    expect(pot.mixCount).toBe(3);
+  });
+
+  it('混ぜ終わるまでは、皿にかけられない', () => {
+    const pot = readyWithNoodle();
+    expect(canPour(pot, [], 8)).toBe(false);
+    mixPot(pot);
+    mixPot(pot);
+    expect(canPour(pot, [], 8)).toBe(false);
+    mixPot(pot);
+    expect(canPour(pot, [], 8)).toBe(true);
+  });
+
+  it('麺が入っていない鍋（ソースだけ）は、混ぜずにかけられる。混ぜることもできない', () => {
+    const pot = createPot();
+    addIngredient(pot, 'meatSauce');
+    addIngredient(pot, 'meatSauce');
+    startHeating(pot, cfg);
+    updateHeat(pot, cfg.sauceHeatTime);
+    expect(canMix(pot)).toBe(false);
+    expect(canPour(pot, [], 8)).toBe(true);
+  });
+
+  it('混ぜる回数は、皿にかけると0に戻る', () => {
+    const pot = readyWithNoodle();
+    for (let i = 0; i < 3; i++) mixPot(pot);
+    pourOnto(pot, []);
+    expect(pot.mixCount).toBe(0);
+  });
+
+  it('必要な回数は、鍋を作るときに決められる', () => {
+    const pot = createPot(5);
+    expect(pot.mixNeed).toBe(5);
   });
 });

@@ -10,7 +10,7 @@ export type MenuItem = {
   enabled: boolean; // false の間は伝票に出ない（必要な設備が未実装）
 };
 
-// 要件定義書「メニューとレシピ」の9品（enabled: false にすると、その品は伝票に出ない）
+// 要件定義書「メニューとレシピ」の品（enabled: false にすると、その品は伝票に出ない）
 export const MENU: MenuItem[] = [
   {
     id: 'tarako',
@@ -35,6 +35,15 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['noodle', 'tomatoSauce', 'pancetta', 'cheese'],
     sauce: ['tomatoSauce', 'pancetta'],
+    basePoints: 50,
+    enabled: true,
+  },
+  {
+    id: 'peperoncino',
+    name: 'ペペロンチーノ',
+    station: 'pasta',
+    ingredients: ['noodle', 'saltOilSauce', 'garlic', 'chili', 'parsley'],
+    sauce: ['saltOilSauce', 'garlic', 'chili'],
     basePoints: 50,
     enabled: true,
   },

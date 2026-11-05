@@ -14,6 +14,7 @@ export type IngredientId =
   | 'chili'
   | 'spinach'
   | 'sauteSauce'
+  | 'saltOilSauce' // 塩オイルソース（ペペロンチーノ）
   | 'saladBase'
   | 'shrimp'
   | 'chicken'
@@ -22,7 +23,7 @@ export type IngredientId =
   | 'cornSoup';
 
 // 手に持って、皿にかける・振るボトル。決まった台の上に自由に置ける（置ける台は bottle.ts）
-export type BottleId = Extract<IngredientId, 'dressing' | 'paprika' | 'parsley'>;
+export type BottleId = Extract<IngredientId, 'dressing' | 'paprika' | 'parsley' | 'blackPepper'>;
 
 // ボトルを置ける台。salad = 右のサラダ台、left = IHの左の台
 export type SurfaceId = 'salad' | 'left';
@@ -48,6 +49,9 @@ export type NoodleKind = Extract<IngredientId, 'noodle' | 'penne'>;
 // 見た目の違いと、スープ皿にだけパックを入れられる、という違いだけ。提供の判定は中身だけで決まる
 export type PlateStyle = 'plate' | 'small' | 'bowl';
 
+// 冷蔵庫から取ってサラダ台に置くトレー・ケース。spinach = ほうれん草のトレー、saltOil = 塩オイルソースのパックが入ったケース
+export type TrayId = 'spinach' | 'saltOil';
+
 export type BoilerState = 'empty' | 'set' | 'boiling' | 'lifted' | 'overdue' | 'shortBoil';
 
 export type Boiler = {
@@ -70,6 +74,8 @@ export type Pot = {
   heat: PotHeat;
   heatTimer: number; // heating: 残り加熱時間（秒）
   dirty: boolean; // 使用済み（具材を入れた）。洗浄機で洗うまで鍋置き場に戻せない
+  mixCount: number; // 麺を入れたあと、混ぜたクリック数
+  mixNeed: number; // 混ぜ終わるのに必要なクリック数（3回）
 };
 
 // 鍋洗浄機は1台・1個ずつ。dirty な鍋が入っている間が洗浄中、洗い終わると dirty が false になる
@@ -93,7 +99,7 @@ export type Item =
   | { kind: 'ingredient'; id: IngredientId }
   | { kind: 'plate'; contents: IngredientId[]; style?: PlateStyle } // style 省略 = plate
   | { kind: 'pack'; packs: Pack[] } // 熱湯で温めてから使うパック。同じ種類を重ねて持てる（コーンスープは最大5つ）
-  | { kind: 'tray' } // ほうれん草のトレー
+  | { kind: 'tray'; id: TrayId } // ほうれん草のトレー / 塩オイルソースのケース
   | { kind: 'bottle'; id: BottleId } // ドレッシング・パプリカパウダー・パセリ。右クリックで皿にかける・振る（なくならない）
   | { kind: 'pot'; pot: Pot };
 
@@ -103,8 +109,8 @@ export type Target =
   | { kind: 'plateStack'; style?: PlateStyle } // 皿の山。style 省略 = plate（小皿・スープ皿の山もある）
   | { kind: 'stock'; id: IngredientId; inFridge?: boolean } // クリックで手に取れる取り出し元（缶・パック・トッピングなど）。inFridge は冷蔵庫の中（扉が開いている間だけ取れる）
   | { kind: 'fridgeDoor' } // 冷蔵庫（扉・本体）。右クリックで開閉
-  | { kind: 'spinachTray' } // 冷蔵庫の中のほうれん草のトレー（扉が開いている間だけ取れる）
-  | { kind: 'traySlot' } // サラダ台の上のトレー置き場。置いたトレーから、トングでほうれん草を取れる
+  | { kind: 'fridgeTray'; id: TrayId } // 冷蔵庫の中のトレー・ケース（扉が開いている間だけ取れる）
+  | { kind: 'traySlot'; id: TrayId } // サラダ台の上のトレー・ケース置き場。置いたものから、ほうれん草（トング）・塩オイルソース（お玉）を取れる
   | { kind: 'boilerBasket'; index: number }
   | { kind: 'boilerButton'; index: number }
   | { kind: 'plateSlot'; index: number }
@@ -131,7 +137,7 @@ export type GameState = {
   boilers: Boiler[];
   plateSlots: (IngredientId[] | null)[]; // 皿の置き場。左の台（plateSlotCount 個）→ サラダ台（saladSlotCount 個）の順。null = 皿なし
   plateStyles: PlateStyle[]; // plateSlots と同じ並び。置いてある皿の種類
-  tray: 'fridge' | 'hand' | 'table'; // ほうれん草のトレーの場所（冷蔵庫 / 手 / サラダ台）
+  trays: Record<TrayId, 'fridge' | 'hand' | 'table'>; // トレー・ケースの場所（冷蔵庫 / 手 / サラダ台）
   fridgeOpen: boolean; // 冷蔵庫の扉（最初は閉まっている）
   bottles: Record<BottleId, BottleSpot>; // 台の上のボトル
   hotWater: (Pack | null)[]; // 熱湯に浸けているパック（3×3の9か所、左上から横に数える）。null = 空き

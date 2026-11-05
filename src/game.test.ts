@@ -328,6 +328,7 @@ describe('Game: ミートパスタを1皿出す（Aパターン）', () => {
 
     g.interact(basket(0)); // 麺を取る
     g.interact(burner(0)); // 加熱済みの鍋に入れる
+    mix(g, 0); // 混ぜる（クリック3回）
     g.interact(burner(0)); // 鍋を手に取る
     g.interact(slot(0)); // 皿にかける
     expect(g.state.plateSlots[0]).toEqual(['meatSauce', 'meatSauce', 'noodle']);
@@ -364,7 +365,7 @@ const hotWater = (index: number): Target => ({ kind: 'hotWaterSlot', index });
 const tomatoSauce: Target = { kind: 'stock', id: 'tomatoSauce', inFridge: true };
 const pancetta: Target = { kind: 'stock', id: 'pancetta' };
 const carbonaraPack: Target = { kind: 'stock', id: 'carbonaraSauce', inFridge: true };
-const blackPepper: Target = { kind: 'stock', id: 'blackPepper' };
+const blackPepper: Target = { kind: 'bottle', id: 'blackPepper' };
 
 describe('Game: パルマ風パスタを1皿出す（Aパターン）', () => {
   it('トマトソースのパックとパンチェッタを鍋に入れて加熱し、麺と合わせ、粉チーズを振って提供する', () => {
@@ -385,6 +386,7 @@ describe('Game: パルマ風パスタを1皿出す（Aパターン）', () => {
 
     g.interact(basket(0));
     g.interact(burner(0)); // 麺を鍋へ
+    mix(g, 0);
     g.interact(burner(0)); // 鍋を持つ
     g.interact(slot(0)); // 皿にかける
     g.interact(washer);
@@ -446,8 +448,9 @@ describe('Game: カルボナーラを1皿出す（Bパターン）', () => {
     g.interact(washer);
     g.interact(cheese);
     g.interact(slot(0));
-    g.interact(blackPepper);
-    g.interact(slot(0));
+    g.interact(blackPepper); // ボトルを持ち、右クリックで皿に振って、左の台に戻す
+    g.rightClick(slot(0));
+    g.interact(table(-0.4, 1.45, 'left'));
     g.interact(slot(0));
     g.interact(pass);
     expect(g.state.served).toBe(1);
@@ -726,6 +729,33 @@ describe('Game: パセリのボトル', () => {
   });
 });
 
+describe('Game: ブラックペッパーのボトル（パセリと同じ）', () => {
+  it('最初は左の台の上。パスタの皿に右クリックで振る。サラダの皿には振れない', () => {
+    const g = newGame();
+    expect(g.state.bottles.blackPepper?.surface).toBe('left');
+    g.interact(plateStack);
+    g.interact(slot(0));
+    g.interact(saladBase);
+    g.interact(saladSlot(0));
+    g.interact(blackPepper);
+    g.rightClick(saladSlot(0));
+    expect(g.state.plateSlots[cfg.plateSlotCount]).toEqual(['saladBase']);
+    g.rightClick(slot(0));
+    expect(g.state.plateSlots[0]).toEqual(['blackPepper']);
+    expect(g.state.hand).toEqual({ kind: 'bottle', id: 'blackPepper' });
+  });
+
+  it('左の台にも、サラダ台にも置ける', () => {
+    const g = newGame();
+    g.interact(blackPepper);
+    g.interact(table(0.0, 0.5, 'salad'));
+    expect(g.state.bottles.blackPepper?.surface).toBe('salad');
+    g.interact(blackPepper);
+    g.interact(table(-0.2, 0.0, 'left'));
+    expect(g.state.bottles.blackPepper).toEqual({ surface: 'left', x: -0.2, z: 0 });
+  });
+});
+
 describe('Game: 進行', () => {
   it('伝票が届き、制限時間でリザルトになる', () => {
     const g = newGame();
@@ -757,8 +787,14 @@ const cornSoupStock: Target = { kind: 'stock', id: 'cornSoup', inFridge: true };
 const garlic: Target = { kind: 'stock', id: 'garlic' };
 const chili: Target = { kind: 'stock', id: 'chili' };
 const sauteSauce: Target = { kind: 'stock', id: 'sauteSauce' };
-const spinachTray: Target = { kind: 'spinachTray' };
-const traySlot: Target = { kind: 'traySlot' };
+const spinachTray: Target = { kind: 'fridgeTray', id: 'spinach' };
+const saltOilCase: Target = { kind: 'fridgeTray', id: 'saltOil' };
+const traySlot: Target = { kind: 'traySlot', id: 'spinach' };
+const caseSlot: Target = { kind: 'traySlot', id: 'saltOil' };
+// 麺を入れたIHの鍋を、クリック3回で混ぜる（Aパターンのパスタだけ）
+function mix(g: Game, burnerIndex: number) {
+  for (let i = 0; i < cfg.mixClicks; i++) g.interact(burner(burnerIndex));
+}
 const smallStack: Target = { kind: 'plateStack', style: 'small' };
 const bowlStack: Target = { kind: 'plateStack', style: 'bowl' };
 
@@ -785,6 +821,7 @@ describe('Game: ペンネアラビアータを1皿出す（Aパターン）', ()
     expect(g.state.ihBurners[0]?.heat).toBe('ready');
 
     g.interact(burner(0)); // 加熱した鍋にペンネを入れる
+    mix(g, 0);
     g.interact(burner(0)); // 鍋を持つ
     g.interact(slot(0)); // 皿にかける
     expect(g.state.plateSlots[0]).toEqual(['tomatoSauce', 'garlic', 'chili', 'penne']);
@@ -815,9 +852,9 @@ describe('Game: ほうれん草のソテーを1皿出す', () => {
   it('冷蔵庫のトレーをサラダ台に置き、トングでほうれん草を2掴み、パンチェッタとソテーソースで加熱し、小皿に盛る', () => {
     const g = gameWithTicket('spinach');
     g.interact(spinachTray);
-    expect(g.state.hand).toEqual({ kind: 'tray' });
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'spinach' });
     g.interact(traySlot); // サラダ台のトレー置き場に置く
-    expect(g.state.tray).toBe('table');
+    expect(g.state.trays.spinach).toBe('table');
     expect(g.state.hand).toBeNull();
 
     g.interact(potSlot(0));
@@ -856,11 +893,11 @@ describe('Game: ほうれん草のソテーを1皿出す', () => {
     g.rightClick(fridgeDoor);
     g.interact(spinachTray);
     g.discard();
-    expect(g.state.hand).toEqual({ kind: 'tray' });
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'spinach' });
     expect(g.planInteract(spinachTray)).toBeNull(); // もう冷蔵庫にはない
     expect(g.planInteract(traySlot)).not.toBeNull();
     g.interact(traySlot);
-    expect(g.state.tray).toBe('table');
+    expect(g.state.trays.spinach).toBe('table');
     expect(g.planInteract(spinachTray)).toBeNull();
   });
 
@@ -971,5 +1008,158 @@ describe('Game: コーンスープを1杯出す', () => {
     g.interact(cornSoupStock); // コーンスープを持つ
     expect(g.planInteract(hotWater(0))).not.toBeNull(); // 同じ種類（コーンスープ）なら、重ねて持てる
     expect(g.planInteract(hotWater(1))).toBeNull(); // 違う種類は持てない
+  });
+});
+
+// ---------- 混ぜる動作・ペペロンチーノ ----------
+
+describe('Game: 混ぜる（Aパターンのパスタだけ）', () => {
+  // ミートソースを加熱し終えた鍋に、茹で上がった麺を入れたところまで
+  function readyPotWithNoodle() {
+    const g = gameWithTicket('meat');
+    setPot(g, 0, 0, 2);
+    g.interact(rack);
+    g.interact(basket(0));
+    g.interact(button(0));
+    g.update(cfg.boilTime + 1);
+    g.interact(basket(0));
+    g.interact(burner(0)); // 加熱済みの鍋に麺を入れる
+    return g;
+  }
+
+  it('麺を入れた鍋は、手が空のクリックで混ぜる。3回で混ざり、それまでは持ち上げられない', () => {
+    const g = readyPotWithNoodle();
+    const pot = g.state.ihBurners[0]!;
+    expect(g.mixProgressAt(burner(0))).toEqual({ done: 0, need: 3 });
+
+    g.interact(burner(0));
+    expect(g.state.hand).toBeNull(); // 持ち上がらず、混ぜている
+    expect(pot.mixCount).toBe(1);
+    expect(g.state.toast?.text).toContain('1/3');
+    g.interact(burner(0));
+    expect(pot.mixCount).toBe(2);
+    expect(g.state.ihBurners[0]).toBe(pot);
+
+    g.interact(burner(0));
+    expect(pot.mixCount).toBe(3);
+    expect(g.state.toast?.text).toContain('混ざった');
+    expect(g.mixProgressAt(burner(0))).toBeNull(); // もう混ぜない
+
+    g.interact(burner(0)); // 4回目は、鍋を持ち上げる
+    expect(g.state.hand?.kind).toBe('pot');
+  });
+
+  it('混ぜ終わるまでは、皿にかけられない（鍋を持てないので、かけようがない）', () => {
+    const g = readyPotWithNoodle();
+    g.interact(burner(0)); // 1回混ぜただけ
+    expect(g.state.hand).toBeNull(); // 鍋は持ち上がらない（混ぜ終わるまで）
+    g.interact(plateStack);
+    g.interact(slot(0));
+    expect(g.state.plateSlots[0]).toEqual([]);
+    g.interact(burner(0));
+    g.interact(burner(0)); // 3回で混ざった
+    g.interact(burner(0)); // 鍋を持つ
+    g.interact(slot(0)); // 皿にかける
+    expect(g.state.plateSlots[0]).toEqual(['meatSauce', 'meatSauce', 'noodle']);
+  });
+
+  it('麺が入っていない鍋（ソースだけ）は、混ぜずに、そのまま持てる', () => {
+    const g = newGame();
+    setPot(g, 0, 0, 2);
+    g.update(cfg.sauceHeatTime + 1);
+    expect(g.mixProgressAt(burner(0))).toBeNull();
+    g.interact(burner(0));
+    expect(g.state.hand?.kind).toBe('pot');
+  });
+
+  it('加熱が終わる前や、手が空でないときは、混ぜられない', () => {
+    const g = newGame();
+    setPot(g, 0, 0, 2); // 加熱中
+    expect(g.mixProgressAt(burner(0))).toBeNull();
+    g.interact(can);
+    expect(g.mixProgressAt(burner(0))).toBeNull();
+  });
+
+  it('皿にかけたあと、洗ったあとは、混ぜた回数がリセットされる', () => {
+    const g = readyPotWithNoodle();
+    mix(g, 0);
+    g.interact(plateStack);
+    g.discard();
+    g.interact(burner(0));
+    expect(g.state.hand?.kind === 'pot' && g.state.hand.pot.mixCount).toBe(3);
+    g.interact(plateStack); // 手がふさがっている
+    g.interact(washer);
+    g.update(cfg.potWashTime + 0.1);
+    g.interact(washer);
+    expect(g.state.hand?.kind === 'pot' && g.state.hand.pot.mixCount).toBe(0);
+  });
+});
+
+describe('Game: ペペロンチーノを1皿出す（Bパターン）', () => {
+  it('塩オイルソースのケースをサラダ台に置き、1杯・ガーリック・唐辛子を鍋に入れて加熱し、麺を盛った皿にかけ、パセリを振る', () => {
+    const g = gameWithTicket('peperoncino');
+    g.interact(saltOilCase);
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'saltOil' });
+    expect(g.planInteract(traySlot)).toBeNull(); // ほうれん草のトレーの置き場には置けない
+    g.interact(caseSlot);
+    expect(g.state.trays.saltOil).toBe('table');
+
+    g.interact(potSlot(0));
+    g.interact(burner(0));
+    g.interact(caseSlot); // お玉で1杯
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'saltOilSauce' });
+    g.interact(burner(0));
+    for (const stock of [garlic, chili]) {
+      g.interact(stock);
+      g.interact(burner(0));
+    }
+    expect(g.state.ihBurners[0]?.contents.slice().sort()).toEqual(['chili', 'garlic', 'saltOilSauce']);
+    expect(g.state.ihBurners[0]?.heat).toBe('heating');
+
+    g.interact(plateStack);
+    g.interact(slot(0));
+    g.interact(rack);
+    g.interact(basket(0));
+    g.interact(button(0));
+    g.update(cfg.boilTime + 1);
+    expect(g.state.ihBurners[0]?.heat).toBe('ready');
+    g.interact(basket(0));
+    g.interact(slot(0)); // 麺を皿に盛る（Bパターン）
+    expect(g.mixProgressAt(burner(0))).toBeNull(); // 鍋に麺は入れない。混ぜない
+    g.interact(burner(0)); // 鍋を持つ
+    g.interact(slot(0)); // ソースをかける
+    expect(g.state.plateSlots[0]).toEqual(['noodle', 'saltOilSauce', 'garlic', 'chili']);
+    g.interact(washer);
+
+    g.interact(parsley);
+    g.rightClick(slot(0));
+    g.interact(table(-0.4, 0.95, 'left'));
+    g.interact(slot(0));
+    g.interact(pass);
+    expect(g.state.served).toBe(1);
+    expect(g.state.mistakes).toBe(0);
+  });
+
+  it('ほうれん草のトレーと塩オイルのケースは、別々に取れて、別々の置き場に置く。ケースは冷蔵庫が開いているときだけ', () => {
+    const g = new Game(cfg, () => 0);
+    g.start();
+    expect(g.planInteract(saltOilCase)).toBeNull(); // 扉が閉まっている
+    g.rightClick(fridgeDoor);
+    g.interact(spinachTray);
+    expect(g.state.trays).toEqual({ spinach: 'hand', saltOil: 'fridge' });
+    g.interact(traySlot);
+    g.interact(saltOilCase);
+    g.interact(caseSlot);
+    expect(g.state.trays).toEqual({ spinach: 'table', saltOil: 'table' });
+    g.interact(caseSlot);
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'saltOilSauce' });
+  });
+
+  it('ケースを置く前は、塩オイルソースは取れない。ケースは捨てられない', () => {
+    const g = newGame();
+    expect(g.planInteract(caseSlot)).toBeNull();
+    g.interact(saltOilCase);
+    g.discard();
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'saltOil' });
   });
 });

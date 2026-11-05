@@ -15,6 +15,7 @@ export const INGREDIENTS: Record<IngredientId, { name: string; color: number }> 
   garlic: { name: 'ガーリック', color: 0xf5efd2 },
   chili: { name: '唐辛子', color: 0xc01818 },
   spinach: { name: 'ほうれん草', color: 0x2f7d32 },
+  saltOilSauce: { name: '塩オイルソース', color: 0xe6cf6a },
   sauteSauce: { name: 'ソテーソース', color: 0xb5651d },
   saladBase: { name: 'サラダベース', color: 0x8fcf6a },
   shrimp: { name: '小エビ', color: 0xf4a384 },

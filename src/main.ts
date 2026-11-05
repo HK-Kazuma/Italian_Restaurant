@@ -61,6 +61,10 @@ const hud = new Hud(document.getElementById('hud')!, cfg, () => input.requestLoc
 // 視点が合っている物に対する、左クリック以外の操作の案内
 function hintFor(target: Target | null): string {
   const hand = game.state.hand;
+  if (hand?.kind === 'tray') {
+    if (target?.kind === 'traySlot') return target.id === hand.id ? '左クリック：ここに置く' : 'この置き場には置けない（種類が違う）';
+    return 'サラダ台の緑の印（矢印の先）に置く';
+  }
   if (hand?.kind === 'bottle') {
     if (game.canUseBottleAt(target)) return `右クリック：${BOTTLE_ACTION[hand.id]}`;
     const p = game.previewBottle(target);
@@ -69,10 +73,33 @@ function hintFor(target: Target | null): string {
     if (p) return 'ここには置けない（ほかのボトルに近すぎる）';
     return `右クリック：${BOTTLE_ACTION[hand.id]}（皿に視点を合わせて）　左クリック：台の上に置く`;
   }
-  if (target && (target.kind === 'fridgeDoor' || target.kind === 'spinachTray' || (target.kind === 'stock' && target.inFridge))) {
+  const mix = game.mixProgressAt(target);
+  if (mix) return `左クリック：混ぜる（${mix.done}/${mix.need}）`;
+  if (target && (target.kind === 'fridgeDoor' || target.kind === 'fridgeTray' || (target.kind === 'stock' && target.inFridge))) {
     return `右クリック：冷蔵庫の扉を${game.state.fridgeOpen ? '閉める' : '開ける'}`;
   }
   return '';
+}
+
+// トレー・ケースを持っているとき、置き場が画面の外にあれば、画面の縁に向きを示す矢印を出す（見えていれば、3Dの印と矢印がある）
+function offscreenGuide(): { left: number; top: number; angle: number; label: string } | null {
+  const guide = kitchen.trayGuide(game.state);
+  if (!guide) return null;
+  const v = guide.world.clone().project(camera);
+  let nx = v.x;
+  let ny = v.y;
+  const behind = v.z > 1; // カメラの後ろ：投影が反転するので、向きを戻す
+  if (behind) {
+    nx = -nx;
+    ny = -ny;
+  }
+  if (!behind && Math.abs(nx) < 0.9 && Math.abs(ny) < 0.85) return null;
+  if (Math.abs(nx) < 1e-3 && Math.abs(ny) < 1e-3) ny = -1;
+  // 縁の少し内側に収める
+  const k = Math.max(Math.abs(nx) / 0.88, Math.abs(ny) / 0.8);
+  nx /= k;
+  ny /= k;
+  return { left: 50 + nx * 50, top: 50 - ny * 50, angle: Math.atan2(nx, ny), label: guide.label };
 }
 
 function resize(): void {
@@ -116,6 +143,7 @@ function frame(): void {
   else interactor.clear();
   kitchen.sync(game.state, dt, game.previewBottle(interactor.current));
   hud.update(game.state, best, hintFor(interactor.current));
+  hud.setGuide(game.state.phase === 'playing' ? offscreenGuide() : null);
   renderer.render(kitchen.scene, camera);
   requestAnimationFrame(frame);
 }

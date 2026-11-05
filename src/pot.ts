@@ -11,8 +11,31 @@ export function isNoodle(id: IngredientId): boolean {
   return NOODLES.has(id);
 }
 
-export function createPot(): Pot {
-  return { contents: [], heat: 'cold', heatTimer: 0, dirty: false };
+export function createPot(mixNeed = 3): Pot {
+  return { contents: [], heat: 'cold', heatTimer: 0, dirty: false, mixCount: 0, mixNeed };
+}
+
+// --- 混ぜる ---
+// 麺を入れた鍋（Aパターンのパスタ）だけ、皿にかける前に、IHの上でクリックして混ぜる（3回）。
+// ソースだけの鍋（Bパターン・ほうれん草のソテー）は混ぜない。
+
+export function needsMix(pot: Pot): boolean {
+  return pot.contents.some(isNoodle);
+}
+
+export function isMixed(pot: Pot): boolean {
+  return pot.mixCount >= pot.mixNeed;
+}
+
+// 加熱が終わって麺が入っていて、まだ混ぜ終わっていない
+export function canMix(pot: Pot): boolean {
+  return pot.heat === 'ready' && needsMix(pot) && !isMixed(pot);
+}
+
+export function mixPot(pot: Pot): boolean {
+  if (!canMix(pot)) return false;
+  pot.mixCount++;
+  return true;
 }
 
 // --- 具材を入れる・加熱する ---
@@ -53,8 +76,14 @@ export function updateHeat(pot: Pot, dt: number): void {
 
 // --- 皿にかける ---
 
+// 麺が入っている鍋は、混ぜ終わってからでないとかけられない
 export function canPour(pot: Pot, plate: readonly IngredientId[], max: number): boolean {
-  return pot.heat === 'ready' && pot.contents.length > 0 && plate.length + pot.contents.length <= max;
+  return (
+    pot.heat === 'ready' &&
+    pot.contents.length > 0 &&
+    plate.length + pot.contents.length <= max &&
+    (!needsMix(pot) || isMixed(pot))
+  );
 }
 
 // 鍋の中身を皿に移す。鍋は空になるが使用済みのまま（洗浄機へ）
@@ -63,6 +92,7 @@ export function pourOnto(pot: Pot, plate: IngredientId[]): void {
   pot.contents = [];
   pot.heat = 'cold';
   pot.heatTimer = 0;
+  pot.mixCount = 0;
 }
 
 // --- 洗浄機 ---
@@ -105,6 +135,7 @@ export function updateWasher(w: Washer, dt: number): void {
     pot.contents = [];
     pot.heat = 'cold';
     pot.heatTimer = 0;
+    pot.mixCount = 0;
   }
 }
 
@@ -114,6 +145,7 @@ export function updateWasher(w: Washer, dt: number): void {
 // ミートソースはお玉2杯で満杯なので、1杯で半分。見た目（scene.ts）はこの値で液面の高さを決める。
 export const SAUCE_FILL_PER_UNIT: Partial<Record<IngredientId, number>> = {
   meatSauce: 0.5,
+  saltOilSauce: 0.5,
   tomatoSauce: 0.5,
   carbonaraSauce: 0.5,
   sauteSauce: 0.5,
