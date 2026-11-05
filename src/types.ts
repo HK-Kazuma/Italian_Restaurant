@@ -98,6 +98,22 @@ export type Pot = {
   mixNeed: number; // 混ぜ終わるのに必要なクリック数（3回）
 };
 
+// 右クリックで投げた鍋。床や台に落ちて止まるまで動く。止まったら、左クリックで手に拾える。
+// x, y, z は鍋の底の中心（y = 0 が床）。yaw は回転（rad）
+export type ThrownPot = {
+  id: number;
+  pot: Pot;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  yaw: number;
+  spin: number; // yaw の回転の速さ（rad/s）
+  resting: boolean; // 止まっている
+};
+
 // 鍋洗浄機は1台・1個ずつ。dirty な鍋が入っている間が洗浄中、洗い終わると dirty が false になる
 export type Washer = {
   pot: Pot | null;
@@ -138,6 +154,7 @@ export type Target =
   | { kind: 'plateSlot'; index: number }
   | { kind: 'servePass' }
   | { kind: 'potSlot'; index: number } // 鍋置き場の1か所
+  | { kind: 'thrownPot'; id: number } // 投げて床・台に落ちている鍋（左クリックで拾う）
   | { kind: 'ihBurner'; index: number }
   | { kind: 'hotWaterSlot'; index: number } // 熱湯に浸けるパックの置き場所
   | { kind: 'bottle'; id: BottleId } // 台の上のボトル
@@ -173,6 +190,7 @@ export type GameState = {
   hotWater: (Pack | null)[]; // 熱湯に浸けているパック（3×3の9か所、左上から横に数える）。null = 空き
   potSlots: (Pot | null)[]; // 鍋置き場。null = 空き
   ihBurners: (Pot | null)[];
+  thrownPots: ThrownPot[]; // 投げた鍋（飛んでいる最中、または床・台に落ちている）
   washer: Washer;
   tickets: Ticket[];
   nextTicketAt: number;

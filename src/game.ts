@@ -25,6 +25,8 @@ import { createTicket, nextTicketInterval, pickMenu } from './tickets';
 import { BOTTLE_IDS, BOTTLE_PLATE, BOTTLE_SURFACES, BOTTLE_VERB } from './bottle';
 import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShelf, fridgeItemOf } from './fridge';
 import { BOTTLE_HOME, SURFACES } from './layout';
+import { OPEN_WORLD, launchPot, stepThrownPot, type ThrowAim } from './throw';
+import type { World } from './world';
 import type { BottleId, BottlePreview, BottleSpot, FridgeItemId, FridgePreview, FridgeSpot, GameState, IngredientId, Item, Mode, Phase, Pot, Target, Toast, TrayId } from './types';
 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
@@ -42,6 +44,9 @@ const BOTTLE_GAP = 0.14; // ボトルどうしの最小の間隔
 
 export class Game {
   state: GameState;
+  // 投げた鍋が当たる床・台・壁。厨房を作ったら main.ts が渡す（なければ、床だけの広い空間）
+  world: World = OPEN_WORLD;
+  private nextThrownId = 1;
 
   constructor(
     readonly cfg: GameConfig = DEFAULT_CONFIG,
@@ -69,6 +74,7 @@ export class Game {
       hotWater: Array.from({ length: this.cfg.hotWaterSlotCount }, () => null),
       potSlots: Array.from({ length: this.cfg.potCount }, () => createPot(this.cfg.mixClicks)),
       ihBurners: Array.from({ length: this.cfg.ihBurnerCount }, () => null),
+      thrownPots: [],
       washer: createWasher(),
       tickets: [],
       nextTicketAt: this.cfg.firstTicketAt,
@@ -114,6 +120,7 @@ export class Game {
     updateWasher(s.washer, dt);
     for (const pack of s.hotWater) if (pack) soakPack(pack, dt, this.cfg); // 熱湯に浸かっている間だけ温まる
     for (const pot of s.ihBurners) if (pot) updateHeat(pot, dt); // 加熱が進むのはIHに載っている間だけ
+    for (const thrown of s.thrownPots) stepThrownPot(thrown, dt, this.world);
     this.spawnTickets();
 
     if (s.mode === 'game' && s.time >= this.cfg.gameDuration) {
@@ -152,8 +159,10 @@ export class Game {
   //  - 扉が開いていて、冷蔵庫の中の物に視点が合っていれば、その物を持ち上げる（棚の好きな場所に置き直せる）
   //  - 冷蔵庫の扉・棚・本体に視点が合っていれば、扉を開閉する
   //  - iPad を持っていれば、画面を開く（ゲーム開始・レシピ）
+  //  - 鍋を持っていれば、視線の向きに投げる（aim があるとき）。落ちた鍋は左クリックで拾える
   //  - ボトルを持っていれば、皿にかける。それ以外は、手に持っている物を捨てる
-  rightClick(target: Target | null): void {
+  // aim: 視点の位置と向き（投げる向き）。省略すると、鍋は投げられない
+  rightClick(target: Target | null, aim: ThrowAim | null = null): void {
     const s = this.state;
     if (s.phase !== 'playing') return;
     if (s.moving) {
@@ -162,6 +171,11 @@ export class Game {
     }
     if (s.hand?.kind === 'ipad') {
       s.ipadOpen = true;
+      return;
+    }
+    if (s.hand?.kind === 'pot' && aim) {
+      s.thrownPots.push(launchPot(this.nextThrownId++, s.hand.pot, aim));
+      s.hand = null;
       return;
     }
     const item = fridgeItemOf(target);
@@ -484,6 +498,16 @@ export class Game {
           };
         }
         return null;
+      }
+
+      case 'thrownPot': {
+        // 投げた鍋は、手が空なら拾える（飛んでいる最中でも受け止められる）
+        const thrown = s.thrownPots.find((t) => t.id === target.id);
+        if (hand || !thrown) return null;
+        return () => {
+          s.hand = { kind: 'pot', pot: thrown.pot };
+          s.thrownPots = s.thrownPots.filter((t) => t !== thrown);
+        };
       }
 
       case 'ihBurner': {

@@ -39,6 +39,7 @@ kitchen.scene.add(camera);
 camera.add(kitchen.handAnchor);
 
 const game = new Game(cfg);
+game.world = kitchen.world; // 投げた鍋が、床・台・壁に当たるように
 const player = new Player(cfg, kitchen.world);
 const interactor = new Interactor(camera, kitchen.interactables, cfg.reach);
 let best = loadBest();
@@ -48,7 +49,10 @@ const input = new Input(canvas, {
   onClick: () => interactor.current && game.interact(interactor.current),
   onDoubleClick: () => interactor.current && game.doubleClick(interactor.current),
   onRightClick: () => {
-    game.rightClick(interactor.current);
+    // 鍋を持っているときは、視点の位置から視線の向きに投げる
+    const origin = camera.getWorldPosition(new THREE.Vector3());
+    const dir = camera.getWorldDirection(new THREE.Vector3());
+    game.rightClick(interactor.current, { origin, dir });
     // iPad の画面を開いたら、カーソルを出して画面を操作できるようにする
     if (game.state.ipadOpen) {
       interactor.clear();
@@ -102,6 +106,8 @@ function hintFor(target: Target | null): string {
   }
   const mix = game.mixProgressAt(target);
   if (mix) return `左クリック：混ぜる（${mix.done}/${mix.need}）`;
+  if (hand?.kind === 'pot' && !game.state.moving) return '右クリック：鍋を投げる';
+  if (target?.kind === 'thrownPot' && !hand) return '左クリック：鍋を拾う';
   // 冷蔵庫：中の物を持ち上げて置き直す／扉の開閉
   if (game.state.moving) {
     const p = game.previewFridge(target);

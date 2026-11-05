@@ -1,16 +1,19 @@
 // 歩ける範囲の判定（上から見た2Dの当たり判定）。Three.js には依存しない。
 // プレイヤーは半径 r の円。部屋の壁（bounds）の内側で、設備（obstacles）に入らない場所だけ立てる。
 
-export type Rect = { minX: number; maxX: number; minZ: number; maxZ: number };
+// top: 設備の天板の高さ（m）。投げた鍋が上に乗る・横からぶつかるために使う（省略 = 高さ不明の設備）
+export type Rect = { minX: number; maxX: number; minZ: number; maxZ: number; top?: number };
 
 export type World = {
   bounds: Rect; // 壁の内側の面
   obstacles: Rect[]; // カウンター・冷蔵庫などの設備
 };
 
-// 中心 (cx, cz)、幅 w（x 方向）× 奥行き d（z 方向）の矩形
-export function rectAt(cx: number, cz: number, w: number, d: number): Rect {
-  return { minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2 };
+// 中心 (cx, cz)、幅 w（x 方向）× 奥行き d（z 方向）の矩形。top は天板の高さ
+export function rectAt(cx: number, cz: number, w: number, d: number, top?: number): Rect {
+  const rect: Rect = { minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2 };
+  if (top !== undefined) rect.top = top;
+  return rect;
 }
 
 function circleHitsRect(x: number, z: number, r: number, rect: Rect): boolean {

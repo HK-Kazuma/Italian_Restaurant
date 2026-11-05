@@ -506,7 +506,8 @@ const BURNER_COLORS = {
 
 type HotWaterView = {
   pack: ItemView;
-  label: Label;
+  label: Label; // タイマー・「済」
+  nameLabel: Label; // 何のパックか
 };
 
 type BurnerView = {
@@ -1130,21 +1131,26 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     label.sprite.position.set(x, 1.0, z);
     label.sprite.visible = false;
     hotWaterSpot.add(label.sprite);
-    hotWaterViews.push({ pack: new ItemView(slot), label });
+
+    const nameLabel = makeLabel('', 0.32);
+    nameLabel.sprite.position.set(x, 1.09, z);
+    nameLabel.sprite.visible = false;
+    hotWaterSpot.add(nameLabel.sprite);
+    hotWaterViews.push({ pack: new ItemView(slot), label, nameLabel });
   }
   decorIn(hotWaterSpot, '熱湯', 0, 0.55, 0.53, 0.5);
-  decorIn(hotWaterSpot, '湯煎器', 0, 1.3, 0, 0.5); // 湯煎器の上に浮かぶ名前（パックのタイマーより上）
+  decorIn(hotWaterSpot, '湯煎器', 0, 1.4, 0, 0.5); // 湯煎器の上に浮かぶ名前（パックの名前・タイマーより上）
   const hotWaterSteam = addSteam(hotWaterSpot, 0, 0.83, 0, { count: 14, rise: 0.45, spread: 0.5, size: 0.28 });
 
   // --- 歩ける範囲：壁の内側と、設備の当たり判定（上から見た矩形）---
   // 設備の位置・大きさを変えたら、ここも合わせる（冷蔵庫・サラダ台・熱湯は layout.ts に追従する）
   const obstacles: Rect[] = [
-    rectAt(0, -1.8, 3, 1), // IHコンロ（鍋置き場・洗浄機を含む）
-    rectAt(0, BOILER_Z, 3, 1.1), // 茹で麺器
-    rectAt(LEFT_COUNTER.x, LEFT_COUNTER.z, SURFACES.left.width, SURFACES.left.depth), // 左の台（皿・トッピング・提供台）
-    rectAt(layout.hotWater.x, layout.hotWater.z, 0.9, 1), // 熱湯
-    rectAt(layout.saladTable.x, layout.saladTable.z, SURFACES.salad.width, SURFACES.salad.depth), // サラダ台
-    rectAt(layout.fridge.x + 0.4, layout.fridge.z, 0.8, 2), // 冷蔵庫（扉は含めない）
+    rectAt(0, -1.8, 3, 1, BOILER_TOP), // IHコンロ（鍋置き場・洗浄機を含む）
+    rectAt(0, BOILER_Z, 3, 1.1, BOILER_TOP), // 茹で麺器
+    rectAt(LEFT_COUNTER.x, LEFT_COUNTER.z, SURFACES.left.width, SURFACES.left.depth, 0.9), // 左の台（皿・トッピング・提供台）
+    rectAt(layout.hotWater.x, layout.hotWater.z, 0.9, 1, 0.8), // 熱湯
+    rectAt(layout.saladTable.x, layout.saladTable.z, SURFACES.salad.width, SURFACES.salad.depth, 0.9), // サラダ台
+    rectAt(layout.fridge.x + 0.4, layout.fridge.z, 0.8, 2, 1.9), // 冷蔵庫（扉は含めない）
   ];
   const wallHalf = 0.05; // 壁の厚み(0.1)の半分
   const world: World = {
@@ -1162,6 +1168,44 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   handAnchor.position.set(0.32, -0.3, -0.65);
   handAnchor.rotation.set(0.35, -0.3, 0);
   const handView = new ItemView(handAnchor, 0.6);
+
+  // --- 投げた鍋 ---
+  // 投げるたびに作り、拾ったら片づける。視点を合わせやすいよう、鍋より大きい見えない当たり判定を付ける
+  type ThrownView = { root: THREE.Group; view: ItemView; hitbox: THREE.Mesh };
+  const thrownViews = new Map<number, ThrownView>();
+  const syncThrownPots = (state: GameState) => {
+    const live = new Set<number>();
+    for (const t of state.thrownPots) {
+      live.add(t.id);
+      let v = thrownViews.get(t.id);
+      if (!v) {
+        const root = new THREE.Group();
+        const hitbox = new THREE.Mesh(
+          new THREE.BoxGeometry(0.46, 0.3, 0.46),
+          new THREE.MeshLambertMaterial({ visible: false }),
+        );
+        hitbox.position.y = 0.12;
+        root.add(hitbox);
+        setTarget(root, { kind: 'thrownPot', id: t.id });
+        scene.add(root);
+        interactables.push(root);
+        v = { root, view: new ItemView(root), hitbox };
+        thrownViews.set(t.id, v);
+      }
+      v.root.position.set(t.x, t.y, t.z);
+      v.root.rotation.y = t.yaw;
+      v.view.show({ kind: 'pot', pot: t.pot });
+    }
+    for (const [id, v] of thrownViews) {
+      if (live.has(id)) continue;
+      v.view.show(null);
+      v.hitbox.geometry.dispose();
+      (v.hitbox.material as THREE.Material).dispose();
+      scene.remove(v.root);
+      interactables.splice(interactables.indexOf(v.root), 1);
+      thrownViews.delete(id);
+    }
+  };
 
   // --- 毎フレームの同期 ---
   let guideTime = 0;
@@ -1269,7 +1313,9 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
       const pack = state.hotWater[i];
       v.pack.show(pack ? { kind: 'pack', packs: [pack] } : null);
       v.label.sprite.visible = !!pack;
+      v.nameLabel.sprite.visible = !!pack;
       if (pack) {
+        v.nameLabel.setText(INGREDIENTS[pack.id].name, '#ffe08a');
         if (pack.warm) v.label.setText('済', '#8be28b');
         else v.label.setText(`${Math.floor(pack.soak)}`, '#ffffff');
       }
@@ -1331,6 +1377,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     ipadLabel.sprite.visible = practice;
     ipadLabel.setText(holdingIpad ? 'ここに戻す（左クリック）' : 'iPad（左クリックで取る）');
 
+    syncThrownPots(state);
     handView.show(state.hand);
   };
 
