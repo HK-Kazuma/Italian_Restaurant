@@ -182,7 +182,7 @@ function frame(): void {
   player.applyTo(camera);
   if (game.state.phase === 'playing' && !game.state.ipadOpen) interactor.update(game);
   else interactor.clear();
-  kitchen.sync(game.state, dt, game.previewBottle(interactor.current), game.previewFridge(interactor.current));
+  kitchen.sync(game.state, dt, game.previewBottle(interactor.current), game.previewFridge(interactor.current), interactor.current);
   hud.update(game.state, best, hintFor(interactor.current));
   hud.setGuide(game.state.phase === 'playing' ? offscreenGuide() : null);
   renderer.render(kitchen.scene, camera);

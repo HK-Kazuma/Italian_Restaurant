@@ -3,8 +3,8 @@ import type { GameConfig } from './config';
 import { INGREDIENTS } from './ingredients';
 import { BOTTLE_IDS } from './bottle';
 import { LAYOUT, LEFT_COUNTER, SURFACES, type Layout } from './layout';
-import { SAUCE_FILL_PER_UNIT, isMixed, isNoodle, needsMix } from './pot';
-import { isSaucePartial } from './recipe';
+import { SAUCE_FILL_PER_UNIT, isNoodle } from './pot';
+import { plateLabel, potLabel } from './labels';
 import { Steam, type SteamOptions } from './steam';
 import { type Rect, type World, rectAt } from './world';
 import { FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, FRIDGE_ITEM_SIZE, FRIDGE_SHELF_Y } from './fridge';
@@ -24,7 +24,8 @@ export type Kitchen = {
   trayGuide: (state: GameState) => { world: THREE.Vector3; label: string } | null;
   // preview: 手に持ったボトルを置こうとしている場所（置く前の見せ方）。なければ null
   // fridgePreview: 冷蔵庫の中で持ち上げている物を、置こうとしている場所
-  sync: (state: GameState, dt: number, preview?: BottlePreview | null, fridgePreview?: FridgePreview | null) => void;
+  // hover: いま視点が合っている設備。鍋・皿の中身の名前を、視点を合わせたときだけ出すために使う
+  sync: (state: GameState, dt: number, preview?: BottlePreview | null, fridgePreview?: FridgePreview | null, hover?: Target | null) => void;
 };
 
 export const TARGET_KEY = 'target';
@@ -645,7 +646,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     scene.add(burner);
     interactables.push(burner);
 
-    const label = makeLabel('', 0.6);
+    const label = makeLabel('', 0.8);
     label.sprite.position.set(x, 1.08, -1.8);
     label.sprite.visible = false;
     scene.add(label.sprite);
@@ -777,6 +778,8 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   decor('小皿', TX, 1.2, -1.4, 0.5);
 
   const slotViews: ItemView[] = [];
+  // 皿の上に浮かべる名前（slotViews と同じ並び）。中身の名前は視点を合わせたときだけ、料理が出来上がったら常に料理名
+  const slotLabels: Label[] = [];
   for (let i = 0; i < cfg.plateSlotCount; i++) {
     const slot = new THREE.Group();
     slot.add(cyl(0.3, 0.3, 0.012, 0xcfc4ae, 0, 0.006, 0));
@@ -785,6 +788,11 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     scene.add(slot);
     interactables.push(slot);
     slotViews.push(new ItemView(slot));
+    const label = makeLabel('', 0.8);
+    label.sprite.position.set(LX, 1.25, -0.9 + i * 0.6);
+    label.sprite.visible = false;
+    scene.add(label.sprite);
+    slotLabels.push(label);
   }
 
   const toppings: [IngredientId, number][] = [
@@ -974,6 +982,11 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     saladSpot.add(slot);
     interactables.push(slot);
     slotViews.push(new ItemView(slot));
+    const label = makeLabel('', 0.8);
+    label.sprite.position.set(SX_WORK, 1.25, 1.05 - j * 0.7);
+    label.sprite.visible = false;
+    saladSpot.add(label.sprite);
+    slotLabels.push(label);
   }
 
   // トレー・ケース置き場：冷蔵庫から取ったものを、同じ種類の置き場に置くと、1回分ずつ取れる。
@@ -1209,7 +1222,13 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
 
   // --- 毎フレームの同期 ---
   let guideTime = 0;
-  const sync = (state: GameState, dt: number, preview: BottlePreview | null = null, fridgePreview: FridgePreview | null = null) => {
+  const sync = (
+    state: GameState,
+    dt: number,
+    preview: BottlePreview | null = null,
+    fridgePreview: FridgePreview | null = null,
+    hover: Target | null = null,
+  ) => {
     const follow = Math.min(1, dt * 8);
 
     door.rotation.y += ((state.fridgeOpen ? Math.PI / 2 : 0) - door.rotation.y) * follow;
@@ -1342,23 +1361,18 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
       else if (pot?.heat === 'ready') steamLevel = 1;
       v.steam.update(steamDt, steamLevel);
 
-      const hasContents = !!pot && pot.contents.length > 0;
-      v.label.sprite.visible = hasContents;
-      if (pot && hasContents) {
-        // 既定のソースになると自動で加熱が始まる。それまでは、入れている途中か、作れない組み合わせか
-        if (heat === 'cold') {
-          if (isSaucePartial(pot.contents)) v.label.setText('材料を入れる', '#ffe08a');
-          else v.label.setText('組み合わせ違い', '#ff8a80');
-        } else if (heat === 'heating') {
-          v.label.setText(`加熱中 ${Math.ceil(pot.heatTimer)}`, '#ffffff');
-        } else if (needsMix(pot)) {
-          // 麺を入れた鍋（Aパターン）は、混ぜてから皿にかける
-          if (isMixed(pot)) v.label.setText('混ざった！', '#8be28b');
-          else v.label.setText(`混ぜる ${pot.mixCount}/${pot.mixNeed}`, '#ffe08a');
-        } else {
-          v.label.setText('完成！', '#8be28b');
-        }
-      }
+      // 材料を入れている間は、視点を合わせたときだけ中身の名前。加熱中は「加熱中」だけ。完成したらソースの名前
+      const spec = pot ? potLabel(pot, hover?.kind === 'ihBurner' && hover.index === i) : null;
+      v.label.sprite.visible = spec !== null;
+      if (spec) v.label.setText(spec.text, spec.color);
+    });
+
+    // 皿の名前：盛り付け中は視点を合わせたときだけ中身の名前。料理が出来上がったら、常に料理名だけ
+    slotLabels.forEach((label, i) => {
+      const contents = state.plateSlots[i];
+      const spec = contents ? plateLabel(contents, hover?.kind === 'plateSlot' && hover.index === i) : null;
+      label.sprite.visible = spec !== null;
+      if (spec) label.setText(spec.text, spec.color);
     });
 
     const w = state.washer;
