@@ -59,7 +59,7 @@ export class Interactor {
     // 皿の中身が作り直されても光り続けるよう、毎フレーム当て直す。
     // 冷蔵庫・サラダ台の天板は大きいので光らせない（冷蔵庫のヒントは HUD、ボトルを置く場所は置く前の見せ方で示す）
     if (root && this.current) {
-      const big = this.current.kind === 'fridgeDoor' || this.current.kind === 'tableTop';
+      const big = this.current.kind === 'fridgeDoor' || this.current.kind === 'fridgeShelf' || this.current.kind === 'tableTop';
       const glow = !big && game.planInteract(this.current);
       setEmissive(root, glow ? HIGHLIGHT : 0x000000);
     }

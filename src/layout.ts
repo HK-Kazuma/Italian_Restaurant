@@ -22,8 +22,8 @@ export type Spot = { x: number; z: number };
 
 export type Layout = {
   // 冷蔵庫。基準点は「前面（扉のある面）の中央」。
-  //   奥行き 0.8m（+x 方向に伸びる）、幅 1.0m（z 方向）。扉はプレイヤー側（-x）へ開く。
-  //   x の範囲 = x 〜 x+0.8、z の範囲 = z-0.5 〜 z+0.5
+  //   奥行き 0.8m（+x 方向に伸びる）、幅 2.0m（z 方向）、4段。扉は左右の観音開きで、プレイヤー側（-x）へ開く。
+  //   x の範囲 = x 〜 x+0.8、z の範囲 = z-1.0 〜 z+1.0
   fridge: Spot;
 
   // サラダ台。基準点は「天板の中心」。
@@ -38,7 +38,7 @@ export type Layout = {
 };
 
 export const LAYOUT: Layout = {
-  fridge: { x: 2.25, z: 2.5 },
+  fridge: { x: 2.25, z: 3.0 },
   saladTable: { x: 2.20, z: 0.3
    },
   hotWater: { x: 1.95, z: -1.8},

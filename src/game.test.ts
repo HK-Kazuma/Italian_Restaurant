@@ -15,6 +15,8 @@ const plateStack: Target = { kind: 'plateStack' };
 const pass: Target = { kind: 'servePass' };
 
 const fridgeDoor: Target = { kind: 'fridgeDoor' };
+// 冷蔵庫の棚板の、視点が合っている点（shelf: 0 = 最下段、1 = 下段、2 = 中段、3 = 上段。x: 奥行き、z: 幅）
+const fridgeShelf = (shelf: 0 | 1 | 2 | 3, x: number, z: number): Target => ({ kind: 'fridgeShelf', shelf, x, z });
 
 // 冷蔵庫は開けた状態で始める（扉の開閉は専用のテストで確認する）
 function newGame() {
@@ -495,9 +497,19 @@ describe('Game: 冷蔵庫の扉', () => {
     g.interact(can);
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'meatSauce' });
 
-    g.rightClick(can); // 中の物を狙っていても冷蔵庫の扱い。手の物は捨てない
+    g.rightClick(fridgeShelf(1, 0, 0)); // 棚・扉・本体への右クリックは、扉の開閉。手の物は捨てない
     expect(g.state.fridgeOpen).toBe(false);
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'meatSauce' });
+    g.rightClick(fridgeDoor);
+    expect(g.state.fridgeOpen).toBe(true);
+  });
+
+  it('扉が閉まっているとき、中の物への右クリックは、扉を開ける（持ち上げない）', () => {
+    const g = new Game(cfg, () => 0);
+    g.start();
+    g.rightClick(can);
+    expect(g.state.fridgeOpen).toBe(true);
+    expect(g.state.moving).toBeNull();
   });
 
   it('冷蔵庫以外を狙った右クリックは、手に持っている物を捨てる', () => {
@@ -1161,5 +1173,133 @@ describe('Game: ペペロンチーノを1皿出す（Bパターン）', () => {
     g.interact(saltOilCase);
     g.discard();
     expect(g.state.hand).toEqual({ kind: 'tray', id: 'saltOil' });
+  });
+});
+
+// ---------- 冷蔵庫の中の物の置き直し ----------
+
+describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置き直す', () => {
+  it('扉が開いているとき、中の物を右クリックで持ち上げる。手は空いたまま、持ち上げた物は取れない', () => {
+    const g = newGame();
+    g.rightClick(can);
+    expect(g.state.moving).toBe('meatSauce');
+    expect(g.state.hand).toBeNull();
+    expect(g.planInteract(can)).toBeNull(); // 持ち上げ中の物は、左クリックで取れない
+    g.interact(tomatoSauce); // ほかの物は、いつもどおり取れる
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'tomatoSauce' });
+  });
+
+  it('棚に右クリックで、その場所に置く。ほかの棚にも置ける', () => {
+    const g = newGame();
+    g.rightClick(can);
+    g.rightClick(fridgeShelf(3, 0.66, 0.0)); // 上段の右端の空き
+    expect(g.state.moving).toBeNull();
+    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 3, x: 0.66, z: 0 });
+    g.interact(can); // 置き直したあとも、取れる
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'meatSauce' });
+  });
+
+  it('置く前に、置こうとしている場所と、置けるかどうかが分かる', () => {
+    const g = newGame();
+    expect(g.previewFridge(fridgeShelf(1, 0.4, 0))).toBeNull(); // 持ち上げていない
+    g.rightClick(can);
+    expect(g.previewFridge(fridgeShelf(3, 0.66, 0))).toEqual({ item: 'meatSauce', shelf: 3, x: 0.66, z: 0, valid: true });
+    expect(g.previewFridge(fridgeDoor)).toBeNull(); // 棚板以外
+  });
+
+  it('棚板の縁を越える位置は、棚板の内側に収める', () => {
+    const g = newGame();
+    g.rightClick(can);
+    const p = g.previewFridge(fridgeShelf(1, 9, 9))!;
+    expect(p.x).toBeLessThanOrEqual(0.78 - 0.1);
+    expect(p.z).toBeLessThanOrEqual(0.96 - 0.1);
+    const q = g.previewFridge(fridgeShelf(1, -9, -9))!;
+    expect(q.x).toBeGreaterThanOrEqual(0.02 + 0.1);
+    expect(q.z).toBeGreaterThanOrEqual(-0.96 + 0.1);
+  });
+
+  it('同じ棚のほかの物に重なる場所には置けない。別の棚なら同じ場所でも置ける', () => {
+    const g = newGame();
+    const tomato = g.state.fridgeItems.tomatoSauce; // 中段にある
+    g.rightClick(can);
+    expect(g.previewFridge(fridgeShelf(tomato.shelf, tomato.x, tomato.z))?.valid).toBe(false);
+    g.rightClick(fridgeShelf(tomato.shelf, tomato.x, tomato.z));
+    expect(g.state.moving).toBe('meatSauce'); // 置けず、持ち上げたまま
+    expect(g.state.toast?.kind).toBe('bad');
+
+    expect(g.previewFridge(fridgeShelf(3, 0.66, 0.0))?.valid).toBe(true); // 上段の空き
+    expect(g.previewFridge(fridgeShelf(0, 0.66, 0.3))?.valid).toBe(true); // 最下段（空き）
+    expect(g.previewFridge(fridgeShelf(2, 0.37, 0.9))?.valid).toBe(true); // 広くなった幅の端
+  });
+
+  it('自分自身のもとの場所には、置き直せる（重なりとは数えない）', () => {
+    const g = newGame();
+    const home = g.state.fridgeItems.meatSauce;
+    g.rightClick(can);
+    expect(g.previewFridge(fridgeShelf(home.shelf, home.x, home.z))?.valid).toBe(true);
+  });
+
+  it('ほかの物に視点が合っているときは、その物に重ねて置こうとした扱い（置けない）。やめるのではない', () => {
+    const g = newGame();
+    g.rightClick(can);
+    expect(g.previewFridge(tomatoSauce)?.valid).toBe(false);
+    expect(g.previewFridge(tomatoSauce)).toMatchObject({ shelf: 2 }); // 相手の物の位置
+    g.rightClick(tomatoSauce);
+    expect(g.state.moving).toBe('meatSauce');
+    expect(g.state.toast?.kind).toBe('bad');
+  });
+
+  it('棚以外への右クリックで、置き直しをやめる（もとの場所に戻る）', () => {
+    const g = newGame();
+    const home = { ...g.state.fridgeItems.meatSauce };
+    g.rightClick(can);
+    g.rightClick(null);
+    expect(g.state.moving).toBeNull();
+    expect(g.state.fridgeItems.meatSauce).toEqual(home);
+    expect(g.state.fridgeOpen).toBe(true); // 扉は閉まらない
+  });
+
+  it('持ち上げている間の右クリックは、扉の開閉にも、手の物を捨てるのにも使われない', () => {
+    const g = newGame();
+    g.interact(tomatoSauce);
+    g.rightClick(can);
+    g.rightClick(fridgeDoor); // 棚以外：やめるだけ
+    expect(g.state.fridgeOpen).toBe(true);
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'tomatoSauce' });
+  });
+
+  it('トレー・ケースも置き直せる。取ったあと（冷蔵庫にないとき）は持ち上げられない', () => {
+    const g = newGame();
+    g.rightClick(spinachTray);
+    expect(g.state.moving).toBe('spinachTray');
+    g.rightClick(fridgeShelf(0, 0.7, 0.3)); // 下段の手前右の空き（棚の内側に収められる）
+    expect(g.state.fridgeItems.spinachTray).toMatchObject({ shelf: 0 });
+
+    g.interact(spinachTray); // 置き直した場所のまま、取れる
+    expect(g.state.trays.spinach).toBe('hand');
+    g.discard();
+    g.interact(traySlot);
+    g.rightClick(spinachTray); // 冷蔵庫にない
+    expect(g.state.moving).toBeNull();
+    expect(g.state.fridgeOpen).toBe(false); // 扉の開閉になる
+  });
+
+  it('取ったトレーのあとの空きには、ほかの物を置ける', () => {
+    const g = newGame();
+    const t = g.state.fridgeItems.spinachTray;
+    g.rightClick(can);
+    expect(g.previewFridge(fridgeShelf(t.shelf, t.x, t.z))?.valid).toBe(false);
+    g.rightClick(null);
+    g.interact(spinachTray);
+    g.interact(traySlot);
+    g.rightClick(can);
+    expect(g.previewFridge(fridgeShelf(t.shelf, t.x, t.z))?.valid).toBe(true);
+  });
+
+  it('扉が開いていなければ、持ち上げられない', () => {
+    const g = new Game(cfg, () => 0);
+    g.start();
+    g.rightClick(can); // 閉まっているので、扉を開けるだけ
+    expect(g.state.moving).toBeNull();
   });
 });

@@ -23,8 +23,9 @@ import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
 import { serveScore } from './score';
 import { createTicket, nextTicketInterval, pickMenu } from './tickets';
 import { BOTTLE_IDS, BOTTLE_PLATE, BOTTLE_SURFACES, BOTTLE_VERB } from './bottle';
+import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShelf, fridgeItemOf } from './fridge';
 import { BOTTLE_HOME, SURFACES } from './layout';
-import type { BottleId, BottlePreview, BottleSpot, GameState, IngredientId, Item, Phase, Pot, Target, Toast, TrayId } from './types';
+import type { BottleId, BottlePreview, BottleSpot, FridgeItemId, FridgePreview, FridgeSpot, GameState, IngredientId, Item, Phase, Pot, Target, Toast, TrayId } from './types';
 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
 type Action = () => void;
@@ -59,6 +60,8 @@ export class Game {
       plateStyles: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => 'plate' as const),
       trays: { spinach: 'fridge', saltOil: 'fridge' },
       fridgeOpen: false,
+      fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...FRIDGE_HOME[id] }])) as Record<FridgeItemId, FridgeSpot>,
+      moving: null,
       bottles: Object.fromEntries(BOTTLE_IDS.map((id) => [id, { ...BOTTLE_HOME[id] }])) as Record<BottleId, BottleSpot>,
       hotWater: Array.from({ length: this.cfg.hotWaterSlotCount }, () => null),
       potSlots: Array.from({ length: this.cfg.potCount }, () => createPot(this.cfg.mixClicks)),
@@ -127,10 +130,25 @@ export class Game {
     this.planDoubleClick(target)?.();
   }
 
-  // 右クリック：冷蔵庫に視点が合っていれば扉を開閉、それ以外は手に持っている物を捨てる
+  // 右クリック：
+  //  - 冷蔵庫の中の物を持ち上げている最中：棚に視点が合っていればそこに置く。それ以外ならやめる
+  //  - 扉が開いていて、冷蔵庫の中の物に視点が合っていれば、その物を持ち上げる（棚の好きな場所に置き直せる）
+  //  - 冷蔵庫の扉・棚・本体に視点が合っていれば、扉を開閉する
+  //  - ボトルを持っていれば、皿にかける。それ以外は、手に持っている物を捨てる
   rightClick(target: Target | null): void {
-    if (this.state.phase !== 'playing') return;
-    if (target && (target.kind === 'fridgeDoor' || target.kind === 'fridgeTray' || (target.kind === 'stock' && target.inFridge))) {
+    const s = this.state;
+    if (s.phase !== 'playing') return;
+    if (s.moving) {
+      this.placeMoving(target);
+      return;
+    }
+    const item = fridgeItemOf(target);
+    if (s.fridgeOpen && item && this.isInFridge(item)) {
+      s.moving = item;
+      this.say(`${FRIDGE_ITEM_NAME[item]}を持ち上げた（棚に視点を合わせて右クリックで置く）`, 'info');
+      return;
+    }
+    if (target && (target.kind === 'fridgeDoor' || target.kind === 'fridgeShelf' || item)) {
       this.state.fridgeOpen = !this.state.fridgeOpen;
       return;
     }
@@ -139,6 +157,54 @@ export class Game {
       return;
     }
     this.discard();
+  }
+
+  // 冷蔵庫の中にある物か（トレー・ケースは、取ったあとは冷蔵庫にない）
+  private isInFridge(id: FridgeItemId): boolean {
+    if (id === 'spinachTray') return this.state.trays.spinach === 'fridge';
+    if (id === 'saltOilCase') return this.state.trays.saltOil === 'fridge';
+    return true;
+  }
+
+  // 持ち上げた物を、視点が合っている棚に置くとしたら、どこにどう置かれるか。
+  // 位置は棚板の内側に収める。同じ棚のほかの物に重なると valid = false
+  previewFridge(target: Target | null): FridgePreview | null {
+    const s = this.state;
+    if (s.phase !== 'playing' || !s.moving) return null;
+    const at = this.shelfPointOf(target);
+    if (!at) return null;
+    const item = s.moving;
+    const { x, z } = clampOnShelf(item, at.x, at.z);
+    const spot: FridgeSpot = { shelf: at.shelf, x, z };
+    const others = FRIDGE_ITEM_IDS.filter((id) => this.isInFridge(id)).map((id) => ({ id, spot: s.fridgeItems[id] }));
+    return { item, shelf: at.shelf, x, z, valid: fitsOnShelf(item, spot, others) };
+  }
+
+  // 視点が合っている物を、棚の上の点として読む。棚板ならその点、別の物ならその物の位置（＝重なるので置けない）。それ以外は null
+  private shelfPointOf(target: Target | null): FridgeSpot | null {
+    if (target?.kind === 'fridgeShelf') return { shelf: target.shelf, x: target.x, z: target.z };
+    const other = fridgeItemOf(target);
+    return other && other !== this.state.moving && this.isInFridge(other) ? this.state.fridgeItems[other] : null;
+  }
+
+  // 持ち上げている物を置く（棚に視点が合っていて、置ける場所のとき）。それ以外の右クリックは、置き直しをやめる
+  private placeMoving(target: Target | null): void {
+    const s = this.state;
+    const item = s.moving;
+    if (!item) return;
+    if (this.shelfPointOf(target)) {
+      const p = this.previewFridge(target);
+      if (p?.valid) {
+        s.fridgeItems[item] = { shelf: p.shelf, x: p.x, z: p.z };
+        s.moving = null;
+        this.say(`${FRIDGE_ITEM_NAME[item]}を置いた`, 'info');
+      } else {
+        this.say('ここには置けない（ほかの物に重なる）', 'bad');
+      }
+      return;
+    }
+    s.moving = null; // 棚以外への右クリック：もとの場所に戻す
+    this.say('置き直しをやめた', 'info');
   }
 
   // ボトルを持っているとき、右クリックでサラダの皿にかける・振る。ボトルは手に残る
@@ -238,6 +304,7 @@ export class Game {
 
       case 'stock':
         if (target.inFridge && !s.fridgeOpen) return null; // 扉が閉まっていると取れない
+        if (s.moving && fridgeItemOf(target) === s.moving) return null; // 持ち上げ中の物は取れない
         if (!hand) return () => (s.hand = stockItem(target.id, this.cfg)); // お玉1杯・パック1つ・1掴みなど
         // コーンスープのパックだけ、クリックした回数だけ重ねて持てる（最大5つ）
         if (canStackPack(hand, target.id, this.cfg)) return () => hand.packs.push(createPack(target.id));
@@ -246,6 +313,7 @@ export class Game {
       case 'fridgeTray':
         // 冷蔵庫の中のトレー・ケース。取って、サラダ台の置き場に置く
         if (hand || !s.fridgeOpen || s.trays[target.id] !== 'fridge') return null;
+        if (s.moving && fridgeItemOf(target) === s.moving) return null; // 持ち上げ中の物は取れない
         return () => {
           s.hand = { kind: 'tray', id: target.id };
           s.trays[target.id] = 'hand';
@@ -264,6 +332,9 @@ export class Game {
           return () => (s.hand = { kind: 'ingredient', id: TRAY_CONTENT[target.id] });
         }
         return null;
+
+      case 'fridgeShelf':
+        return null; // 棚板は、右クリックで持ち上げた物を置く場所（左クリックでは何も起きない）
 
       case 'fridgeDoor':
         // 左クリックでは開かない（右クリックで開閉）。閉まっている間だけ案内を出す

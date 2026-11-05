@@ -52,6 +52,26 @@ export type PlateStyle = 'plate' | 'small' | 'bowl';
 // 冷蔵庫から取ってサラダ台に置くトレー・ケース。spinach = ほうれん草のトレー、saltOil = 塩オイルソースのパックが入ったケース
 export type TrayId = 'spinach' | 'saltOil';
 
+// 冷蔵庫の中の物（右クリックで持ち上げて、棚の好きな場所に置き直せる）。名前・大きさ・最初の置き場所は fridge.ts
+export type FridgeItemId =
+  | 'saladBase'
+  | 'spinachTray'
+  | 'meatSauce'
+  | 'tomatoSauce'
+  | 'carbonaraSauce'
+  | 'penne'
+  | 'cornSoup'
+  | 'saltOilCase';
+
+// 冷蔵庫の棚の番号。0 = 最下段、1 = 下段、2 = 中段、3 = 上段
+export type FridgeShelf = 0 | 1 | 2 | 3;
+
+// 冷蔵庫の中の置き場所。x, z は冷蔵庫の基準点（前面の中央）からの相対（x: 奥行き、z: 幅）
+export type FridgeSpot = { shelf: FridgeShelf; x: number; z: number };
+
+// 持ち上げた物を、いま視点が合っている棚に置くとしたときの様子（置く前の見せ方に使う）
+export type FridgePreview = { item: FridgeItemId; shelf: FridgeShelf; x: number; z: number; valid: boolean };
+
 export type BoilerState = 'empty' | 'set' | 'boiling' | 'lifted' | 'overdue' | 'shortBoil';
 
 export type Boiler = {
@@ -109,6 +129,7 @@ export type Target =
   | { kind: 'plateStack'; style?: PlateStyle } // 皿の山。style 省略 = plate（小皿・スープ皿の山もある）
   | { kind: 'stock'; id: IngredientId; inFridge?: boolean } // クリックで手に取れる取り出し元（缶・パック・トッピングなど）。inFridge は冷蔵庫の中（扉が開いている間だけ取れる）
   | { kind: 'fridgeDoor' } // 冷蔵庫（扉・本体）。右クリックで開閉
+  | { kind: 'fridgeShelf'; shelf: FridgeShelf; x: number; z: number } // 冷蔵庫の棚板。x, z は視点が合っている点（基準点からの相対）。物を置き直す場所を選ぶ
   | { kind: 'fridgeTray'; id: TrayId } // 冷蔵庫の中のトレー・ケース（扉が開いている間だけ取れる）
   | { kind: 'traySlot'; id: TrayId } // サラダ台の上のトレー・ケース置き場。置いたものから、ほうれん草（トング）・塩オイルソース（お玉）を取れる
   | { kind: 'boilerBasket'; index: number }
@@ -139,6 +160,8 @@ export type GameState = {
   plateStyles: PlateStyle[]; // plateSlots と同じ並び。置いてある皿の種類
   trays: Record<TrayId, 'fridge' | 'hand' | 'table'>; // トレー・ケースの場所（冷蔵庫 / 手 / サラダ台）
   fridgeOpen: boolean; // 冷蔵庫の扉（最初は閉まっている）
+  fridgeItems: Record<FridgeItemId, FridgeSpot>; // 冷蔵庫の中の物の置き場所（トレー・ケースは、取ったあとは使わない）
+  moving: FridgeItemId | null; // 右クリックで持ち上げている最中の物（手とは別。棚に右クリックで置く）
   bottles: Record<BottleId, BottleSpot>; // 台の上のボトル
   hotWater: (Pack | null)[]; // 熱湯に浸けているパック（3×3の9か所、左上から横に数える）。null = 空き
   potSlots: (Pot | null)[]; // 鍋置き場。null = 空き

@@ -7,7 +7,8 @@ import { SAUCE_FILL_PER_UNIT, isMixed, isNoodle, needsMix } from './pot';
 import { isSaucePartial } from './recipe';
 import { Steam, type SteamOptions } from './steam';
 import { type Rect, type World, rectAt } from './world';
-import type { Boiler, BottleId, NoodleKind, TrayId, BottlePreview, GameState, IngredientId, Item, Pot, SurfaceId, Target } from './types';
+import { FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, FRIDGE_ITEM_SIZE, FRIDGE_SHELF_Y } from './fridge';
+import type { Boiler, BottleId, FridgeItemId, FridgePreview, FridgeShelf, NoodleKind, TrayId, BottlePreview, GameState, IngredientId, Item, Pot, SurfaceId, Target } from './types';
 
 // 厨房の3Dシーン。見た目はすべてプリミティブ（箱・円柱）で作るローポリのプレースホルダー。
 // ゲームの状態は読むだけ（sync）で、ここからは state を書き換えない。
@@ -22,7 +23,8 @@ export type Kitchen = {
   // トレー・ケースを手に持っているとき、サラダ台の置き場の位置と名前（HUD の矢印で使う）。持っていなければ null
   trayGuide: (state: GameState) => { world: THREE.Vector3; label: string } | null;
   // preview: 手に持ったボトルを置こうとしている場所（置く前の見せ方）。なければ null
-  sync: (state: GameState, dt: number, preview?: BottlePreview | null) => void;
+  // fridgePreview: 冷蔵庫の中で持ち上げている物を、置こうとしている場所
+  sync: (state: GameState, dt: number, preview?: BottlePreview | null, fridgePreview?: FridgePreview | null) => void;
 };
 
 export const TARGET_KEY = 'target';
@@ -729,8 +731,8 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   };
 
   // --- 冷蔵庫（右クリックで扉を開閉。最初は閉まっている）---
-  // 基準点＝前面（扉側）の中央。+x が奥行き、z が幅。棚は下段・中段・上段。
-  // 上段：サラダベース、中段：ミートソース缶とトマトソースの容器、下段：カルボナーラのパック
+  // 基準点＝前面（扉側）の中央。+x が奥行き、z が幅（2.0m）。棚は最下段・下段・中段・上段の4段。
+  // 上段：サラダベース、中段：ミートソース缶とトマトソースの容器、下段：カルボナーラのパックなど、最下段：空き
   const fridgeSpot = new THREE.Group();
   fridgeSpot.position.set(layout.fridge.x, 0, layout.fridge.z);
   scene.add(fridgeSpot);
@@ -740,100 +742,121 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   setTarget(fridge, { kind: 'fridgeDoor' });
   fridgeSpot.add(fridge);
   interactables.push(fridge);
-  fridge.add(box(0.04, 1.9, 1, 0xbfc9cf, 0.78, 0.95, 0)); // 背板
-  fridge.add(box(0.8, 1.9, 0.04, STEEL, 0.4, 0.95, -0.48)); // 側板
-  fridge.add(box(0.8, 1.9, 0.04, STEEL, 0.4, 0.95, 0.48));
-  fridge.add(box(0.8, 0.04, 1, STEEL, 0.4, 1.88, 0)); // 天板
-  fridge.add(box(0.8, 0.06, 1, 0x9aa3ab, 0.4, 0.03, 0)); // 底
-  const LOWER_SHELF_Y = 0.5;
-  const MIDDLE_SHELF_Y = 0.95;
-  const UPPER_SHELF_Y = 1.4;
-  for (const y of [LOWER_SHELF_Y, MIDDLE_SHELF_Y, UPPER_SHELF_Y]) fridge.add(box(0.76, 0.03, 0.92, 0xf1f5f7, 0.4, y, 0));
+  fridge.add(box(0.04, 1.9, 2, 0xbfc9cf, 0.78, 0.95, 0)); // 背板
+  fridge.add(box(0.8, 1.9, 0.04, STEEL, 0.4, 0.95, -0.98)); // 側板
+  fridge.add(box(0.8, 1.9, 0.04, STEEL, 0.4, 0.95, 0.98));
+  fridge.add(box(0.8, 0.04, 2, STEEL, 0.4, 1.88, 0)); // 天板
+  fridge.add(box(0.8, 0.06, 2, 0x9aa3ab, 0.4, 0.03, 0)); // 底
+  // 棚板（最下段・下段・中段・上段）：持ち上げた物を置く場所を選ぶために、視点が合った点を調べられるようにする（上の面だけ）
+  FRIDGE_SHELF_Y.forEach((y, shelf) => {
+    const board = box(0.76, 0.03, 1.92, 0xf1f5f7, 0.4, y, 0);
+    const shelfId = shelf as FridgeShelf;
+    setTarget(board, { kind: 'fridgeShelf', shelf: shelfId, x: 0, z: 0 });
+    board.userData[RESOLVE_KEY] = (hit: THREE.Intersection): Target | null => {
+      if (!hit.face || hit.face.normal.y < 0.5) return null;
+      const local = fridgeSpot.worldToLocal(hit.point.clone());
+      return { kind: 'fridgeShelf', shelf: shelfId, x: local.x, z: local.z };
+    };
+    fridgeSpot.add(board);
+    interactables.push(board);
+  });
 
-  const door = new THREE.Group(); // 奥側（z=+0.5）を蝶番にして、プレイヤー側へ90度開く
+  // 観音開きの扉：左右の端（z=±1.0）を蝶番にして、プレイヤー側へ90度ずつ開く
+  const door = new THREE.Group(); // 手前側（z=+1.0）の扉
   door.add(box(0.05, 1.9, 1, 0xe9eef1, 0, 0.95, -0.5));
   door.add(box(0.04, 0.5, 0.05, 0x8a9096, -0.04, 1.0, -0.9)); // 取っ手
-  door.position.set(0, 0, 0.5);
+  door.position.set(0, 0, 1.0);
   fridge.add(door); // 回転は sync で state.fridgeOpen に合わせる
+  const doorR = new THREE.Group(); // 奥側（z=-1.0）の扉
+  doorR.add(box(0.05, 1.9, 1, 0xe9eef1, 0, 0.95, 0.5));
+  doorR.add(box(0.04, 0.5, 0.05, 0x8a9096, -0.04, 1.0, 0.9));
+  doorR.position.set(0, 0, -1.0);
+  fridge.add(doorR);
 
-  // 冷蔵庫の中の取り出し元。扉が閉まっている間は取れない（game.ts 側で判定）
-  const addFridgeStock = (obj: THREE.Object3D, id: IngredientId) => {
-    setTarget(obj, { kind: 'stock', id, inFridge: true });
+  // 冷蔵庫の中の物。位置は state.fridgeItems（右クリックで持ち上げて、棚の好きな場所に置き直せる）から毎フレーム決める。
+  // 扉が閉まっている間は取れない（game.ts 側で判定）
+  const fridgeItems = new Map<FridgeItemId, THREE.Group>();
+  const addFridgeItem = (id: FridgeItemId, obj: THREE.Group, target: Target) => {
+    setTarget(obj, target);
     fridgeSpot.add(obj);
     interactables.push(obj);
+    fridgeItems.set(id, obj);
   };
+  const fridgeStock = (id: IngredientId): Target => ({ kind: 'stock', id, inFridge: true });
 
-  // サラダベース（上段）：お皿にサラダが入ったもの（2つ重ねてある）
+  // サラダベース：お皿にサラダが入ったもの（2つ重ねてある）
   const saladBases = new THREE.Group();
   for (const y of [0, 0.09]) {
     saladBases.add(cyl(0.17, 0.13, 0.05, 0xf5f5f5, 0, y + 0.025, 0)); // 器
     saladBases.add(cyl(0.15, 0.16, 0.07, INGREDIENTS.saladBase.color, 0, y + 0.085, 0)); // サラダ
   }
-  saladBases.position.set(0.37, UPPER_SHELF_Y + 0.015, 0.22);
-  addFridgeStock(saladBases, 'saladBase');
+  addFridgeItem('saladBase', saladBases, fridgeStock('saladBase'));
 
-  // ほうれん草のトレー（上段）。取って、サラダ台のトレー置き場に置く
-  // トレー・ケース（取ると冷蔵庫から消える）。ほうれん草のトレー：上段、塩オイルソースのケース：下段
-  const fridgeTrays = new Map<TrayId, THREE.Group>();
-  for (const [id, shelfY, z] of [
-    ['spinach', UPPER_SHELF_Y, -0.22],
-    ['saltOil', LOWER_SHELF_Y, -0.34],
-  ] as [TrayId, number, number][]) {
-    const tray = buildTray(id);
-    tray.position.set(0.37, shelfY + 0.015, z);
-    setTarget(tray, { kind: 'fridgeTray', id });
-    fridgeSpot.add(tray);
-    interactables.push(tray);
-    fridgeTrays.set(id, tray);
-  }
+  // トレー・ケース（取ると冷蔵庫から消える）：ほうれん草のトレー、塩オイルソースのケース
+  addFridgeItem('spinachTray', buildTray('spinach'), { kind: 'fridgeTray', id: 'spinach' });
+  addFridgeItem('saltOilCase', buildTray('saltOil'), { kind: 'fridgeTray', id: 'saltOil' });
 
-  // ミートソース缶（中段）。クリックでお玉1杯すくう
+  // ミートソース缶。クリックでお玉1杯すくう
   const can = new THREE.Group();
   can.add(cyl(0.1, 0.1, 0.18, INGREDIENTS.meatSauce.color, 0, 0.09, 0)); // 缶
   can.add(cyl(0.101, 0.101, 0.012, 0xcfd3d6, 0, 0.186, 0)); // ふた
   can.add(cyl(0.012, 0.012, 0.26, 0x8a8f94, 0.04, 0.3, 0).rotateZ(-0.35)); // お玉の柄
   can.add(cyl(0.045, 0.03, 0.04, 0xc9ced3, 0.09, 0.42, 0)); // お玉の器
-  can.position.set(0.37, MIDDLE_SHELF_Y + 0.015, 0.25);
-  addFridgeStock(can, 'meatSauce');
+  addFridgeItem('meatSauce', can, fridgeStock('meatSauce'));
 
-  // トマトソースのパックが入った食材収納容器（缶の隣）。クリックでパック1つ
+  // トマトソースのパックが入った食材収納容器。クリックでパック1つ
   const tomato = new THREE.Group();
   tomato.add(box(0.3, 0.1, 0.34, 0xcfe8f5, 0, 0.05, 0));
   for (let i = -1; i <= 1; i++) tomato.add(box(0.12, 0.14, 0.03, INGREDIENTS.tomatoSauce.color, 0, 0.12, i * 0.09));
-  tomato.position.set(0.37, MIDDLE_SHELF_Y + 0.015, -0.2);
-  addFridgeStock(tomato, 'tomatoSauce');
+  addFridgeItem('tomatoSauce', tomato, fridgeStock('tomatoSauce'));
 
-  // 下段：カルボナーラのパック、ペンネ、コーンスープのパック（3つ並べる）
+  // カルボナーラのパック（熱湯で温めてから鍋に入れる）、ペンネ（茹で麺器に麺と同じようにセットする）、
+  // コーンスープのパック（熱湯で温めて、スープ皿に入れる）
   const packStack = (color: number, count: number) => {
     const g = new THREE.Group();
     for (let i = 0; i < count; i++) g.add(box(0.16, 0.04, 0.2, color, i * 0.01, 0.02 + i * 0.042, 0));
     return g;
   };
-  const carbonara = packStack(0xf3e3a1, 3); // 熱湯で温めてから鍋に入れる
-  carbonara.position.set(0.37, LOWER_SHELF_Y + 0.015, 0.33);
-  addFridgeStock(carbonara, 'carbonaraSauce');
+  addFridgeItem('carbonaraSauce', packStack(0xf3e3a1, 3), fridgeStock('carbonaraSauce'));
 
-  const penne = new THREE.Group(); // 茹で麺器に、麺と同じようにセットする
+  const penne = new THREE.Group();
   penne.add(box(0.2, 0.12, 0.14, 0xf2dca0, 0, 0.06, 0));
   penne.add(box(0.205, 0.04, 0.145, 0xc0392b, 0, 0.07, 0));
-  penne.position.set(0.37, LOWER_SHELF_Y + 0.015, 0.1);
-  addFridgeStock(penne, 'penne');
+  addFridgeItem('penne', penne, fridgeStock('penne'));
 
-  const cornSoup = packStack(INGREDIENTS.cornSoup.color, 4); // 熱湯で温めて、スープ皿に入れる
-  cornSoup.position.set(0.37, LOWER_SHELF_Y + 0.015, -0.12);
-  addFridgeStock(cornSoup, 'cornSoup');
+  addFridgeItem('cornSoup', packStack(INGREDIENTS.cornSoup.color, 4), fridgeStock('cornSoup'));
 
-  const fridgeLabels = [
-    decorIn(fridgeSpot, 'サラダベース', 0.02, 1.62, 0.22, 0.42),
-    decorIn(fridgeSpot, 'ほうれん草', 0.02, 1.62, -0.22, 0.42),
-    decorIn(fridgeSpot, 'ミートソース缶', 0.02, 1.32, 0.25, 0.42),
-    decorIn(fridgeSpot, 'トマトソース', 0.02, 1.32, -0.2, 0.42),
-    decorIn(fridgeSpot, 'カルボナーラ', 0.02, 0.62, 0.33, 0.38),
-    decorIn(fridgeSpot, 'ペンネ', 0.02, 0.7, 0.1, 0.28),
-    decorIn(fridgeSpot, 'コーンスープ', 0.02, 0.78, -0.12, 0.38),
-    decorIn(fridgeSpot, '塩オイルソース', 0.02, 0.86, -0.34, 0.4),
-  ];
+  // 名前のラベル（位置は毎フレーム、物に付いてくる）
+  const fridgeLabels = new Map<FridgeItemId, Label>();
+  for (const id of FRIDGE_ITEM_IDS) fridgeLabels.set(id, decorIn(fridgeSpot, FRIDGE_ITEM_NAME[id], 0.02, 1, 0, 0.4));
   decorIn(fridgeSpot, '冷蔵庫', 0.02, 2.05, 0, 0.5);
+
+  // 置き直す前の見せ方：置こうとしている場所の印（物の大きさの板）と、薄い物。置ける間は緑、置けないときは赤
+  const fridgeGhost = new THREE.Group();
+  fridgeGhost.visible = false;
+  const fridgeGhostPad = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 0.012, 1),
+    new THREE.MeshBasicMaterial({ color: 0x4cd964, transparent: true, opacity: 0.55, depthWrite: false }),
+  );
+  fridgeGhost.add(fridgeGhostPad);
+  const fridgeGhostItems = new Map<FridgeItemId, THREE.Group>();
+  for (const [id, group] of fridgeItems) {
+    const copy = group.clone(true);
+    copy.userData = {}; // 狙える対象ではない
+    copy.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        const m = (o.material as THREE.Material).clone() as THREE.MeshLambertMaterial;
+        m.transparent = true;
+        m.opacity = 0.5;
+        m.depthWrite = false;
+        o.material = m;
+      }
+    });
+    copy.visible = false;
+    fridgeGhost.add(copy);
+    fridgeGhostItems.set(id, copy);
+  }
+  fridgeSpot.add(fridgeGhost);
 
   // --- サラダ台 ---
   // 基準点＝天板の中心（1.5m × 3.0m）。左の列（x=-0.45）でサラダを作り、トレーを置き、ボトルを置く。
@@ -1033,7 +1056,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     rectAt(LEFT_COUNTER.x, LEFT_COUNTER.z, SURFACES.left.width, SURFACES.left.depth), // 左の台（皿・トッピング・提供台）
     rectAt(layout.hotWater.x, layout.hotWater.z, 0.9, 1), // 熱湯
     rectAt(layout.saladTable.x, layout.saladTable.z, SURFACES.salad.width, SURFACES.salad.depth), // サラダ台
-    rectAt(layout.fridge.x + 0.4, layout.fridge.z, 0.8, 1), // 冷蔵庫（扉は含めない）
+    rectAt(layout.fridge.x + 0.4, layout.fridge.z, 0.8, 2), // 冷蔵庫（扉は含めない）
   ];
   const wallHalf = 0.05; // 壁の厚み(0.1)の半分
   const world: World = {
@@ -1054,11 +1077,43 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
 
   // --- 毎フレームの同期 ---
   let guideTime = 0;
-  const sync = (state: GameState, dt: number, preview: BottlePreview | null = null) => {
+  const sync = (state: GameState, dt: number, preview: BottlePreview | null = null, fridgePreview: FridgePreview | null = null) => {
     const follow = Math.min(1, dt * 8);
 
     door.rotation.y += ((state.fridgeOpen ? Math.PI / 2 : 0) - door.rotation.y) * follow;
-    for (const l of fridgeLabels) l.sprite.visible = state.fridgeOpen;
+    doorR.rotation.y = -door.rotation.y;
+
+    // 冷蔵庫の中の物：state.fridgeItems の場所（棚・奥行き・幅）に置く。
+    // 持ち上げている最中の物と、取って冷蔵庫にないトレー・ケースは隠す。名前は、同じ棚の中で高さをずらして、重ならないようにする
+    const inFridge = (id: FridgeItemId) =>
+      id === 'spinachTray' ? state.trays.spinach === 'fridge' : id === 'saltOilCase' ? state.trays.saltOil === 'fridge' : true;
+    const shownByShelf: FridgeItemId[][] = FRIDGE_SHELF_Y.map(() => []);
+    for (const id of FRIDGE_ITEM_IDS) {
+      const group = fridgeItems.get(id)!;
+      const spot = state.fridgeItems[id];
+      const shown = inFridge(id) && state.moving !== id;
+      group.visible = shown;
+      group.position.set(spot.x, FRIDGE_SHELF_Y[spot.shelf] + 0.015, spot.z);
+      if (shown) shownByShelf[spot.shelf].push(id);
+      fridgeLabels.get(id)!.sprite.visible = false;
+    }
+    shownByShelf.forEach((ids, shelf) => {
+      ids.sort((a, b) => state.fridgeItems[b].z - state.fridgeItems[a].z).forEach((id, rank) => {
+        const label = fridgeLabels.get(id)!;
+        label.sprite.visible = state.fridgeOpen;
+        label.sprite.position.set(0.02, FRIDGE_SHELF_Y[shelf] + 0.2 + rank * 0.07, state.fridgeItems[id].z);
+      });
+    });
+
+    // 置こうとしている場所（板と薄い物）。置けない場所では赤
+    fridgeGhost.visible = fridgePreview !== null;
+    if (fridgePreview) {
+      const size = FRIDGE_ITEM_SIZE[fridgePreview.item];
+      fridgeGhost.position.set(fridgePreview.x, FRIDGE_SHELF_Y[fridgePreview.shelf] + 0.015, fridgePreview.z);
+      fridgeGhostPad.scale.set(size.hx * 2, 1, size.hz * 2);
+      (fridgeGhostPad.material as THREE.MeshBasicMaterial).color.setHex(fridgePreview.valid ? 0x4cd964 : 0xe5484d);
+      for (const [id, ghost] of fridgeGhostItems) ghost.visible = id === fridgePreview.item;
+    }
 
     // 台の上のボトル（手に持っている間は台の上から消える）
     for (const id of BOTTLE_IDS) {
@@ -1133,7 +1188,6 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     });
 
     // ほうれん草のトレー：冷蔵庫にあるか、サラダ台に置かれているか（手に持っている間はどちらにもない）
-    for (const [id, tray] of fridgeTrays) tray.visible = state.trays[id] === 'fridge';
     for (const [id, view] of trayViews) view.show(state.trays[id] === 'table' ? { kind: 'tray', id } : null);
     for (const [id, label] of trayLabels) label.setText(state.trays[id] === 'table' ? TRAY_CONTENT_NAMES[id] : TRAY_NAMES[id]);
 

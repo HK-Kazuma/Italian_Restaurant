@@ -52,23 +52,30 @@ body {
   font-weight: bold;
 }
 
+/* 伝票は横一列（最大6枚）。左上のタイマー・スコアの右から画面の右端までを使い、被らないようにする */
 .rail {
+  --rail-left: 440px; /* タイマー＋スコア（コンボ表示込み）の幅の分だけ空ける */
+  --rail-right: 16px;
+  --rail-zoom: 1.5;
   top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(760px, 56vw);
+  left: var(--rail-left);
+  width: calc(100vw - var(--rail-left) - var(--rail-right));
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
   gap: 8px;
-  transform-origin: top center;
+  transform-origin: top left;
   transition: transform 0.12s;
 }
+/* 拡大しても右端と左上の表示にはみ出さないよう、拡大率の分だけ幅を縮めておく */
 .rail.zoom {
-  transform: translateX(-50%) scale(1.5);
+  width: calc((100vw - var(--rail-left) - var(--rail-right)) / var(--rail-zoom));
+  transform: scale(var(--rail-zoom));
 }
 .ticket {
-  width: 132px;
+  flex: 0 1 132px;
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 6px 8px;
   background: #fffdf3;
   color: #222;

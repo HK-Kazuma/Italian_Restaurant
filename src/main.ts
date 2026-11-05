@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BOTTLE_ACTION } from './bottle';
 import { DEFAULT_CONFIG } from './config';
+import { FRIDGE_ITEM_NAME, fridgeItemOf } from './fridge';
 import { Game } from './game';
 import { Hud } from './hud';
 import { Input } from './input';
@@ -75,7 +76,15 @@ function hintFor(target: Target | null): string {
   }
   const mix = game.mixProgressAt(target);
   if (mix) return `左クリック：混ぜる（${mix.done}/${mix.need}）`;
-  if (target && (target.kind === 'fridgeDoor' || target.kind === 'fridgeTray' || (target.kind === 'stock' && target.inFridge))) {
+  // 冷蔵庫：中の物を持ち上げて置き直す／扉の開閉
+  if (game.state.moving) {
+    const p = game.previewFridge(target);
+    if (p) return p.valid ? '右クリック：ここに置く' : 'ここには置けない（ほかの物に重なる）';
+    return '棚に視点を合わせて右クリックで置く（それ以外で右クリックすると、やめる）';
+  }
+  const item = fridgeItemOf(target);
+  if (item && game.state.fridgeOpen) return `右クリック：${FRIDGE_ITEM_NAME[item]}を持ち上げて、置き直す`;
+  if (target && (target.kind === 'fridgeDoor' || target.kind === 'fridgeShelf' || item)) {
     return `右クリック：冷蔵庫の扉を${game.state.fridgeOpen ? '閉める' : '開ける'}`;
   }
   return '';
@@ -141,7 +150,7 @@ function frame(): void {
   player.applyTo(camera);
   if (game.state.phase === 'playing') interactor.update(game);
   else interactor.clear();
-  kitchen.sync(game.state, dt, game.previewBottle(interactor.current));
+  kitchen.sync(game.state, dt, game.previewBottle(interactor.current), game.previewFridge(interactor.current));
   hud.update(game.state, best, hintFor(interactor.current));
   hud.setGuide(game.state.phase === 'playing' ? offscreenGuide() : null);
   renderer.render(kitchen.scene, camera);

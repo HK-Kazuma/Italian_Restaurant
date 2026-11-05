@@ -80,7 +80,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   ticketIntervalStart: 25,
   ticketIntervalEnd: 10,
   ticketIntervalJitter: 0.25,
-  maxOpenTickets: 8,
+  maxOpenTickets: 6, // 画面に横一列で並べられる枚数に合わせる
 
   speedBonusMax: 20,
   speedBonusWindow: 90,
