@@ -10,7 +10,7 @@ export type MenuItem = {
   enabled: boolean; // false の間は伝票に出ない（必要な設備が未実装）
 };
 
-// 要件定義書「メニューとレシピ」の9品。鍋・IH・サラダ台が揃うまでは enabled: false
+// 要件定義書「メニューとレシピ」の9品（enabled: false にすると、その品は伝票に出ない）
 export const MENU: MenuItem[] = [
   {
     id: 'tarako',
@@ -54,7 +54,7 @@ export const MENU: MenuItem[] = [
     ingredients: ['penne', 'tomatoSauce', 'garlic', 'chili', 'parsley'],
     sauce: ['tomatoSauce', 'garlic', 'chili'],
     basePoints: 50,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'spinach',
@@ -63,7 +63,7 @@ export const MENU: MenuItem[] = [
     ingredients: ['spinach', 'spinach', 'pancetta', 'sauteSauce'],
     sauce: ['spinach', 'spinach', 'pancetta', 'sauteSauce'],
     basePoints: 30,
-    enabled: false,
+    enabled: true,
   },
   {
     id: 'shrimpSalad',
@@ -87,7 +87,7 @@ export const MENU: MenuItem[] = [
     station: 'salad',
     ingredients: ['cornSoup'],
     basePoints: 10,
-    enabled: false,
+    enabled: true,
   },
 ];
 

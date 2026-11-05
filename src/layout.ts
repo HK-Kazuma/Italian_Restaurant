@@ -27,8 +27,8 @@ export type Layout = {
   fridge: Spot;
 
   // サラダ台。基準点は「天板の中心」。
-  //   x 方向 1.1m × z 方向 2.7m。手前の列（x-0.2）がサラダを作る台、奥の列（x+0.3）が具材コーナー。
-  //   x の範囲 = x-0.55 〜 x+0.55、z の範囲 = z-1.35 〜 z+1.35
+  //   x 方向 1.5m × z 方向 3.0m。左の列（x-0.45）がサラダを作る台・トレー置き場・ボトル、中・右の列（x+0.1 / x+0.55）が具材コーナー。
+  //   x の範囲 = x-0.75 〜 x+0.75、z の範囲 = z-1.5 〜 z+1.5
   saladTable: Spot;
 
   // 熱湯。基準点は「中心」。
@@ -47,7 +47,7 @@ export const LAYOUT: Layout = {
 // ボトルを置ける台（天板）。salad = 右のサラダ台、left = IHの左の台（皿・トッピング・提供台）。
 // 大きさは x 方向 × z 方向（m）。見た目・当たり判定・ボトルを置ける範囲が使う
 export const SURFACES = {
-  salad: { width: 1.1, depth: 2.7 },
+  salad: { width: 1.5, depth: 3.0 },
   left: { width: 1.4, depth: 3.6 },
 };
 
@@ -57,7 +57,7 @@ export const LEFT_COUNTER = { x: -2.6, z: -0.2 };
 // ボトルの最初の置き場所。台の中心からの相対位置（x: 右、z: 手前）。
 // パセリは、もとのトッピングの位置（左の台の奥の列）
 export const BOTTLE_HOME: Record<BottleId, { surface: SurfaceId; x: number; z: number }> = {
-  dressing: { surface: 'salad', x: 0.3, z: -0.5 },
-  paprika: { surface: 'salad', x: 0.3, z: -0.95 },
+  dressing: { surface: 'salad', x: -0.45, z: -0.9 },
+  paprika: { surface: 'salad', x: -0.45, z: -1.25 },
   parsley: { surface: 'left', x: -0.4, z: 0.95 },
 };

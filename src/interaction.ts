@@ -11,6 +11,12 @@ function setEmissive(root: THREE.Object3D, hex: number): void {
   });
 }
 
+// 手に持っている間は台の上から消えるボトルなど、見えていない物は狙えない（ray が素通りして、後ろの物に当たる）
+function isVisible(obj: THREE.Object3D): boolean {
+  for (let o: THREE.Object3D | null = obj; o; o = o.parent) if (!o.visible) return false;
+  return true;
+}
+
 function findTargetRoot(obj: THREE.Object3D): THREE.Object3D | null {
   for (let o: THREE.Object3D | null = obj; o; o = o.parent) {
     if (o.userData[TARGET_KEY]) return o;
@@ -35,7 +41,7 @@ export class Interactor {
 
   update(game: Game): void {
     this.raycaster.setFromCamera(this.center, this.camera);
-    const hit = this.raycaster.intersectObjects(this.roots, true)[0];
+    const hit = this.raycaster.intersectObjects(this.roots, true).find((h) => isVisible(h.object));
     let root = hit ? findTargetRoot(hit.object) : null;
     let target: Target | null = root ? (root.userData[TARGET_KEY] as Target) : null;
 

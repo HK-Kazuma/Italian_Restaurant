@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG as cfg } from './config';
-import { createPack, soakPack, stockItem, warmTime } from './pack';
+import { canStackPack, createPack, findWarmPack, soakPack, stackLimit, stockItem, warmTime } from './pack';
 
 describe('pack', () => {
   it('カルボナーラのパックだけ温めが必要', () => {
@@ -12,7 +12,7 @@ describe('pack', () => {
     expect(stockItem('tomatoSauce', cfg)).toEqual({ kind: 'ingredient', id: 'tomatoSauce' });
     expect(stockItem('carbonaraSauce', cfg)).toEqual({
       kind: 'pack',
-      pack: { id: 'carbonaraSauce', soak: 0, warm: false },
+      packs: [{ id: 'carbonaraSauce', soak: 0, warm: false }],
     });
   });
 
@@ -30,5 +30,46 @@ describe('pack', () => {
 describe('stockItem: サラダベース', () => {
   it('お皿にサラダが入ったもの（皿の中身が saladBase）を手に持つ', () => {
     expect(stockItem('saladBase', cfg)).toEqual({ kind: 'plate', contents: ['saladBase'] });
+  });
+});
+
+describe('コーンスープのパック', () => {
+  it('温め時間は5秒。カルボナーラは3秒', () => {
+    expect(warmTime('cornSoup', cfg)).toBe(cfg.cornSoupWarmTime);
+    const pack = createPack('cornSoup');
+    soakPack(pack, cfg.cornSoupWarmTime - 0.1, cfg);
+    expect(pack.warm).toBe(false);
+    soakPack(pack, 0.2, cfg);
+    expect(pack.warm).toBe(true);
+  });
+
+  it('コーンスープだけ最大5つまで手に持てる。ほかのパックは1つ', () => {
+    expect(stackLimit('cornSoup', cfg)).toBe(5);
+    expect(stackLimit('carbonaraSauce', cfg)).toBe(1);
+
+    const hand = stockItem('cornSoup', cfg);
+    expect(hand.kind).toBe('pack');
+    if (hand.kind !== 'pack') return;
+    for (let i = hand.packs.length; i < 5; i++) {
+      expect(canStackPack(hand, 'cornSoup', cfg)).toBe(true);
+      hand.packs.push(createPack('cornSoup'));
+    }
+    expect(hand.packs).toHaveLength(5);
+    expect(canStackPack(hand, 'cornSoup', cfg)).toBe(false); // 6つ目は持てない
+    expect(canStackPack(stockItem('carbonaraSauce', cfg), 'carbonaraSauce', cfg)).toBe(false);
+  });
+
+  it('温まったパックを探せる', () => {
+    const a = createPack('cornSoup');
+    const b = createPack('cornSoup');
+    b.warm = true;
+    expect(findWarmPack([a, b])).toBe(1);
+    expect(findWarmPack([a], 'cornSoup')).toBe(-1);
+  });
+});
+
+describe('stockItem: ペンネ', () => {
+  it('冷蔵庫のペンネは、生麺（ペンネ）として手に持つ', () => {
+    expect(stockItem('penne', cfg)).toEqual({ kind: 'rawNoodle', id: 'penne' });
   });
 });

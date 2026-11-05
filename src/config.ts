@@ -5,12 +5,16 @@ export type GameConfig = {
   // 茹で麺器
   boilerCount: number; // 口数
   boilTime: number; // 麺の茹で時間（秒）
+  penneBoilTime: number; // ペンネの茹で時間（秒）。未決事項（スパゲッティと同じか）
   graceTime: number; // 麺が上がってからの猶予（秒）
   shortBoilTime: number; // ショート茹で（秒）
 
   // 熱湯（サラダ台とIHの間）
+  hotWaterColumns: number; // パックを浸けられる場所の列数（3×3 = 9か所なら 3）
   hotWaterSlotCount: number; // パックを浸けられる数
   carbonaraWarmTime: number; // カルボナーラのパックを余温めする秒数（3秒以上）
+  cornSoupWarmTime: number; // コーンスープのパックを温める秒数（5秒以上）
+  cornSoupStackMax: number; // コーンスープのパックを一度に手に持てる数（ほかのパックは1つ）
 
   // 鍋とIH
   ihBurnerCount: number; // IHコンロの口数
@@ -50,11 +54,15 @@ export const DEFAULT_CONFIG: GameConfig = {
 
   boilerCount: 4,
   boilTime: 50,
+  penneBoilTime: 50,
   graceTime: 30,
   shortBoilTime: 3,
 
-  hotWaterSlotCount: 3,
+  hotWaterColumns: 3,
+  hotWaterSlotCount: 9,
   carbonaraWarmTime: 3,
+  cornSoupWarmTime: 5,
+  cornSoupStackMax: 5,
 
   ihBurnerCount: 4,
   potCount: 5,

@@ -51,8 +51,19 @@ describe('既定のソース（鍋で加熱する分）', () => {
     expect(findSauceRecipe(['meatSauce', 'tomatoSauce'])).toBeNull();
     expect(isSaucePartial(['meatSauce', 'tomatoSauce'])).toBe(false);
   });
-  it('有効でないメニュー（ペンネなど）のソースは対象外', () => {
-    expect(findSauceRecipe(['tomatoSauce', 'garlic', 'chili'])).toBeNull();
+  it('ペンネアラビアータ：トマトソース・ガーリック・唐辛子が、順不同でそろう', () => {
+    expect(findSauceRecipe(['tomatoSauce', 'garlic', 'chili'])?.id).toBe('penne');
+    expect(findSauceRecipe(['chili', 'tomatoSauce', 'garlic'])?.id).toBe('penne');
+    expect(findSauceRecipe(['tomatoSauce', 'garlic'])).toBeNull();
+    expect(isSaucePartial(['tomatoSauce', 'garlic'])).toBe(true);
+  });
+  it('ほうれん草のソテー：ほうれん草2掴み・パンチェッタ・ソテーソースがそろう', () => {
+    expect(findSauceRecipe(['spinach', 'spinach', 'pancetta', 'sauteSauce'])?.id).toBe('spinach');
+    expect(findSauceRecipe(['spinach', 'pancetta', 'sauteSauce'])).toBeNull();
+  });
+  it('無効にしたメニューのソースは対象外', () => {
+    const off = MENU.map((m) => (m.id === 'penne' ? { ...m, enabled: false } : m));
+    expect(findSauceRecipe(['tomatoSauce', 'garlic', 'chili'], off)).toBeNull();
   });
   it('ソースの材料は、完成品の材料に含まれている', () => {
     for (const m of MENU) {

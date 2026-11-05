@@ -69,7 +69,7 @@ function hintFor(target: Target | null): string {
     if (p) return 'ここには置けない（ほかのボトルに近すぎる）';
     return `右クリック：${BOTTLE_ACTION[hand.id]}（皿に視点を合わせて）　左クリック：台の上に置く`;
   }
-  if (target && (target.kind === 'fridgeDoor' || (target.kind === 'stock' && target.inFridge))) {
+  if (target && (target.kind === 'fridgeDoor' || target.kind === 'spinachTray' || (target.kind === 'stock' && target.inFridge))) {
     return `右クリック：冷蔵庫の扉を${game.state.fridgeOpen ? '閉める' : '開ける'}`;
   }
   return '';

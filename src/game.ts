@@ -16,7 +16,7 @@ import {
   updateHeat,
   updateWasher,
 } from './pot';
-import { soakPack, stockItem } from './pack';
+import { canStackPack, createPack, findWarmPack, soakPack, stockItem } from './pack';
 import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
 import { serveScore } from './score';
 import { createTicket, nextTicketInterval, pickMenu } from './tickets';
@@ -50,6 +50,8 @@ export class Game {
       hand: null,
       boilers: Array.from({ length: this.cfg.boilerCount }, createBoiler),
       plateSlots: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => null),
+      plateStyles: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => 'plate' as const),
+      tray: 'fridge',
       fridgeOpen: false,
       bottles: Object.fromEntries(BOTTLE_IDS.map((id) => [id, { ...BOTTLE_HOME[id] }])) as Record<BottleId, BottleSpot>,
       hotWater: Array.from({ length: this.cfg.hotWaterSlotCount }, () => null),
@@ -122,7 +124,7 @@ export class Game {
   // 右クリック：冷蔵庫に視点が合っていれば扉を開閉、それ以外は手に持っている物を捨てる
   rightClick(target: Target | null): void {
     if (this.state.phase !== 'playing') return;
-    if (target && (target.kind === 'fridgeDoor' || (target.kind === 'stock' && target.inFridge))) {
+    if (target && (target.kind === 'fridgeDoor' || target.kind === 'spinachTray' || (target.kind === 'stock' && target.inFridge))) {
       this.state.fridgeOpen = !this.state.fridgeOpen;
       return;
     }
@@ -192,6 +194,10 @@ export class Game {
       this.say('ボトルは捨てられない（台の上に置く）', 'info');
       return;
     }
+    if (s.hand.kind === 'tray') {
+      this.say('トレーは捨てられない（サラダ台の上に置く）', 'info');
+      return;
+    }
     if (s.hand.kind === 'pot') {
       // 鍋は総数が決まっているので、捨てると循環から消えてしまう
       this.say('鍋は捨てられない', 'info');
@@ -210,16 +216,37 @@ export class Game {
     switch (target.kind) {
       case 'noodleRack':
         if (hand) return null;
-        return () => (s.hand = { kind: 'rawNoodle' });
+        return () => (s.hand = { kind: 'rawNoodle', id: 'noodle' });
 
       case 'plateStack':
         if (hand) return null;
-        return () => (s.hand = { kind: 'plate', contents: [] });
+        return () => (s.hand = { kind: 'plate', contents: [], style: target.style ?? 'plate' });
 
       case 'stock':
-        if (hand) return null;
         if (target.inFridge && !s.fridgeOpen) return null; // 扉が閉まっていると取れない
-        return () => (s.hand = stockItem(target.id, this.cfg)); // お玉1杯・パック1つ・1掴みなど
+        if (!hand) return () => (s.hand = stockItem(target.id, this.cfg)); // お玉1杯・パック1つ・1掴みなど
+        // コーンスープのパックだけ、クリックした回数だけ重ねて持てる（最大5つ）
+        if (canStackPack(hand, target.id, this.cfg)) return () => hand.packs.push(createPack(target.id));
+        return null;
+
+      case 'spinachTray':
+        // 冷蔵庫の中のトレー。取って、サラダ台のトレー置き場に置く
+        if (hand || !s.fridgeOpen || s.tray !== 'fridge') return null;
+        return () => {
+          s.hand = { kind: 'tray' };
+          s.tray = 'hand';
+        };
+
+      case 'traySlot':
+        if (hand?.kind === 'tray') {
+          return () => {
+            s.tray = 'table';
+            s.hand = null;
+          };
+        }
+        // 置いたトレーから、トングでほうれん草を1掴み取る
+        if (!hand && s.tray === 'table') return () => (s.hand = { kind: 'ingredient', id: 'spinach' });
+        return null;
 
       case 'fridgeDoor':
         // 左クリックでは開かない（右クリックで開閉）。閉まっている間だけ案内を出す
@@ -247,14 +274,14 @@ export class Game {
         const b = s.boilers[target.index];
         if (b.state === 'empty' && hand?.kind === 'rawNoodle') {
           return () => {
-            setNoodle(b);
+            setNoodle(b, hand.id);
             s.hand = null;
           };
         }
         if (b.state === 'lifted' && !hand) {
           return () => {
-            takeNoodle(b);
-            s.hand = { kind: 'ingredient', id: 'noodle' };
+            const noodle = takeNoodle(b);
+            if (noodle) s.hand = { kind: 'ingredient', id: noodle };
           };
         }
         if (b.state === 'overdue') {
@@ -273,15 +300,27 @@ export class Game {
         const slot = s.plateSlots[target.index];
         if (!hand && slot) {
           return () => {
-            s.hand = { kind: 'plate', contents: slot };
+            s.hand = { kind: 'plate', contents: slot, style: s.plateStyles[target.index] };
             s.plateSlots[target.index] = null;
           };
         }
         if (hand?.kind === 'plate' && !slot) {
           return () => {
             s.plateSlots[target.index] = hand.contents;
+            s.plateStyles[target.index] = hand.style ?? 'plate';
             s.hand = null;
           };
+        }
+        // 温まったコーンスープのパックを、空のスープ皿に入れる（1皿に1つ）
+        if (hand?.kind === 'pack' && slot && s.plateStyles[target.index] === 'bowl' && slot.length === 0) {
+          const i = findWarmPack(hand.packs, 'cornSoup');
+          if (i >= 0) {
+            return () => {
+              slot.push('cornSoup');
+              hand.packs.splice(i, 1);
+              if (hand.packs.length === 0) s.hand = null;
+            };
+          }
         }
         if (hand?.kind === 'ingredient' && slot && slot.length < this.cfg.maxPlateContents) {
           return () => {
@@ -342,27 +381,34 @@ export class Game {
           };
         }
         // 熱湯で温まったパック（カルボナーラ）は、加熱前の鍋に入れられる
-        if (hand?.kind === 'pack' && hand.pack.warm && pot && canAddIngredient(pot, hand.pack.id, this.cfg.maxPotContents)) {
-          return () => {
-            addIngredient(pot, hand.pack.id);
-            s.hand = null;
-            this.tryAutoHeat(pot);
-          };
+        if (hand?.kind === 'pack' && pot) {
+          const i = hand.packs.findIndex((p) => p.warm && canAddIngredient(pot, p.id, this.cfg.maxPotContents));
+          if (i >= 0) {
+            return () => {
+              addIngredient(pot, hand.packs[i].id);
+              hand.packs.splice(i, 1);
+              if (hand.packs.length === 0) s.hand = null;
+              this.tryAutoHeat(pot);
+            };
+          }
         }
         return null;
       }
 
       case 'hotWaterSlot': {
-        const pack = s.hotWater[target.index];
-        if (hand?.kind === 'pack' && !pack) {
+        const cell = s.hotWater[target.index];
+        // 手に持っているパックを、空いている場所に1つ浸ける
+        if (hand?.kind === 'pack' && !cell) {
           return () => {
-            s.hotWater[target.index] = hand.pack;
-            s.hand = null;
+            s.hotWater[target.index] = hand.packs.pop()!;
+            if (hand.packs.length === 0) s.hand = null;
           };
         }
-        if (!hand && pack) {
+        // 浸けているパックを取る。手が空いているか、同じ種類のパックを持っていて、まだ持てるときだけ
+        if (cell && (!hand || canStackPack(hand, cell.id, this.cfg))) {
           return () => {
-            s.hand = { kind: 'pack', pack };
+            if (hand) hand.packs.push(cell);
+            else s.hand = { kind: 'pack', packs: [cell] };
             s.hotWater[target.index] = null;
           };
         }
@@ -441,11 +487,17 @@ export function describeItem(item: Item | null): string {
   if (!item) return '';
   switch (item.kind) {
     case 'rawNoodle':
-      return '生麺';
+      return item.id === 'penne' ? 'ペンネ' : '生麺';
     case 'ingredient':
       return INGREDIENTS[item.id].name;
-    case 'pack':
-      return `${INGREDIENTS[item.pack.id].name}パック（${item.pack.warm ? '温まった' : '冷たい'}）`;
+    case 'pack': {
+      const name = INGREDIENTS[item.packs[0].id].name;
+      const warm = item.packs.filter((p) => p.warm).length;
+      if (item.packs.length === 1) return `${name}パック（${warm ? '温まった' : '冷たい'}）`;
+      return `${name}パック×${item.packs.length}（温まった ${warm}）`;
+    }
+    case 'tray':
+      return 'ほうれん草のトレー';
     case 'bottle':
       return `${INGREDIENTS[item.id].name}（ボトル）`;
     case 'pot': {
@@ -454,9 +506,11 @@ export function describeItem(item: Item | null): string {
       const heat = { cold: '未加熱', heating: '加熱中', ready: '完成' }[pot.heat];
       return `鍋（${heat}：${pot.contents.map((id) => INGREDIENTS[id].name).join('・')}）`;
     }
-    case 'plate':
+    case 'plate': {
+      const kind = { plate: '皿', small: '小皿', bowl: 'スープ皿' }[item.style ?? 'plate'];
       return item.contents.length === 0
-        ? '皿（空）'
-        : `皿（${item.contents.map((id) => INGREDIENTS[id].name).join('・')}）`;
+        ? `${kind}（空）`
+        : `${kind}（${item.contents.map((id) => INGREDIENTS[id].name).join('・')}）`;
+    }
   }
 }

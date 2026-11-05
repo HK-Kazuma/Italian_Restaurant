@@ -26,9 +26,9 @@ describe('boiler', () => {
     const b = createBoiler();
     setNoodle(b);
     pressButton(b, cfg);
-    expect(takeNoodle(b)).toBe(false);
+    expect(takeNoodle(b)).toBeNull();
     updateBoiler(b, cfg.boilTime, cfg);
-    expect(takeNoodle(b)).toBe(true);
+    expect(takeNoodle(b)).toBe('noodle'); // 取り出した麺の種類が返る
     expect(b.state).toBe('empty');
   });
 
@@ -39,7 +39,7 @@ describe('boiler', () => {
     updateBoiler(b, cfg.boilTime, cfg);
     updateBoiler(b, cfg.graceTime + 1, cfg);
     expect(b.state).toBe('overdue');
-    expect(takeNoodle(b)).toBe(false);
+    expect(takeNoodle(b)).toBeNull();
 
     expect(startShortBoil(b, cfg)).toBe(true);
     updateBoiler(b, 3, cfg);
@@ -50,5 +50,28 @@ describe('boiler', () => {
   it('のびかけ以外ではショート茹でできない', () => {
     const b = createBoiler();
     expect(startShortBoil(b, cfg)).toBe(false);
+  });
+});
+
+describe('ペンネ', () => {
+  it('入れた麺の種類が覚えられ、ペンネの茹で時間で上がり、ペンネとして取り出せる', () => {
+    const c = { ...cfg, penneBoilTime: 20 };
+    const b = createBoiler();
+    setNoodle(b, 'penne');
+    pressButton(b, c);
+    expect(b.timer).toBe(20);
+    updateBoiler(b, 19, c);
+    expect(b.state).toBe('boiling');
+    updateBoiler(b, 1, c);
+    expect(b.state).toBe('lifted');
+    expect(takeNoodle(b)).toBe('penne');
+  });
+
+  it('スパゲッティは今までの茹で時間のまま', () => {
+    const c = { ...cfg, penneBoilTime: 20 };
+    const b = createBoiler();
+    setNoodle(b);
+    pressButton(b, c);
+    expect(b.timer).toBe(c.boilTime);
   });
 });
