@@ -121,7 +121,8 @@ export type Item =
   | { kind: 'pack'; packs: Pack[] } // 熱湯で温めてから使うパック。同じ種類を重ねて持てる（コーンスープは最大5つ）
   | { kind: 'tray'; id: TrayId } // ほうれん草のトレー / 塩オイルソースのケース
   | { kind: 'bottle'; id: BottleId } // ドレッシング・パプリカパウダー・パセリ。右クリックで皿にかける・振る（なくならない）
-  | { kind: 'pot'; pot: Pot };
+  | { kind: 'pot'; pot: Pot }
+  | { kind: 'ipad' }; // 練習キッチンの壁にかかっている iPad。右クリックで画面を開く（ゲーム開始・レシピ）
 
 // 視点の先にあるクリック可能な設備
 export type Target =
@@ -141,7 +142,8 @@ export type Target =
   | { kind: 'hotWaterSlot'; index: number } // 熱湯に浸けるパックの置き場所
   | { kind: 'bottle'; id: BottleId } // 台の上のボトル
   | { kind: 'tableTop'; surface: SurfaceId; x: number; z: number } // 台の天板。x, z は視点が合っている点（台の中心からの相対）
-  | { kind: 'washer' };
+  | { kind: 'washer' }
+  | { kind: 'ipadWall' }; // 後ろの壁にかかっている iPad（練習中だけ。左クリックで手に取る・壁に戻す）
 
 export type Phase = 'title' | 'playing' | 'paused' | 'result';
 
@@ -151,8 +153,13 @@ export type Toast = {
   expiresAt: number; // ゲーム内時刻
 };
 
+// practice = 練習キッチン（時間制限なし。操作を覚える・気軽に料理する）、game = 本番（5分間のタイムアタック）
+export type Mode = 'practice' | 'game';
+
 export type GameState = {
   phase: Phase;
+  mode: Mode;
+  ipadOpen: boolean; // iPad の画面を開いている間（マウスのカーソルが出て、視点は動かせない）
   time: number; // 経過時間（秒）
   hand: Item | null;
   boilers: Boiler[];

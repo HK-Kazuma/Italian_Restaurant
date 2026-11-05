@@ -35,6 +35,8 @@ export type GameConfig = {
   ticketIntervalEnd: number; // 終了時の届く間隔（秒）。後半ほど短くする
   ticketIntervalJitter: number; // 間隔のばらつき（0.25 なら ±25%）
   maxOpenTickets: number; // 同時に並ぶ伝票の上限
+  practiceTicketInterval: number; // 練習キッチンで伝票が届く間隔（秒、一定）
+  practiceMaxTickets: number; // 練習キッチンで同時に並ぶ伝票の上限
 
   // スコア
   speedBonusMax: number; // 速度ボーナスの最大値
@@ -81,6 +83,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   ticketIntervalEnd: 10,
   ticketIntervalJitter: 0.25,
   maxOpenTickets: 6, // 画面に横一列で並べられる枚数に合わせる
+  practiceTicketInterval: 25,
+  practiceMaxTickets: 5,
 
   speedBonusMax: 20,
   speedBonusWindow: 90,

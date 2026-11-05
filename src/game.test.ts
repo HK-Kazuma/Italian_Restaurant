@@ -1303,3 +1303,167 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
     expect(g.state.moving).toBeNull();
   });
 });
+
+describe('Game: 練習キッチンと iPad', () => {
+  const ipadWall: Target = { kind: 'ipadWall' };
+
+  function practice() {
+    const g = new Game(cfg, () => 0);
+    g.startPractice();
+    return g;
+  }
+
+  it('練習は、時間が過ぎても終わらない（ゲームは終わる）', () => {
+    const g = practice();
+    expect(g.state.mode).toBe('practice');
+    for (let i = 0; i < cfg.gameDuration + 60; i++) g.update(1);
+    expect(g.state.phase).toBe('playing');
+
+    const real = new Game(cfg, () => 0);
+    real.start();
+    expect(real.state.mode).toBe('game');
+    for (let i = 0; i < cfg.gameDuration + 1; i++) real.update(1);
+    expect(real.state.phase).toBe('result');
+  });
+
+  it('練習の伝票は、25秒ごとに1枚。最大5枚まで', () => {
+    const g = practice();
+    g.update(cfg.firstTicketAt); // 最初の1枚
+    expect(g.state.tickets.length).toBe(1);
+    g.update(cfg.practiceTicketInterval - 1);
+    expect(g.state.tickets.length).toBe(1);
+    g.update(1);
+    expect(g.state.tickets.length).toBe(2);
+    for (let i = 0; i < 20 * cfg.practiceTicketInterval; i++) g.update(1);
+    expect(g.state.tickets.length).toBe(cfg.practiceMaxTickets); // 5枚で頭打ち
+  });
+
+  it('5枚に達していなければ、また届く', () => {
+    const g = practice();
+    for (let i = 0; i < 20 * cfg.practiceTicketInterval; i++) g.update(1);
+    g.state.tickets.shift(); // 1枚さばいた
+    expect(g.state.tickets.length).toBe(cfg.practiceMaxTickets - 1);
+    for (let i = 0; i < cfg.practiceTicketInterval; i++) g.update(1);
+    expect(g.state.tickets.length).toBe(cfg.practiceMaxTickets);
+  });
+
+  it('ゲームの伝票は、これまでどおり間隔が短くなっていく（練習の一定間隔ではない）', () => {
+    const g = new Game({ ...cfg, ticketIntervalJitter: 0 }, () => 0);
+    g.start();
+    g.update(cfg.firstTicketAt);
+    const first = g.state.nextTicketAt - g.state.time;
+    expect(first).toBeCloseTo(cfg.ticketIntervalStart, 0);
+    g.state.time = cfg.gameDuration - 1;
+    g.state.nextTicketAt = 0;
+    g.update(0.5);
+    expect(g.state.nextTicketAt - g.state.time).toBeLessThan(cfg.ticketIntervalEnd + 0.5);
+  });
+
+  it('壁の iPad は、手が空のときだけ取れて、壁に戻せる', () => {
+    const g = practice();
+    g.interact(ipadWall);
+    expect(g.state.hand).toEqual({ kind: 'ipad' });
+    g.interact(ipadWall); // 持っているときに壁へ左クリックすると戻る
+    expect(g.state.hand).toBeNull();
+
+    g.state.hand = { kind: 'rawNoodle', id: 'noodle' };
+    expect(g.planInteract(ipadWall)).toBeNull(); // 手がふさがっていると取れない
+  });
+
+  it('iPad は右クリックで画面を開く。捨てられない', () => {
+    const g = practice();
+    g.rightClick(null); // 持っていなければ何も起きない
+    expect(g.state.ipadOpen).toBe(false);
+    g.interact(ipadWall);
+    g.rightClick(null);
+    expect(g.state.ipadOpen).toBe(true);
+    expect(g.state.hand).toEqual({ kind: 'ipad' }); // 開いても捨てられない
+    g.closeIpad();
+    expect(g.state.ipadOpen).toBe(false);
+    expect(g.state.hand).toEqual({ kind: 'ipad' });
+  });
+
+  it('壁の iPad はゲーム中は使えない', () => {
+    const g = new Game(cfg, () => 0);
+    g.start();
+    expect(g.planInteract(ipadWall)).toBeNull();
+  });
+
+  it('iPad からゲームを始めると、新しい状態になる（手の iPad・開いた画面も戻る）', () => {
+    const g = practice();
+    g.interact(ipadWall);
+    g.rightClick(null);
+    g.start();
+    expect(g.state.mode).toBe('game');
+    expect(g.state.hand).toBeNull();
+    expect(g.state.ipadOpen).toBe(false);
+    expect(g.state.time).toBe(0);
+  });
+
+  it('練習で置き直した冷蔵庫の配置は、ゲームにも反映される', () => {
+    const g = practice();
+    g.rightClick({ kind: 'fridgeDoor' }); // 扉を開ける
+    g.rightClick(can);
+    expect(g.state.moving).toBe('meatSauce');
+    g.rightClick(fridgeShelf(3, 0.66, 0));
+    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 3, x: 0.66, z: 0 });
+
+    g.start();
+    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 3, x: 0.66, z: 0 });
+    expect(g.state.fridgeOpen).toBe(false); // 扉の開け閉めは引き継がない
+    expect(g.state.moving).toBeNull();
+    expect(g.state.fridgeItems.tomatoSauce).toEqual(newGame().state.fridgeItems.tomatoSauce); // 動かしていない物はそのまま
+  });
+
+  it('ゲームのあと練習に戻っても、冷蔵庫の配置は残る', () => {
+    const g = practice();
+    g.rightClick({ kind: 'fridgeDoor' });
+    g.rightClick(can);
+    g.rightClick(fridgeShelf(3, 0.66, 0));
+    g.start();
+    g.startPractice();
+    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 3, x: 0.66, z: 0 });
+  });
+
+  it('動かしていなければ、最初の配置のまま', () => {
+    const g = practice();
+    g.start();
+    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 2, x: 0.37, z: 0.25 });
+  });
+});
+
+// ---------- 取り出した麺を茹で麺器に戻す ----------
+
+describe('Game: 取り出した麺を茹で麺器のかごに戻す', () => {
+  it('茹で上がりの麺を空のかごに戻すと、また最初からボイルしないと茹で上がらない', () => {
+    const g = newGame();
+    boilNoodle(g);
+    g.interact(basket(0)); // 取り出す
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'noodle' });
+    expect(g.state.boilers[0].state).toBe('empty');
+
+    g.interact(basket(0)); // 戻す
+    expect(g.state.hand).toBeNull();
+    expect(g.state.boilers[0].state).toBe('set'); // 茹で上がりには戻らない
+    g.update(cfg.boilTime + 10);
+    expect(g.state.boilers[0].state).toBe('set'); // ボタンを押すまで茹でない
+
+    g.interact(button(0));
+    expect(g.state.boilers[0].state).toBe('boiling');
+    g.update(cfg.boilTime + 1);
+    expect(g.state.boilers[0].state).toBe('lifted');
+  });
+
+  it('ペンネも戻せて、ペンネの時間で茹でなおす。かごが空いていなければ戻せない', () => {
+    const g = newGame();
+    g.state.boilers[0].noodle = 'penne';
+    g.state.boilers[0].state = 'lifted';
+    g.interact(basket(0));
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'penne' });
+    g.interact(basket(0));
+    expect(g.state.boilers[0]).toMatchObject({ state: 'set', noodle: 'penne' });
+
+    g.state.hand = { kind: 'ingredient', id: 'noodle' };
+    expect(g.planInteract(basket(0))).toBeNull(); // かごは使用中
+  });
+});

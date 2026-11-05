@@ -25,7 +25,7 @@ import { createTicket, nextTicketInterval, pickMenu } from './tickets';
 import { BOTTLE_IDS, BOTTLE_PLATE, BOTTLE_SURFACES, BOTTLE_VERB } from './bottle';
 import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShelf, fridgeItemOf } from './fridge';
 import { BOTTLE_HOME, SURFACES } from './layout';
-import type { BottleId, BottlePreview, BottleSpot, FridgeItemId, FridgePreview, FridgeSpot, GameState, IngredientId, Item, Phase, Pot, Target, Toast, TrayId } from './types';
+import type { BottleId, BottlePreview, BottleSpot, FridgeItemId, FridgePreview, FridgeSpot, GameState, IngredientId, Item, Mode, Phase, Pot, Target, Toast, TrayId } from './types';
 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
 type Action = () => void;
@@ -47,12 +47,15 @@ export class Game {
     readonly cfg: GameConfig = DEFAULT_CONFIG,
     private rng: () => number = Math.random,
   ) {
-    this.state = this.initialState('title');
+    this.state = this.initialState('title', 'practice');
   }
 
-  private initialState(phase: Phase): GameState {
+  // fridge: 引き継ぐ冷蔵庫の中の物の置き場所（練習で置き直した配置を、ゲームにも反映する）。省略 = 最初の配置
+  private initialState(phase: Phase, mode: Mode, fridge?: Record<FridgeItemId, FridgeSpot>): GameState {
     return {
       phase,
+      mode,
+      ipadOpen: false,
       time: 0,
       hand: null,
       boilers: Array.from({ length: this.cfg.boilerCount }, createBoiler),
@@ -60,7 +63,7 @@ export class Game {
       plateStyles: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => 'plate' as const),
       trays: { spinach: 'fridge', saltOil: 'fridge' },
       fridgeOpen: false,
-      fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...FRIDGE_HOME[id] }])) as Record<FridgeItemId, FridgeSpot>,
+      fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...(fridge ?? FRIDGE_HOME)[id] }])) as Record<FridgeItemId, FridgeSpot>,
       moving: null,
       bottles: Object.fromEntries(BOTTLE_IDS.map((id) => [id, { ...BOTTLE_HOME[id] }])) as Record<BottleId, BottleSpot>,
       hotWater: Array.from({ length: this.cfg.hotWaterSlotCount }, () => null),
@@ -79,8 +82,19 @@ export class Game {
     };
   }
 
+  // 練習キッチンを始める（時間制限なし）。冷蔵庫の置き直しは引き継ぐ
+  startPractice(): void {
+    this.state = this.initialState('playing', 'practice', this.state.fridgeItems);
+  }
+
+  // ゲーム（5分間のタイムアタック）を始める。練習で置き直した冷蔵庫の配置は、そのまま引き継ぐ。それ以外は最初から
   start(): void {
-    this.state = this.initialState('playing');
+    this.state = this.initialState('playing', 'game', this.state.fridgeItems);
+  }
+
+  // iPad の画面を閉じる（手には iPad を持ったまま）
+  closeIpad(): void {
+    this.state.ipadOpen = false;
   }
 
   pause(): void {
@@ -102,7 +116,7 @@ export class Game {
     for (const pot of s.ihBurners) if (pot) updateHeat(pot, dt); // 加熱が進むのはIHに載っている間だけ
     this.spawnTickets();
 
-    if (s.time >= this.cfg.gameDuration) {
+    if (s.mode === 'game' && s.time >= this.cfg.gameDuration) {
       s.time = this.cfg.gameDuration;
       s.phase = 'result';
     }
@@ -111,11 +125,14 @@ export class Game {
   private spawnTickets(): void {
     const s = this.state;
     if (s.time < s.nextTicketAt) return;
-    if (s.tickets.length < this.cfg.maxOpenTickets) {
+    // 練習キッチン：一定の間隔で、上限（5枚）に達していない間だけ届く。ゲーム：だんだん間隔が短くなる
+    const practice = s.mode === 'practice';
+    const max = practice ? this.cfg.practiceMaxTickets : this.cfg.maxOpenTickets;
+    if (s.tickets.length < max) {
       s.tickets.push(createTicket(s.nextTicketId++, pickMenu(MENU, this.rng), s.time));
     }
     const progress = s.time / this.cfg.gameDuration;
-    s.nextTicketAt = s.time + nextTicketInterval(progress, this.cfg, this.rng);
+    s.nextTicketAt = s.time + (practice ? this.cfg.practiceTicketInterval : nextTicketInterval(progress, this.cfg, this.rng));
   }
 
   // --- 操作 ---
@@ -134,12 +151,17 @@ export class Game {
   //  - 冷蔵庫の中の物を持ち上げている最中：棚に視点が合っていればそこに置く。それ以外ならやめる
   //  - 扉が開いていて、冷蔵庫の中の物に視点が合っていれば、その物を持ち上げる（棚の好きな場所に置き直せる）
   //  - 冷蔵庫の扉・棚・本体に視点が合っていれば、扉を開閉する
+  //  - iPad を持っていれば、画面を開く（ゲーム開始・レシピ）
   //  - ボトルを持っていれば、皿にかける。それ以外は、手に持っている物を捨てる
   rightClick(target: Target | null): void {
     const s = this.state;
     if (s.phase !== 'playing') return;
     if (s.moving) {
       this.placeMoving(target);
+      return;
+    }
+    if (s.hand?.kind === 'ipad') {
+      s.ipadOpen = true;
       return;
     }
     const item = fridgeItemOf(target);
@@ -278,6 +300,10 @@ export class Game {
       this.say('トレー・ケースは捨てられない（サラダ台の上に置く）', 'info');
       return;
     }
+    if (s.hand.kind === 'ipad') {
+      this.say('iPadは捨てられない（壁に向けて左クリックで戻す）', 'info');
+      return;
+    }
     if (s.hand.kind === 'pot') {
       // 鍋は総数が決まっているので、捨てると循環から消えてしまう
       this.say('鍋は捨てられない', 'info');
@@ -333,6 +359,13 @@ export class Game {
         }
         return null;
 
+      case 'ipadWall':
+        // 練習キッチンだけ。手が空なら取る、iPad を持っていれば壁に戻す
+        if (s.mode !== 'practice') return null;
+        if (!hand) return () => (s.hand = { kind: 'ipad' });
+        if (hand.kind === 'ipad') return () => (s.hand = null);
+        return null;
+
       case 'fridgeShelf':
         return null; // 棚板は、右クリックで持ち上げた物を置く場所（左クリックでは何も起きない）
 
@@ -363,6 +396,14 @@ export class Game {
         if (b.state === 'empty' && hand?.kind === 'rawNoodle') {
           return () => {
             setNoodle(b, hand.id);
+            s.hand = null;
+          };
+        }
+        // 取り出した茹で上がりの麺は、空のかごに戻せる。戻した麺は、また最初から茹でる（ボタンを押す）
+        if (b.state === 'empty' && hand?.kind === 'ingredient' && (hand.id === 'noodle' || hand.id === 'penne')) {
+          const noodle = hand.id;
+          return () => {
+            setNoodle(b, noodle);
             s.hand = null;
           };
         }
@@ -595,6 +636,8 @@ export function describeItem(item: Item | null): string {
       return TRAY_NAME[item.id];
     case 'bottle':
       return `${INGREDIENTS[item.id].name}（ボトル）`;
+    case 'ipad':
+      return 'iPad';
     case 'pot': {
       const { pot } = item;
       if (pot.contents.length === 0) return pot.dirty ? '鍋（使用済み）' : '鍋';

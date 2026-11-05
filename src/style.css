@@ -213,3 +213,183 @@ body {
   text-align: right;
   white-space: nowrap;
 }
+
+/* 練習キッチン：タイマーの代わりに「練習」、スコアは出さない。案内を左上に常に出す */
+.practice .top .score {
+  display: none;
+}
+.practice-note {
+  display: none;
+  top: 64px;
+  left: 16px;
+  width: 400px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #ffe08a;
+  text-shadow: 0 1px 4px #000;
+}
+.practice .practice-note {
+  display: block;
+}
+
+/* 手に持った iPad の画面（右クリックで開く）。開いている間はカーソルを出して操作する */
+.ipad {
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+}
+.ipad.hidden {
+  display: none;
+}
+.ipad-body {
+  box-sizing: border-box;
+  width: min(880px, 92vw, calc(88vh * 4 / 3));
+  aspect-ratio: 4 / 3;
+  padding: 2.4%;
+  background: #1b1b1f;
+  border-radius: 36px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+}
+.ipad-screen {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 18px 28px 22px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #2b5876, #4e4376);
+  color: #fff;
+}
+.ipad-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  margin-bottom: 8px;
+  opacity: 0.95;
+}
+.ipad button {
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.ipad-status button {
+  padding: 4px 12px;
+  font-size: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.22);
+}
+.ipad-page[hidden] {
+  display: none;
+}
+.ipad-page h2 {
+  margin: 4px 0 10px;
+  font-size: 26px;
+}
+.ipad-page p {
+  font-size: 15px;
+  line-height: 1.6;
+}
+.ipad-apps {
+  display: flex;
+  justify-content: center;
+  gap: 4%;
+  margin-top: 8%;
+}
+.ipad .app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 16px;
+  font-weight: bold;
+}
+.ipad .app .icon {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border-radius: 26px;
+  font-size: 54px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+.ipad .app:hover .icon {
+  filter: brightness(1.15);
+}
+.ipad .icon.green {
+  background: #34c759;
+}
+.ipad .icon.orange {
+  background: #ff9f0a;
+}
+.ipad .icon.blue {
+  background: #0a84ff;
+}
+.ipad-tip {
+  text-align: center;
+  opacity: 0.85;
+  font-size: 13px !important;
+}
+.ipad .back {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font-size: 16px;
+  color: #9fd0ff;
+}
+.ipad .go {
+  margin-top: 12px;
+  padding: 12px 36px;
+  border: 0;
+  border-radius: 28px;
+  background: #34c759;
+  font-size: 20px;
+  font-weight: bold;
+}
+.ipad .go:hover {
+  filter: brightness(1.12);
+}
+.recipe-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.recipe-card {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.recipe-name {
+  font-size: 16px;
+  font-weight: bold;
+}
+.recipe-name .badge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 11px;
+  font-weight: normal;
+}
+.ipad .controls {
+  margin: 4px 0;
+}
+.ipad .controls th,
+.ipad .controls td {
+  font-size: 13px;
+  vertical-align: top;
+}
+.ipad .recipe {
+  color: #e6e0d4;
+  font-size: 13px;
+}

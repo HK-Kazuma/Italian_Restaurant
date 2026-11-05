@@ -47,21 +47,47 @@ const input = new Input(canvas, {
   onLook: (dx, dy) => game.state.phase === 'playing' && player.look(dx, dy),
   onClick: () => interactor.current && game.interact(interactor.current),
   onDoubleClick: () => interactor.current && game.doubleClick(interactor.current),
-  onRightClick: () => game.rightClick(interactor.current),
+  onRightClick: () => {
+    game.rightClick(interactor.current);
+    // iPad の画面を開いたら、カーソルを出して画面を操作できるようにする
+    if (game.state.ipadOpen) {
+      interactor.clear();
+      input.exitLock();
+    }
+  },
   onTicketZoom: (on) => hud.setTicketZoom(on),
   onLockChange: (locked) => {
     const { phase } = game.state;
-    if (locked && (phase === 'title' || phase === 'result')) game.start();
+    if (locked && (phase === 'title' || phase === 'result')) game.startPractice(); // まずは練習キッチン。ゲームは iPad から
     else if (locked) game.resume();
-    else if (phase === 'playing') game.pause(); // Esc で解除 = 一時停止
+    else if (phase === 'playing' && !game.state.ipadOpen) game.pause(); // Esc で解除 = 一時停止（iPad を開いているときは、カーソルを出しているだけ）
   },
 });
 
-const hud = new Hud(document.getElementById('hud')!, cfg, () => input.requestLock());
+const hud = new Hud(
+  document.getElementById('hud')!,
+  cfg,
+  () => input.requestLock(),
+  (action) => {
+    // iPad の画面から：ゲーム開始（冷蔵庫の配置は引き継ぐ）、または閉じて練習に戻る
+    if (action === 'start') game.start();
+    else game.closeIpad();
+    input.requestLock();
+  },
+);
+
+// カーソルが出たまま取り残されたとき（再ロックが拒否された直後など）は、画面クリックで視点操作に戻る
+canvas.addEventListener('click', () => {
+  if (!input.locked && game.state.phase === 'playing' && !game.state.ipadOpen) input.requestLock();
+});
 
 // 視点が合っている物に対する、左クリック以外の操作の案内
 function hintFor(target: Target | null): string {
   const hand = game.state.hand;
+  if (hand?.kind === 'ipad' && !game.state.moving) {
+    return target?.kind === 'ipadWall' ? '左クリック：iPadを壁に戻す　右クリック：iPadを開く' : '右クリック：iPadを開く（壁に向けて左クリックで戻す）';
+  }
+  if (target?.kind === 'ipadWall') return game.state.mode === 'practice' && !hand ? '左クリック：iPadを取る' : '';
   if (hand?.kind === 'tray') {
     if (target?.kind === 'traySlot') return target.id === hand.id ? '左クリック：ここに置く' : 'この置き場には置けない（種類が違う）';
     return 'サラダ台の緑の印（矢印の先）に置く';
@@ -148,7 +174,7 @@ function frame(): void {
   wasPlaying = game.state.phase === 'playing';
 
   player.applyTo(camera);
-  if (game.state.phase === 'playing') interactor.update(game);
+  if (game.state.phase === 'playing' && !game.state.ipadOpen) interactor.update(game);
   else interactor.clear();
   kitchen.sync(game.state, dt, game.previewBottle(interactor.current), game.previewFridge(interactor.current));
   hud.update(game.state, best, hintFor(interactor.current));

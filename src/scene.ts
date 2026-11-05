@@ -271,6 +271,65 @@ function buildTray(id: TrayId): THREE.Group {
 }
 
 // お玉ですくう具材（手に持つとお玉で表示する）
+// --- iPad：壁にかかっている物と、手に持った物で、同じ見た目を使う ---
+const IPAD_SCREEN = { w: 0.5, h: 0.375 }; // 画面の大きさ（4:3）
+const IPAD_BODY = { w: 0.56, h: 0.435, d: 0.018 }; // ふちを含めた本体
+
+// 画面に映すホーム画面（遠くから見ても iPad と分かる絵）。一度だけ作って使い回す
+let ipadScreenTexture: THREE.CanvasTexture | null = null;
+function getIpadScreenTexture(): THREE.CanvasTexture {
+  if (ipadScreenTexture) return ipadScreenTexture;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 384;
+  const ctx = canvas.getContext('2d')!;
+  const bg = ctx.createLinearGradient(0, 0, 512, 384);
+  bg.addColorStop(0, '#2b5876');
+  bg.addColorStop(1, '#4e4376');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 512, 384);
+  const apps: [string, string, string][] = [
+    ['#34c759', '▶', 'ゲーム開始'],
+    ['#ff9f0a', '☰', 'レシピ'],
+    ['#0a84ff', '？', '操作説明'],
+  ];
+  ctx.textAlign = 'center';
+  apps.forEach(([color, glyph, name], i) => {
+    const x = 56 + i * 150;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.roundRect(x, 110, 112, 112, 28);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 60px "Yu Gothic", "Meiryo", sans-serif';
+    ctx.fillText(glyph, x + 56, 168);
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = 'bold 22px "Yu Gothic", "Meiryo", sans-serif';
+    ctx.fillText(name, x + 56, 256);
+  });
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.beginPath();
+  ctx.roundRect(196, 356, 120, 8, 4);
+  ctx.fill();
+  ipadScreenTexture = new THREE.CanvasTexture(canvas);
+  ipadScreenTexture.colorSpace = THREE.SRGBColorSpace;
+  return ipadScreenTexture;
+}
+
+// iPad の本体。画面は +z 側を向く（壁にかける物は、向きを回して部屋の側へ向ける）
+function buildIpad(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(IPAD_BODY.w, IPAD_BODY.h, IPAD_BODY.d, 0x1b1b1f));
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(IPAD_SCREEN.w, IPAD_SCREEN.h),
+    new THREE.MeshLambertMaterial({ map: getIpadScreenTexture() }),
+  );
+  screen.position.z = IPAD_BODY.d / 2 + 0.001;
+  g.add(screen);
+  return g;
+}
+
 const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce', 'shrimp', 'garlic', 'chili', 'saltOilSauce']);
 // トングでつかむ具材（手に持つとトングで表示する）
 const TONGED: ReadonlySet<IngredientId> = new Set(['pancetta', 'chicken', 'spinach']);
@@ -320,6 +379,13 @@ function buildItemMesh(item: Item): THREE.Group {
     case 'pot':
       g.add(buildPotMesh(item.pot));
       break;
+    case 'ipad': {
+      // 画面を自分（カメラ）に向けて、立てて持つ
+      const pad = buildIpad();
+      pad.position.y = 0.22;
+      g.add(pad);
+      break;
+    }
     case 'plate': {
       // 皿の種類：普通の皿 / 小皿（ほうれん草のソテー）/ スープ皿（コーンスープ）
       const style = item.style ?? 'plate';
@@ -373,6 +439,8 @@ function itemSignature(item: Item | null): string {
       return `pack:${item.packs.map((p) => `${p.id}${p.warm ? 1 : 0}`).join(',')}`;
     case 'pot':
       return `pot:${item.pot.dirty}:${item.pot.contents.join(',')}`;
+    case 'ipad':
+      return 'ipad';
   }
 }
 
@@ -520,6 +588,26 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   scene.add(box(0.1, 3.2, roomD, 0xe2dac6, roomMinX, 1.6, roomCz)); // 左
   scene.add(box(0.1, 3.2, roomD, 0xe2dac6, roomMaxX, 1.6, roomCz)); // 右
   scene.add(box(roomW, 0.1, roomD, 0x5c5149, roomCx, 3.25, roomCz)); // 天井
+
+  // 後ろの壁（プレイヤーが最初に立つ場所の真後ろ）にかかっている iPad。練習キッチンのあいだだけある
+  // 最初の位置（壁から 4m）からでも見つけやすいよう、手に持つ物より大きくしてある
+  const IPAD_WALL_Y = 1.5;
+  const IPAD_WALL_SCALE = 1.7;
+  const ipadWall = new THREE.Group();
+  const ipadOnWallView = buildIpad().rotateY(Math.PI); // 画面を部屋の側（-z）へ
+  ipadWall.add(ipadOnWallView);
+  // 手に持っている間は、iPad の代わりに「戻す場所」（空の台）を出す。これに左クリックで壁に戻せる
+  const ipadDock = box(IPAD_BODY.w, IPAD_BODY.h, IPAD_BODY.d, 0x4a4a52);
+  ipadDock.visible = false;
+  ipadWall.add(ipadDock);
+  ipadWall.scale.setScalar(IPAD_WALL_SCALE);
+  ipadWall.position.set(0, IPAD_WALL_Y, roomMaxZ - 0.05 - (IPAD_BODY.d / 2) * IPAD_WALL_SCALE);
+  setTarget(ipadWall, { kind: 'ipadWall' });
+  scene.add(ipadWall);
+  interactables.push(ipadWall);
+  const ipadLabel = makeLabel('iPad（左クリックで取る）', 1.1);
+  ipadLabel.sprite.position.set(0, IPAD_WALL_Y + 0.55, roomMaxZ - 0.15);
+  scene.add(ipadLabel.sprite);
 
   // 湯気の発生源。parent の中の (x, y, z) から立ちのぼる
   const addSteam = (parent: THREE.Object3D, x: number, y: number, z: number, opts?: SteamOptions): Steam => {
@@ -1232,6 +1320,16 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     if (!w.pot) washerLabel.setText('鍋洗浄機');
     else if (w.pot.dirty) washerLabel.setText(`洗浄中 ${Math.ceil(w.timer)}`, '#ffe08a');
     else washerLabel.setText('洗い終わり！', '#8be28b');
+
+    // 壁の iPad：練習キッチンで、誰も持っていない間だけ見える
+    // 持っている間は、戻す場所だけ残す（なければ、壁に向けて左クリックできず、戻せなくなる）
+    const practice = state.mode === 'practice';
+    const holdingIpad = state.hand?.kind === 'ipad';
+    ipadWall.visible = practice;
+    ipadOnWallView.visible = !holdingIpad;
+    ipadDock.visible = holdingIpad;
+    ipadLabel.sprite.visible = practice;
+    ipadLabel.setText(holdingIpad ? 'ここに戻す（左クリック）' : 'iPad（左クリックで取る）');
 
     handView.show(state.hand);
   };
