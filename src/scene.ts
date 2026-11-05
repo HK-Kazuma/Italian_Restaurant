@@ -1075,7 +1075,8 @@ type HotWaterView = {
 
 type BurnerView = {
   disc: THREE.Mesh;
-  label: Label;
+  label: Label; // モニターの画面に映す文字（絵は label のテクスチャ）
+  monitor: THREE.Object3D; // 口の手前にはめ込まれたモニターの画面（文字）。表示する物がないときは消える
   steam: Steam;
   pot: ItemView;
 };
@@ -1175,7 +1176,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
 
   // iPad の真上の壁に立てかけた看板（お店のロゴ）。練習でもゲームでも常にある
   const SIGN_W = 1.5;
-  const SIGN_H = SIGN_W * (941 / 1672); // ロゴ画像の縦横比
+  const SIGN_H = SIGN_W * (887 / 1774); // ロゴ画像の縦横比
   const SIGN_D = 0.05;
   const logoTexture = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}logo.png`);
   logoTexture.colorSpace = THREE.SRGBColorSpace;
@@ -1224,14 +1225,28 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     scene.add(burner);
     interactables.push(burner);
 
-    const label = makeLabel('', 0.8);
-    label.sprite.position.set(x, 1.08, -1.8);
-    label.sprite.visible = false;
-    scene.add(label.sprite);
+    // 加熱中・完成などの表示：黒い丸（IHの口）の手前で、コンロの台にはめ込まれた小さなモニター。画面は真上を向いている。
+    // 枠と黒いガラスはいつもあり、表示する物があるときだけ文字（screen）が映る
+    const label = makeLabel('', 0.68);
+    const mx = x;
+    const mz = -1.8 + 0.4;
+    scene.add(box(0.37, 0.006, 0.12, 0x1c1f24, mx, 0.802, mz)); // 枠（天板の面から、ほんの少し出ている）
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.085), new THREE.MeshBasicMaterial({ color: 0x0b0d10 }));
+    glass.rotation.x = -Math.PI / 2; // 上向き
+    glass.position.set(mx, 0.8054, mz);
+    scene.add(glass);
+    const monitor = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.34, 0.085), // ラベルの絵（4:1）をそのまま映す。MeshBasic なので自ら光って見える
+      new THREE.MeshBasicMaterial({ map: label.sprite.material.map, transparent: true }),
+    );
+    monitor.rotation.x = -Math.PI / 2; // 上向き。文字の上側が奥（コンロの背板側）になり、プレイヤーから読める
+    monitor.position.set(mx, 0.8058, mz);
+    monitor.visible = false;
+    scene.add(monitor);
 
     // 鍋の口の上から。加熱が進むほど、完成が近いほど多くなる
     const steam = addSteam(scene, x, 0.82 + POT_H, -1.8, { count: 16, rise: 0.55, spread: 0.07, size: 0.28 });
-    burnerViews.push({ disc, label, pot: new ItemView(burner), steam });
+    burnerViews.push({ disc, label, monitor, pot: new ItemView(burner), steam });
   }
 
   // 鍋洗浄機（左）：ステンレスの箱に洗い槽。洗い槽が鍋を入れる場所
@@ -1773,9 +1788,27 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
 
   // --- 手持ちの表示（カメラの右下）---
   const handAnchor = new THREE.Group();
-  handAnchor.position.set(0.32, -0.3, -0.65);
-  handAnchor.rotation.set(0.35, -0.3, 0);
+  const HAND_POS = new THREE.Vector3(0.32, -0.3, -0.65);
+  const HAND_ROT = new THREE.Euler(0.35, -0.3, 0);
+  handAnchor.position.copy(HAND_POS);
+  handAnchor.rotation.copy(HAND_ROT);
   const handView = new ItemView(handAnchor, 0.6);
+
+  // ボトルを振る動き：口を前に倒して、細かく振る。SHAKE_TIME 秒で元の構えに戻る
+  const SHAKE_TIME = 0.6;
+  const applyHandPose = (state: GameState) => {
+    const elapsed = state.bottleShakeAt === null ? Infinity : state.time - state.bottleShakeAt;
+    const shaking = state.hand?.kind === 'bottle' && elapsed >= 0 && elapsed < SHAKE_TIME;
+    if (!shaking) {
+      handAnchor.position.copy(HAND_POS);
+      handAnchor.rotation.copy(HAND_ROT);
+      return;
+    }
+    const env = Math.sin((Math.PI * elapsed) / SHAKE_TIME); // 0→1→0。倒して、戻す
+    const wobble = Math.sin(elapsed * 50) * env; // 細かい振動
+    handAnchor.position.set(HAND_POS.x, HAND_POS.y + 0.06 * env + 0.025 * wobble, HAND_POS.z - 0.08 * env);
+    handAnchor.rotation.set(HAND_ROT.x - 2.0 * env + 0.18 * wobble, HAND_ROT.y, HAND_ROT.z + 0.08 * wobble);
+  };
 
   // --- 投げた鍋 ---
   // 投げるたびに作り、拾ったら片づける。視点を合わせやすいよう、鍋より大きい見えない当たり判定を付ける
@@ -1958,7 +1991,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
 
       // 材料を入れている間は、視点を合わせたときだけ中身の名前。加熱中は「加熱中」だけ。完成したらソースの名前
       const spec = pot ? potLabel(pot, hover?.kind === 'ihBurner' && hover.index === i) : null;
-      v.label.sprite.visible = spec !== null;
+      v.monitor.visible = spec !== null;
       if (spec) v.label.setText(spec.text, spec.color);
     });
 
@@ -1988,6 +2021,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
 
     syncThrownPots(state);
     handView.show(state.hand);
+    applyHandPose(state);
   };
 
   const trayGuide = (state: GameState) => {

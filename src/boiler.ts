@@ -25,6 +25,16 @@ export function pressButton(b: Boiler, cfg: BoilerTimes): boolean {
   return true;
 }
 
+// 取り出した茹で上がりの麺を、空のかごに戻す。戻した麺は、のびた麺と同じ扱い（のびかけ）になる。
+// ダブルクリックのショート茹でで復活させる
+export function returnNoodle(b: Boiler, noodle: NoodleKind): boolean {
+  if (b.state !== 'empty') return false;
+  b.state = 'overdue';
+  b.timer = 0;
+  b.noodle = noodle;
+  return true;
+}
+
 // かごが上がっている間だけ麺を取り出せる。取り出した麺の種類を返す（取れなければ null）
 export function takeNoodle(b: Boiler): NoodleKind | null {
   if (b.state !== 'lifted') return null;

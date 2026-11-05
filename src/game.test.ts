@@ -618,6 +618,18 @@ describe('Game: ボトル（ドレッシング・パプリカパウダー）', (
     expect(g.state.plateSlots[cfg.plateSlotCount]).toEqual(['saladBase', 'dressing', 'dressing']);
   });
 
+  it('皿に振った時刻を記録する（振る動きの表示用）。振れなかったときは記録しない', () => {
+    const g = newGame();
+    g.interact(saladBase);
+    g.interact(saladSlot(0));
+    g.interact(dressing);
+    g.rightClick(null); // 皿に向いていない
+    expect(g.state.bottleShakeAt).toBeNull();
+    g.update(1.5);
+    g.rightClick(saladSlot(0));
+    expect(g.state.bottleShakeAt).toBe(g.state.time);
+  });
+
   it('サラダの皿以外への右クリックでは、かけない。ボトルは捨てられない', () => {
     const g = newGame();
     g.interact(dressing);
@@ -1505,7 +1517,7 @@ describe('Game: iPad からのゲーム開始（操作説明つき）', () => {
 // ---------- 取り出した麺を茹で麺器に戻す ----------
 
 describe('Game: 取り出した麺を茹で麺器のかごに戻す', () => {
-  it('茹で上がりの麺を空のかごに戻すと、また最初からボイルしないと茹で上がらない', () => {
+  it('茹で上がりの麺を空のかごに戻すと、のびた麺と同じ扱い（のびかけ）になる', () => {
     const g = newGame();
     boilNoodle(g);
     g.interact(basket(0)); // 取り出す
@@ -1514,26 +1526,30 @@ describe('Game: 取り出した麺を茹で麺器のかごに戻す', () => {
 
     g.interact(basket(0)); // 戻す
     expect(g.state.hand).toBeNull();
-    expect(g.state.boilers[0].state).toBe('set'); // 茹で上がりには戻らない
-    g.update(cfg.boilTime + 10);
-    expect(g.state.boilers[0].state).toBe('set'); // ボタンを押すまで茹でない
+    expect(g.state.boilers[0].state).toBe('overdue');
+    expect(g.planInteract(button(0))).toBeNull(); // 最初から茹で直すことはできない
+    g.interact(basket(0));
+    expect(g.state.hand).toBeNull(); // すぐには取れない
 
-    g.interact(button(0));
-    expect(g.state.boilers[0].state).toBe('boiling');
-    g.update(cfg.boilTime + 1);
-    expect(g.state.boilers[0].state).toBe('lifted');
+    g.doubleClick(basket(0)); // ダブルクリックでショート茹で
+    expect(g.state.boilers[0].state).toBe('shortBoil');
+    g.update(cfg.shortBoilTime + 0.1);
+    g.interact(basket(0));
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'noodle' });
   });
 
-  it('ペンネも戻せて、ペンネの時間で茹でなおす。かごが空いていなければ戻せない', () => {
+  it('ペンネも戻すとのびかけになる。かごが空いていなければ戻せない', () => {
     const g = newGame();
     g.state.boilers[0].noodle = 'penne';
     g.state.boilers[0].state = 'lifted';
     g.interact(basket(0));
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'penne' });
     g.interact(basket(0));
-    expect(g.state.boilers[0]).toMatchObject({ state: 'set', noodle: 'penne' });
+    expect(g.state.boilers[0]).toMatchObject({ state: 'overdue', noodle: 'penne' });
 
     g.state.hand = { kind: 'ingredient', id: 'noodle' };
-    expect(g.planInteract(basket(0))).toBeNull(); // かごは使用中
+    g.interact(basket(0)); // かごは使用中：麺は手に残り、かごも変わらない
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'noodle' });
+    expect(g.state.boilers[0]).toMatchObject({ state: 'overdue', noodle: 'penne' });
   });
 });

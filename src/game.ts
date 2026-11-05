@@ -1,4 +1,4 @@
-import { createBoiler, pressButton, setNoodle, startShortBoil, takeNoodle, updateBoiler } from './boiler';
+import { createBoiler, pressButton, returnNoodle, setNoodle, startShortBoil, takeNoodle, updateBoiler } from './boiler';
 import { DEFAULT_CONFIG, type GameConfig } from './config';
 import { INGREDIENTS } from './ingredients';
 import {
@@ -71,6 +71,7 @@ export class Game {
       fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...(fridge ?? FRIDGE_HOME)[id] }])) as Record<FridgeItemId, FridgeSpot>,
       moving: null,
       bottles: Object.fromEntries(BOTTLE_IDS.map((id) => [id, { ...BOTTLE_HOME[id] }])) as Record<BottleId, BottleSpot>,
+      bottleShakeAt: null,
       hotWater: Array.from({ length: this.cfg.hotWaterSlotCount }, () => null),
       potSlots: Array.from({ length: this.cfg.potCount }, () => createPot(this.cfg.mixClicks)),
       ihBurners: Array.from({ length: this.cfg.ihBurnerCount }, () => null),
@@ -274,6 +275,7 @@ export class Game {
       return;
     }
     plate.push(hand.id);
+    this.state.bottleShakeAt = this.state.time;
     this.say(`${INGREDIENTS[hand.id].name}を${BOTTLE_VERB[hand.id]}`, 'info');
   }
 
@@ -434,12 +436,13 @@ export class Game {
             s.hand = null;
           };
         }
-        // 取り出した茹で上がりの麺は、空のかごに戻せる。戻した麺は、また最初から茹でる（ボタンを押す）
+        // 取り出した茹で上がりの麺は、空のかごに戻せる。戻した麺は、のびた麺と同じ扱い（ダブルクリックでショート茹で）
         if (b.state === 'empty' && hand?.kind === 'ingredient' && (hand.id === 'noodle' || hand.id === 'penne')) {
           const noodle = hand.id;
           return () => {
-            setNoodle(b, noodle);
+            returnNoodle(b, noodle);
             s.hand = null;
+            this.say('のびかけ！ダブルクリックでショート茹で', 'info');
           };
         }
         if (b.state === 'lifted' && !hand) {

@@ -188,6 +188,7 @@ export type GameState = {
   fridgeItems: Record<FridgeItemId, FridgeSpot>; // 冷蔵庫の中の物の置き場所（トレー・ケースは、取ったあとは使わない）
   moving: FridgeItemId | null; // 右クリックで持ち上げている最中の物（手とは別。棚に右クリックで置く）
   bottles: Record<BottleId, BottleSpot>; // 台の上のボトル
+  bottleShakeAt: number | null; // 手に持ったボトルを最後に振った（かけた）ゲーム内時刻。振る動きの表示に使う
   hotWater: (Pack | null)[]; // 熱湯に浸けているパック（3×3の9か所、左上から横に数える）。null = 空き
   potSlots: (Pot | null)[]; // 鍋置き場。null = 空き
   ihBurners: (Pot | null)[];
