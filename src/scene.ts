@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import type { GameConfig } from './config';
 import { INGREDIENTS } from './ingredients';
 import { LAYOUT, type Layout } from './layout';
+import { SAUCE_FILL_PER_UNIT, isNoodle } from './pot';
 import { type Rect, type World, rectAt } from './world';
-import type { Boiler, GameState, IngredientId, Item, Target } from './types';
+import type { Boiler, GameState, IngredientId, Item, Pot, Target } from './types';
 
 // 厨房の3Dシーン。見た目はすべてプリミティブ（箱・円柱）で作るローポリのプレースホルダー。
 // ゲームの状態は読むだけ（sync）で、ここからは state を書き換えない。
@@ -80,6 +81,146 @@ function disposeTree(obj: THREE.Object3D): void {
 
 // --- 手持ち・皿の見た目 ---
 
+// --- 鍋の見た目：何がどれだけ入っているか、見て分かるようにする ---
+
+// 決まった乱数（同じ鍋の中身なら毎回同じ配置にする。作り直しても具材が動かない）
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashId(id: string): number {
+  let h = 2166136261;
+  for (const ch of id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
+
+// パンチェッタ：細切れの細いベーコンが、バラバラに散らばった見た目（赤身と脂身の2色）。
+// 入れた順序に関係なく、いちばん上の面（yAt）に載せるので、あとからソースを入れても埋もれない。
+// heap > 0 なら、中央が盛り上がった山にする（鍋の底に少量だけあっても見えるように）
+function addPancettaStrips(
+  g: THREE.Group,
+  count: number,
+  seed: number,
+  radius: number,
+  yAt: (r: number) => number,
+  heap = 0,
+): void {
+  const rnd = seeded(seed);
+  for (let i = 0; i < count; i++) {
+    const r = Math.sqrt(rnd()) * radius;
+    const a = rnd() * Math.PI * 2;
+    const color = i % 3 === 0 ? 0xf6d5cf : INGREDIENTS.pancetta.color; // 3本に1本は脂身
+    const strip = box(0.07, 0.006, 0.012, color, Math.cos(a) * r, yAt(r) + 0.003 + (i % 4) * 0.0015 + heap * (1 - r / radius), Math.sin(a) * r);
+    strip.rotation.y = rnd() * Math.PI;
+    g.add(strip);
+  }
+}
+
+// 粒状の具材（ひき肉のかたまりなど）を散らす
+function addChunks(
+  g: THREE.Group,
+  color: number,
+  count: number,
+  seed: number,
+  radius: number,
+  y: number,
+  size: number,
+): void {
+  const rnd = seeded(seed);
+  for (let i = 0; i < count; i++) {
+    const r = Math.sqrt(rnd()) * radius;
+    const a = rnd() * Math.PI * 2;
+    const chunk = box(size, size * 0.6, size, color, Math.cos(a) * r, y + size * 0.3, Math.sin(a) * r);
+    chunk.rotation.y = rnd() * Math.PI;
+    g.add(chunk);
+  }
+}
+
+const POT_H = 0.14;
+const POT_FLOOR = 0.012; // 鍋の底の厚み
+const POT_MAX_DEPTH = 0.105; // ソースが満杯のときの深さ
+const PANCETTA_STRIPS_PER_UNIT = 12; // パンチェッタ1掴みの本数
+
+// 鍋の内側の半径（底は少しすぼまっている）
+const potInnerRadius = (y: number) => 0.12 + 0.02 * (y / POT_H);
+
+function buildPotMesh(pot: Pot): THREE.Group {
+  const g = new THREE.Group();
+  const bodyColor = pot.dirty ? 0x8d7b68 : 0xc9ced3;
+
+  // 本体：上が開いた筒（内側も見える）と、底
+  const wall = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15, 0.13, POT_H, 20, 1, true),
+    new THREE.MeshLambertMaterial({ color: bodyColor, side: THREE.DoubleSide }),
+  );
+  wall.position.y = POT_H / 2;
+  g.add(wall);
+  g.add(cyl(0.13, 0.13, POT_FLOOR, 0x2a2d31, 0, POT_FLOOR / 2, 0));
+  g.add(box(0.04, 0.025, 0.14, 0x55595e, 0, 0.1, 0.22)); // 取っ手（手前向き）
+
+  const units = (id: IngredientId) => pot.contents.filter((c) => c === id).length;
+
+  // ソース：量に応じた高さの液面。ミートソースはお玉1杯で半分、2杯で満杯。
+  // 複数のソースは、量で重みづけした色に混ざる
+  let fill = 0;
+  let r = 0;
+  let gr = 0;
+  let b = 0;
+  for (const [id, per] of Object.entries(SAUCE_FILL_PER_UNIT) as [IngredientId, number][]) {
+    const w = units(id) * per;
+    if (w === 0) continue;
+    const c = new THREE.Color(INGREDIENTS[id].color);
+    fill += w;
+    r += c.r * w;
+    gr += c.g * w;
+    b += c.b * w;
+  }
+  let surfaceY = POT_FLOOR;
+  if (fill > 0) {
+    const sauceColor = new THREE.Color(r / fill, gr / fill, b / fill).getHex();
+    const h = Math.min(1, fill) * POT_MAX_DEPTH;
+    surfaceY = POT_FLOOR + h;
+    g.add(cyl(potInnerRadius(surfaceY) - 0.002, potInnerRadius(POT_FLOOR), h, sauceColor, 0, POT_FLOOR + h / 2, 0));
+  }
+
+  // ミートソースは、ひき肉のかたまりで見分けがつくようにする（トマトソースはなめらか）
+  const meat = units('meatSauce');
+  if (meat > 0) addChunks(g, 0x4a140c, 9 * meat, hashId('meatSauce'), 0.1, surfaceY, 0.02);
+
+  // 麺：中央に山。まわりにソースが見える
+  const noodles = pot.contents.filter(isNoodle);
+  const hasNoodle = noodles.length > 0;
+  const moundTop = surfaceY + 0.05;
+  if (hasNoodle) {
+    const id = noodles[0];
+    g.add(cyl(0.075, 0.09, 0.05, INGREDIENTS[id].color, 0, surfaceY + 0.025, 0));
+  }
+
+  // パンチェッタ：細切れのベーコンがバラバラ。入れた順序に関係なく、いちばん上に見える
+  const pancetta = units('pancetta');
+  if (pancetta > 0) {
+    addPancettaStrips(g, PANCETTA_STRIPS_PER_UNIT * pancetta, hashId('pancetta'), 0.085, (rad) =>
+      hasNoodle && rad < 0.085 ? moundTop : surfaceY,
+      surfaceY === POT_FLOOR && !hasNoodle ? 0.085 : 0.03, // ソースも麺もなく底に少量だけのときは、高めの山にして見えるようにする
+    );
+  }
+
+  // それ以外の具材（ほうれん草など）：その具材の色のかけらを散らす
+  const others = new Set(pot.contents);
+  for (const id of others) {
+    if (id === 'pancetta' || id === 'meatSauce' || isNoodle(id) || SAUCE_FILL_PER_UNIT[id] !== undefined) continue;
+    addChunks(g, INGREDIENTS[id].color, 8 * units(id), hashId(id), 0.1, hasNoodle ? moundTop : surfaceY, 0.03);
+  }
+  return g;
+}
+
 // お玉ですくう具材（手に持つとお玉で表示する）
 const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce', 'shrimp']);
 // トングでつかむ具材（手に持つとトングで表示する）
@@ -117,13 +258,9 @@ function buildItemMesh(item: Item): THREE.Group {
       g.add(box(0.15, 0.04, 0.2, item.pack.warm ? 0xf5c26b : 0xdfe8ee, 0, 0.02, 0)); // 袋（温まると色が変わる）
       g.add(box(0.1, 0.042, 0.08, INGREDIENTS[item.pack.id].color, 0, 0.021, 0)); // ラベル
       break;
-    case 'pot': {
-      const top = item.pot.contents.at(-1);
-      g.add(cyl(0.15, 0.15, 0.14, item.pot.dirty ? 0x8d7b68 : 0xc9ced3, 0, 0.07, 0)); // 胴
-      g.add(cyl(0.125, 0.125, 0.02, top ? INGREDIENTS[top].color : 0x2a2d31, 0, 0.145, 0)); // 内側（中身の色）
-      g.add(box(0.04, 0.025, 0.14, 0x55595e, 0, 0.1, 0.22)); // 取っ手（手前向き）
+    case 'pot':
+      g.add(buildPotMesh(item.pot));
       break;
-    }
     case 'plate': {
       g.add(cyl(0.23, 0.18, 0.03, 0xf5f5f5, 0, 0.015, 0));
       let y = 0.03;
@@ -134,6 +271,9 @@ function buildItemMesh(item: Item): THREE.Group {
         } else if (id === 'noodle' || id === 'penne') {
           g.add(cyl(0.15, 0.17, 0.06, INGREDIENTS[id].color, 0, y + 0.03, 0));
           y += 0.06;
+        } else if (id === 'pancetta') {
+          addPancettaStrips(g, PANCETTA_STRIPS_PER_UNIT, hashId(id) + i, 0.12, () => y);
+          y += 0.012;
         } else {
           const r = Math.max(0.05, 0.13 - i * 0.012);
           g.add(cyl(r, r, 0.014, INGREDIENTS[id].color, 0, y + 0.007, 0));
@@ -187,11 +327,11 @@ class ItemView {
 }
 
 // --- 茹で麺器 ---
-
-// 茹で麺器はIHコンロ（z: -2.3〜-1.3）の奥に隙間なく接する（奥行き1.1）
+// 茹で麺器はIHコンロ（z: -2.3〜-1.3）の奥に隙間なく接する（奥行き1.1）。天板の高さはIHコンロと同じ
 const BOILER_Z = -2.85;
-const BASKET_UP = 1.53;
-const BASKET_DOWN = 1.22;
+const BOILER_TOP = 0.8; // IHコンロの天板の高さ
+const BASKET_UP = BOILER_TOP + 0.38; // かごが上がっている高さ
+const BASKET_DOWN = BOILER_TOP + 0.07; // かごがお湯に浸かっている高さ
 
 const NOODLE_COLORS = {
   set: 0xf3e9c0, // 生
@@ -343,12 +483,12 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   }
   decor('鍋置き場', POT_X, 0.76, -1.27, 0.6);
 
-  // --- 奥：茹で麺器（IHの奥で一段高い）---
-  scene.add(box(3, 1.15, 1.1, 0x9aa3ab, 0, 0.575, BOILER_Z));
+  // --- 奥：茹で麺器（IHコンロと同じ高さ）---
+  scene.add(box(3, BOILER_TOP, 1.1, 0x9aa3ab, 0, BOILER_TOP / 2, BOILER_Z));
   const boilerViews: BoilerView[] = [];
   for (let i = 0; i < cfg.boilerCount; i++) {
     const x = (i - (cfg.boilerCount - 1) / 2) * 0.7;
-    scene.add(box(0.55, 0.02, 0.62, 0x3b82c4, x, 1.16, BOILER_Z)); // お湯
+    scene.add(box(0.55, 0.02, 0.62, 0x3b82c4, x, BOILER_TOP + 0.01, BOILER_Z)); // お湯
 
     const basket = new THREE.Group();
     basket.add(box(0.4, 0.03, 0.4, 0xb4bac0, 0, 0, 0));
@@ -364,13 +504,13 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     scene.add(basket);
     interactables.push(basket);
 
-    const button = cyl(0.07, 0.07, 0.05, 0xc0392b, x, 1.175, BOILER_Z + 0.5);
+    const button = cyl(0.07, 0.07, 0.05, 0xc0392b, x, BOILER_TOP + 0.025, BOILER_Z + 0.5);
     setTarget(button, { kind: 'boilerButton', index: i });
     scene.add(button);
     interactables.push(button);
 
     const label = makeLabel('空', 0.66);
-    label.sprite.position.set(x, 1.95, BOILER_Z);
+    label.sprite.position.set(x, BOILER_TOP + 0.8, BOILER_Z);
     scene.add(label.sprite);
 
     boilerViews.push({ basket, noodle, button, label });

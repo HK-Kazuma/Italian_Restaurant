@@ -11,6 +11,7 @@ import {
   insertPot,
   isWashing,
   pourOnto,
+  sauceFill,
   startHeating,
   takeWashedPot,
   updateHeat,
@@ -131,5 +132,21 @@ describe('washer', () => {
     expect(out?.contents).toEqual([]); // 洗うと中身も加熱状態もリセットされる
     expect(out?.heat).toBe('cold');
     expect(w.pot).toBeNull();
+  });
+});
+
+describe('sauceFill（ソースの量）', () => {
+  it('ミートソースはお玉1杯で半分、2杯で満杯', () => {
+    expect(sauceFill([])).toBe(0);
+    expect(sauceFill(['meatSauce'])).toBe(0.5);
+    expect(sauceFill(['meatSauce', 'meatSauce'])).toBe(1);
+  });
+  it('満杯を超えない', () => {
+    expect(sauceFill(['meatSauce', 'meatSauce', 'meatSauce'])).toBe(1);
+  });
+  it('ソース以外（パンチェッタ・麺）は量に数えず、入れた順序にも依存しない', () => {
+    expect(sauceFill(['pancetta', 'tomatoSauce'])).toBe(0.5);
+    expect(sauceFill(['tomatoSauce', 'pancetta'])).toBe(0.5);
+    expect(sauceFill(['meatSauce', 'noodle'])).toBe(0.5);
   });
 });

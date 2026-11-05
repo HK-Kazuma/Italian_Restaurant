@@ -107,3 +107,20 @@ export function updateWasher(w: Washer, dt: number): void {
     pot.heatTimer = 0;
   }
 }
+
+// --- 見た目の量 ---
+
+// ソース1つ分（お玉1杯・パック1つ）が、鍋の中をどれだけ満たすか（満杯 = 1）。
+// ミートソースはお玉2杯で満杯なので、1杯で半分。見た目（scene.ts）はこの値で液面の高さを決める。
+export const SAUCE_FILL_PER_UNIT: Partial<Record<IngredientId, number>> = {
+  meatSauce: 0.5,
+  tomatoSauce: 0.5,
+  carbonaraSauce: 0.5,
+  sauteSauce: 0.5,
+};
+
+// 鍋に入っているソースの量（0〜1）。入れた順序には依存しない
+export function sauceFill(contents: readonly IngredientId[]): number {
+  const total = contents.reduce((sum, id) => sum + (SAUCE_FILL_PER_UNIT[id] ?? 0), 0);
+  return Math.min(1, total);
+}
