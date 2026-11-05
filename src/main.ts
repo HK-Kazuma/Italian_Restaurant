@@ -62,7 +62,8 @@ const input = new Input(canvas, {
   onTicketZoom: (on) => hud.setTicketZoom(on),
   onLockChange: (locked) => {
     const { phase } = game.state;
-    if (locked && (phase === 'title' || phase === 'result')) game.startPractice(); // まずは練習キッチン。ゲームは iPad から
+    if (locked && phase === 'ready') game.begin(); // 操作説明をクリック = ゲーム開始
+    else if (locked && (phase === 'title' || phase === 'result')) game.startPractice(); // まずは練習キッチン。ゲームは iPad から
     else if (locked) game.resume();
     else if (phase === 'playing' && !game.state.ipadOpen) game.pause(); // Esc で解除 = 一時停止（iPad を開いているときは、カーソルを出しているだけ）
   },
@@ -73,10 +74,15 @@ const hud = new Hud(
   cfg,
   () => input.requestLock(),
   (action) => {
-    // iPad の画面から：ゲーム開始（冷蔵庫の配置は引き継ぐ）、または閉じて練習に戻る
-    if (action === 'start') game.start();
-    else game.closeIpad();
-    input.requestLock();
+    // iPad の画面から：ゲーム開始（最初の場所に戻り、操作説明を出す。クリックで始まる。冷蔵庫の配置は引き継ぐ）、または閉じて練習に戻る
+    if (action === 'start') {
+      game.getReady();
+      player.reset();
+      interactor.clear();
+    } else {
+      game.closeIpad();
+      input.requestLock();
+    }
   },
 );
 

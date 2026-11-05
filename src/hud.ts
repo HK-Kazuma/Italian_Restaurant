@@ -13,10 +13,9 @@ const CONTROLS_HTML = `
     <tr><th>右クリック</th><td>冷蔵庫：扉の開閉（開けているときは、中の物を持ち上げて置き直す）　ボトル（ドレッシング・パプリカ・パセリ）を持っているとき：皿にかける・振る　iPadを持っているとき：画面を開く　それ以外：手に持っている物を捨てる</td></tr>
     <tr><th>E（押している間）</th><td>伝票を拡大表示</td></tr>
   </table>
-  <p class="recipe">たらこのパスタ：生麺を茹で麺器にセット→ボタン→上がったら取る→皿に盛る→たらこソース→刻みのり→提供台へ</p>
 `;
 
-// iPad の画面から選べる操作。start = ゲーム開始、close = 画面を閉じて練習キッチンに戻る
+// iPad の画面から選べる操作。start = ゲーム開始（操作説明を出して、クリックで始まる）、close = 画面を閉じて練習キッチンに戻る
 export type IpadAction = 'start' | 'close';
 
 // レシピ：メニュー表（recipe.ts）から作る。完成品の中身と、鍋で加熱する分
@@ -33,6 +32,7 @@ function recipeHtml(): string {
         <div class="recipe-name">${m.name}<span class="badge">${m.station === 'pasta' ? 'パスタ台' : 'サラダ台'}</span></div>
         <div class="recipe-row"><b>完成：</b>${countedNames(m.ingredients)}</div>
         ${m.sauce ? `<div class="recipe-row"><b>鍋で加熱：</b>${countedNames(m.sauce)}</div>` : ''}
+        <ol class="recipe-steps">${m.steps.map((t) => `<li>${t}</li>`).join('')}</ol>
       </div>`,
     )
     .join('');
@@ -53,12 +53,13 @@ function ipadHtml(gameSeconds: number): string {
       <button class="back" data-go="home">‹ ホーム</button>
       <h2>ゲーム開始</h2>
       <p>${Math.round(gameSeconds / 60)}分間のタイムアタックを始めます。伝票は時間とともに届く間隔が短くなっていきます。</p>
-      <p>冷蔵庫の中の物を置き直していれば、その配置のままゲームが始まります。それ以外（鍋・皿・伝票など）は最初の状態に戻ります。</p>
+      <p>最初に立っていた場所に戻り、操作説明が出ます。クリックするとゲームが始まります。</p>
+      <p>冷蔵庫の中の物を置き直していれば、その配置のままゲームが始まります（取り出して具材コーナーに置いた物は、冷蔵庫の空いている場所に戻ります）。それ以外（鍋・皿・伝票など）は最初の状態に戻ります。</p>
       <button class="go" data-act="start">ゲームを始める</button>
     </section>
     <section class="ipad-page" data-page="recipe" hidden>
       <button class="back" data-go="home">‹ ホーム</button>
-      <h2>レシピ</h2>
+      <h2>レシピ（作り方）</h2>
       <p class="ipad-tip">「鍋で加熱」の材料を鍋に入れると、IHに載せた時点で自動的に加熱が始まります。</p>
       <div class="recipe-list">${recipeHtml()}</div>
     </section>
@@ -191,10 +192,14 @@ export class Hud {
 
     switch (state.phase) {
       case 'title':
-        this.overlay.innerHTML = `<h1>厨房タイムアタック</h1>
-          <p>5分間で届く伝票をどれだけ多く・正確にさばけるか。</p>
-          <p>まずは時間制限のない練習キッチンに入ります。操作に慣れたら、後ろの壁の iPad からゲームを始めましょう。</p>${CONTROLS_HTML}
+        this.overlay.innerHTML = `<img class="logo" src="${import.meta.env.BASE_URL}logo.png" alt="ドリアーノ田中's Kitchen" />
+          <h1>厨房タイムアタック</h1>${CONTROLS_HTML}
           <p class="cta">クリックで練習キッチンへ</p>`;
+        break;
+      case 'ready':
+        this.overlay.innerHTML = `<h1>ゲーム開始</h1>
+          <p>${Math.round(this.cfg.gameDuration / 60)}分間のタイムアタック。届く伝票をできるだけ多く、正確にさばこう。</p>${CONTROLS_HTML}
+          <p class="cta">クリックでゲーム開始</p>`;
         break;
       case 'paused':
         this.overlay.innerHTML = `<h1>一時停止</h1>${CONTROLS_HTML}<p class="cta">クリックで再開</p>`;

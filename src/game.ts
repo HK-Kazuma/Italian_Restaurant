@@ -23,7 +23,7 @@ import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
 import { serveScore } from './score';
 import { createTicket, nextTicketInterval, pickMenu } from './tickets';
 import { BOTTLE_IDS, BOTTLE_PLATE, BOTTLE_SURFACES, BOTTLE_VERB } from './bottle';
-import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShelf, fridgeItemOf } from './fridge';
+import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShelf, fridgeItemOf, returnToFridge } from './fridge';
 import { BOTTLE_HOME, SURFACES } from './layout';
 import { OPEN_WORLD, launchPot, stepThrownPot, type ThrowAim } from './throw';
 import type { World } from './world';
@@ -88,14 +88,35 @@ export class Game {
     };
   }
 
+  // 次の状態に引き継ぐ冷蔵庫の配置。練習で置き直した配置を残す。外に出ていたトレー・ケースは冷蔵庫に戻るので、
+  // もとの場所にほかの物が置かれていたら、冷蔵庫の中の空いている場所に置く。最初（引き継ぐ物がない）は undefined
+  private carriedFridge(): Record<FridgeItemId, FridgeSpot> | undefined {
+    const prev = this.state;
+    if (!prev) return undefined;
+    const out: FridgeItemId[] = [];
+    if (prev.trays.spinach !== 'fridge') out.push('spinachTray');
+    if (prev.trays.saltOil !== 'fridge') out.push('saltOilCase');
+    return returnToFridge(prev.fridgeItems, out);
+  }
+
   // 練習キッチンを始める（時間制限なし）。冷蔵庫の置き直しは引き継ぐ
   startPractice(): void {
-    this.state = this.initialState('playing', 'practice', this.state.fridgeItems);
+    this.state = this.initialState('playing', 'practice', this.carriedFridge());
   }
 
   // ゲーム（5分間のタイムアタック）を始める。練習で置き直した冷蔵庫の配置は、そのまま引き継ぐ。それ以外は最初から
   start(): void {
-    this.state = this.initialState('playing', 'game', this.state.fridgeItems);
+    this.state = this.initialState('playing', 'game', this.carriedFridge());
+  }
+
+  // ゲームの準備（iPad から）：状態を最初に戻して、操作説明を出す。時間は進まず、begin() で始まる
+  getReady(): void {
+    this.state = this.initialState('ready', 'game', this.carriedFridge());
+  }
+
+  // 操作説明を読み終えて、ゲームを始める
+  begin(): void {
+    if (this.state.phase === 'ready') this.state.phase = 'playing';
   }
 
   // iPad の画面を閉じる（手には iPad を持ったまま）

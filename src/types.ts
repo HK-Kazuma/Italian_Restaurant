@@ -162,7 +162,8 @@ export type Target =
   | { kind: 'washer' }
   | { kind: 'ipadWall' }; // 後ろの壁にかかっている iPad（練習中だけ。左クリックで手に取る・壁に戻す）
 
-export type Phase = 'title' | 'playing' | 'paused' | 'result';
+// ready = ゲーム開始前の操作説明（クリックで始まる。時間は進まない）
+export type Phase = 'title' | 'ready' | 'playing' | 'paused' | 'result';
 
 export type Toast = {
   text: string;

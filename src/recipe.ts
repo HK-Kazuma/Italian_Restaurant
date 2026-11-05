@@ -6,6 +6,7 @@ export type MenuItem = {
   station: Station;
   ingredients: IngredientId[]; // 完成品の中身（順序なし。同じ物は個数分並べる）
   sauce?: IngredientId[]; // このうち、鍋に入れて加熱する分（既定のソース）。鍋がこの中身になったら、IHで加熱が始まる
+  steps: string[]; // 作り方（iPad のレシピに出す）
   basePoints: number;
   enabled: boolean; // false の間は伝票に出ない（必要な設備が未実装）
 };
@@ -17,6 +18,12 @@ export const MENU: MenuItem[] = [
     name: 'たらこのパスタ',
     station: 'pasta',
     ingredients: ['noodle', 'tarakoSauce', 'nori'],
+    steps: [
+      "皿に、茹で上がった麺を盛る",
+      "たらこソースのパックを麺にかける",
+      "刻みのりをかける",
+      "提供台へ（鍋・IHは使いません）",
+    ],
     basePoints: 30,
     enabled: true,
   },
@@ -26,6 +33,12 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['noodle', 'meatSauce', 'meatSauce', 'cheese', 'parsley'],
     sauce: ['meatSauce', 'meatSauce'],
+    steps: [
+      "冷蔵庫のミートソース缶から、お玉2杯を鍋に入れる",
+      "鍋をIHにセットして加熱",
+      "麺が上がったら、加熱した鍋に麺を入れて混ぜる",
+      "皿に盛り、粉チーズ1杯とパセリを振る",
+    ],
     basePoints: 50,
     enabled: true,
   },
@@ -35,6 +48,12 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['noodle', 'tomatoSauce', 'pancetta', 'cheese'],
     sauce: ['tomatoSauce', 'pancetta'],
+    steps: [
+      "具材コーナーのトマトソース1杯と、パンチェッタ1掴みを鍋に入れる",
+      "鍋をIHにセットして加熱",
+      "麺が上がったら、加熱した鍋に麺を入れて混ぜる",
+      "皿に盛り、粉チーズ1杯を振る",
+    ],
     basePoints: 50,
     enabled: true,
   },
@@ -44,6 +63,13 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['noodle', 'saltOilSauce', 'garlic', 'chili', 'parsley'],
     sauce: ['saltOilSauce', 'garlic', 'chili'],
+    steps: [
+      "冷蔵庫から塩オイルソースのケースを出して、サラダ台に置く",
+      "塩オイルソース1杯、ガーリック1杯、唐辛子1杯を鍋に入れる",
+      "鍋をIHにセットして加熱",
+      "麺が上がったら、皿に麺を盛る",
+      "鍋のソースをかけ、パセリを振る",
+    ],
     basePoints: 50,
     enabled: true,
   },
@@ -53,6 +79,13 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['noodle', 'carbonaraSauce', 'cheese', 'blackPepper'],
     sauce: ['carbonaraSauce'],
+    steps: [
+      "冷蔵庫からカルボナーラのパックを取る",
+      "茹で麺器の左の熱湯に3秒以上つけて、余温めする",
+      "余温めしたパックを鍋に入れて、IHで加熱",
+      "麺が上がったら、皿に麺を盛る",
+      "鍋のソースをかけ、粉チーズ1杯とブラックペッパーを振る",
+    ],
     basePoints: 50,
     enabled: true,
   },
@@ -62,6 +95,13 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['penne', 'tomatoSauce', 'garlic', 'chili', 'parsley'],
     sauce: ['tomatoSauce', 'garlic', 'chili'],
+    steps: [
+      "冷蔵庫からペンネを取り、茹で麺器に麺と同じようにセットして茹でる",
+      "鍋にトマトソース1杯、ガーリック1杯、唐辛子1杯を入れる",
+      "鍋をIHにセットして加熱",
+      "ペンネが上がったら、加熱した鍋に入れて混ぜる",
+      "皿に盛り、パセリを振る",
+    ],
     basePoints: 50,
     enabled: true,
   },
@@ -71,6 +111,14 @@ export const MENU: MenuItem[] = [
     station: 'pasta',
     ingredients: ['spinach', 'spinach', 'pancetta', 'sauteSauce'],
     sauce: ['spinach', 'spinach', 'pancetta', 'sauteSauce'],
+    steps: [
+      "冷蔵庫からほうれん草のトレーを取り、サラダ台に置く",
+      "トングでほうれん草を2掴み、鍋に入れる",
+      "パンチェッタ1掴みと、ソテーソースのパックを鍋に入れる",
+      "鍋をIHにセットして加熱",
+      "加熱が終わったら混ぜる",
+      "パスタ皿の横にある小さめの皿に盛る",
+    ],
     basePoints: 30,
     enabled: true,
   },
@@ -79,6 +127,12 @@ export const MENU: MenuItem[] = [
     name: '小エビのサラダ',
     station: 'salad',
     ingredients: ['saladBase', 'shrimp', 'dressing', 'paprika'],
+    steps: [
+      "冷蔵庫からサラダベースを取り、サラダ台に置く",
+      "具材コーナーの小エビを1杯、サラダに盛る",
+      "ドレッシングをかける",
+      "パプリカパウダーを振る",
+    ],
     basePoints: 10,
     enabled: true,
   },
@@ -87,6 +141,12 @@ export const MENU: MenuItem[] = [
     name: 'チキンのサラダ',
     station: 'salad',
     ingredients: ['saladBase', 'chicken', 'dressing', 'paprika'],
+    steps: [
+      "冷蔵庫からサラダベースを取り、サラダ台に置く",
+      "具材コーナーのサラダチキンをトング1掴み、サラダに盛る",
+      "ドレッシングをかける",
+      "パプリカパウダーを振る",
+    ],
     basePoints: 10,
     enabled: true,
   },
@@ -95,6 +155,12 @@ export const MENU: MenuItem[] = [
     name: 'コーンスープ',
     station: 'salad',
     ingredients: ['cornSoup'],
+    steps: [
+      "冷蔵庫からコーンスープのパックを取る（クリックした回数だけ、最大5つ持てる）",
+      "茹で麺器の左の熱湯に5秒以上つけて温める",
+      "サラダ台の上のスープ皿を取り、サラダ台に置く",
+      "温めたパックをスープ皿に入れて完成",
+    ],
     basePoints: 10,
     enabled: true,
   },

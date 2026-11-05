@@ -81,6 +81,52 @@ export function fitsOnShelf(
   });
 }
 
+// 冷蔵庫に戻す物（トレー・ケース）の置き場所を決める。もとの場所が空いていればそこへ、
+// ほかの物が置かれて重なるなら、冷蔵庫の中の空いている場所（できるだけ近く）へ。
+// items: 全部の物の置き場所。returning: 外に出ていて、これから冷蔵庫に戻る物（それ以外は冷蔵庫の中にある）
+export function returnToFridge(
+  items: Record<FridgeItemId, FridgeSpot>,
+  returning: readonly FridgeItemId[],
+): Record<FridgeItemId, FridgeSpot> {
+  const result = Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...items[id] }])) as Record<FridgeItemId, FridgeSpot>;
+  const placed = FRIDGE_ITEM_IDS.filter((id) => !returning.includes(id));
+  for (const id of returning) {
+    const others = placed.map((o) => ({ id: o, spot: result[o] }));
+    if (!fitsOnShelf(id, result[id], others)) result[id] = findFreeSpot(id, result[id], others);
+    placed.push(id);
+  }
+  return result;
+}
+
+// from の近くで、ほかの物に重ならない場所を探す（同じ棚を先に、なければ近い棚から）。どこにも空きがなければ from のまま
+function findFreeSpot(
+  id: FridgeItemId,
+  from: FridgeSpot,
+  others: readonly { id: FridgeItemId; spot: FridgeSpot }[],
+): FridgeSpot {
+  const STEP = 0.04;
+  const shelves = FRIDGE_SHELF_Y.map((_, i) => i as FridgeSpot['shelf']).sort(
+    (a, b) => Math.abs(a - from.shelf) - Math.abs(b - from.shelf),
+  );
+  for (const shelf of shelves) {
+    let best: FridgeSpot | null = null;
+    let bestDist = Infinity;
+    for (let x = SHELF_X.min; x <= SHELF_X.max; x += STEP) {
+      for (let z = SHELF_Z.min; z <= SHELF_Z.max; z += STEP) {
+        const c = clampOnShelf(id, x, z);
+        const spot: FridgeSpot = { shelf, x: c.x, z: c.z };
+        const dist = Math.hypot(spot.x - from.x, spot.z - from.z);
+        if (dist < bestDist && fitsOnShelf(id, spot, others)) {
+          best = spot;
+          bestDist = dist;
+        }
+      }
+    }
+    if (best) return best;
+  }
+  return { ...from };
+}
+
 // 視点が合っている物（冷蔵庫の中の物）が、どの物か。冷蔵庫の中の物でなければ null
 export function fridgeItemOf(target: Target | null): FridgeItemId | null {
   if (!target) return null;

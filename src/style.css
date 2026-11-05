@@ -179,6 +179,13 @@ body {
 .overlay.hidden {
   display: none;
 }
+.overlay .logo {
+  width: min(360px, 60vw);
+  height: auto;
+  margin: 0 0 16px;
+  border-radius: 20px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
 .overlay h1 {
   font-size: 44px;
   margin: 0 0 12px;
@@ -380,6 +387,11 @@ body {
   background: rgba(255, 255, 255, 0.25);
   font-size: 11px;
   font-weight: normal;
+}
+.recipe-steps {
+  margin: 6px 0 0;
+  padding-left: 1.4em;
+  color: #e6e0d4;
 }
 .ipad .controls {
   margin: 4px 0;

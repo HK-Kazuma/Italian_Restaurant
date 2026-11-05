@@ -16,6 +16,13 @@ export class Player {
     private world: World,
   ) {}
 
+  // 最初に立つ場所と向きに戻す
+  reset(): void {
+    this.yaw = 0;
+    this.pitch = 0;
+    this.position.set(0, EYE_HEIGHT, 0);
+  }
+
   look(dx: number, dy: number): void {
     this.yaw -= dx * this.cfg.mouseSensitivity;
     this.pitch -= dy * this.cfg.mouseSensitivity;

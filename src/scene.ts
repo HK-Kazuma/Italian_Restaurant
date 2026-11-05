@@ -158,6 +158,69 @@ function addChunks(
   }
 }
 
+// ガーリックスライス：小さくて薄い丸い輪切り。yAt(r) の高さの面に、少し重なりながら散らす
+function addGarlicSlices(g: THREE.Group, count: number, seed: number, radius: number, yAt: (r: number) => number): void {
+  const rnd = seeded(seed);
+  const geo = new THREE.CylinderGeometry(0.012, 0.012, 0.0025, 14);
+  const colors = [mat(0xf3ecc8), mat(0xe9dfae), mat(0xf8f3d8)];
+  for (let i = 0; i < count; i++) {
+    const r = Math.sqrt(rnd()) * radius;
+    const a = rnd() * Math.PI * 2;
+    const slice = new THREE.Mesh(geo, colors[i % colors.length]);
+    slice.position.set(Math.cos(a) * r, yAt(r) + 0.002 + rnd() * 0.006, Math.sin(a) * r);
+    slice.rotation.set((rnd() - 0.5) * 0.5, rnd() * Math.PI, (rnd() - 0.5) * 0.5);
+    slice.scale.setScalar(0.85 + rnd() * 0.35);
+    g.add(slice);
+  }
+}
+
+// 唐辛子：細かいペッパー状のフレーク（赤い小さな粒と、少し黒ずんだ粒）
+function addChiliFlakes(g: THREE.Group, count: number, seed: number, radius: number, yAt: (r: number) => number): void {
+  const rnd = seeded(seed);
+  const geo = new THREE.BoxGeometry(0.0065, 0.0022, 0.0045);
+  const colors = [mat(0xc81818), mat(0xa81010), mat(0xdc2a1c), mat(0x7a0c0c)];
+  for (let i = 0; i < count; i++) {
+    const r = Math.sqrt(rnd()) * radius;
+    const a = rnd() * Math.PI * 2;
+    const flake = new THREE.Mesh(geo, colors[i % colors.length]);
+    flake.position.set(Math.cos(a) * r, yAt(r) + 0.0015 + rnd() * 0.004, Math.sin(a) * r);
+    flake.rotation.set((rnd() - 0.5) * 0.8, rnd() * Math.PI, (rnd() - 0.5) * 0.8);
+    flake.scale.setScalar(0.7 + rnd() * 0.7);
+    g.add(flake);
+  }
+}
+
+// ステンレスの丸い容器（ガーリック・唐辛子の具材置き場）。中身は山盛りで見える
+const STEEL_BIN = { r: 0.17, h: 0.1 };
+function buildSteelBin(id: 'garlic' | 'chili'): THREE.Group {
+  const g = new THREE.Group();
+  const { r, h } = STEEL_BIN;
+  const steel = 0xc9ced3;
+  const wall = new THREE.Mesh(
+    new THREE.CylinderGeometry(r, r * 0.88, h, 32, 1, true),
+    new THREE.MeshLambertMaterial({ color: steel, side: THREE.DoubleSide }),
+  );
+  wall.position.y = h / 2;
+  g.add(wall);
+  const floor = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.88, r * 0.88, 0.008, 32), mat(0x9aa0a6));
+  floor.position.y = 0.004;
+  g.add(floor);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(r, 0.007, 8, 40), mat(0xe6eaee));
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = h;
+  g.add(rim);
+  // 中身：下地の層と、その上に山盛りの粒
+  const fillTop = h - 0.02;
+  const baseColor = id === 'garlic' ? 0xe9dfae : 0x9c1010;
+  const fill = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.93, r * 0.85, fillTop - 0.008, 32), mat(baseColor));
+  fill.position.y = 0.008 + (fillTop - 0.008) / 2;
+  g.add(fill);
+  const heap = (rr: number) => fillTop + 0.03 * (1 - Math.min(1, rr / (r * 0.9)) ** 2);
+  if (id === 'garlic') addGarlicSlices(g, 90, hashId('garlic-bin'), r * 0.88, heap);
+  else addChiliFlakes(g, 320, hashId('chili-bin'), r * 0.88, heap);
+  return g;
+}
+
 const POT_H = 0.14;
 const POT_FLOOR = 0.012; // 鍋の底の厚み
 const POT_MAX_DEPTH = 0.105; // ソースが満杯のときの深さ
@@ -237,6 +300,12 @@ function buildPotMesh(pot: Pot): THREE.Group {
   const others = new Set(pot.contents);
   for (const id of others) {
     if (id === 'pancetta' || id === 'meatSauce' || isNoodle(id) || SAUCE_FILL_PER_UNIT[id] !== undefined) continue;
+    if (id === 'garlic' || id === 'chili') {
+      const y = hasNoodle ? moundTop : surfaceY;
+      if (id === 'garlic') addGarlicSlices(g, 10 * units(id), hashId(id), 0.1, () => y);
+      else addChiliFlakes(g, 45 * units(id), hashId(id), 0.1, () => y);
+      continue;
+    }
     addChunks(g, INGREDIENTS[id].color, 8 * units(id), hashId(id), 0.1, hasNoodle ? moundTop : surfaceY, 0.03);
   }
   return g;
@@ -264,6 +333,43 @@ function buildSaltOilCase(): THREE.Group {
   const g = new THREE.Group();
   g.add(box(0.3, 0.07, 0.3, 0xdfe5e8, 0, 0.035, 0));
   for (let i = -2; i <= 2; i++) g.add(box(0.04, 0.13, 0.22, INGREDIENTS.saltOilSauce.color, i * 0.05, 0.1, 0));
+  return g;
+}
+
+// 生麺のケース：牛乳屋さんの配達に使うような、青いプラスチックのコンテナ。
+// 側面は格子状のすき間で、中に生麺の束が横たわっている。原点は底の中心
+const CRATE_BLUE = 0x2f6fb8;
+const CRATE_BLUE_DARK = 0x245a97;
+function buildMilkCrate(w = 0.56, d = 0.4, h = 0.26): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(w, 0.02, d, CRATE_BLUE_DARK, 0, 0.01, 0)); // 底
+  // 側面：上下のふちと縦の桟（すき間から中が見える）
+  const wall = (len: number, x: number, z: number, rotY: number): void => {
+    const side = new THREE.Group();
+    side.add(box(len, 0.035, 0.022, CRATE_BLUE, 0, h - 0.0175, 0)); // 上のふち
+    side.add(box(len, 0.045, 0.022, CRATE_BLUE, 0, 0.0425, 0)); // 下のふち
+    const bars = Math.round(len / 0.07);
+    for (let i = 0; i < bars; i++) {
+      const bx = -len / 2 + (len / bars) * (i + 0.5);
+      side.add(box(0.022, h - 0.08, 0.018, CRATE_BLUE, bx, h / 2 - 0.0025, 0));
+    }
+    side.rotation.y = rotY;
+    side.position.set(x, 0, z);
+    g.add(side);
+  };
+  wall(w, 0, d / 2 - 0.011, 0);
+  wall(w, 0, -d / 2 + 0.011, 0);
+  wall(d, w / 2 - 0.011, 0, Math.PI / 2);
+  wall(d, -w / 2 + 0.011, 0, Math.PI / 2);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    g.add(box(0.035, h, 0.035, CRATE_BLUE_DARK, sx * (w / 2 - 0.0175), h / 2, sz * (d / 2 - 0.0175))); // 角の柱
+  }
+  // 中の生麺（横向きの束）。上のふちより少し高く積んである
+  const bundles = Math.max(2, Math.floor((w - 0.08) / 0.085));
+  for (let i = 0; i < bundles; i++) {
+    const bx = -((bundles - 1) * 0.085) / 2 + i * 0.085;
+    g.add(cyl(0.04, 0.04, d - 0.06, 0xf3e9c0, bx, h - 0.045, 0).rotateX(Math.PI / 2));
+  }
   return g;
 }
 
@@ -335,6 +441,207 @@ const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce', 'shrimp', 'garli
 // トングでつかむ具材（手に持つとトングで表示する）
 const TONGED: ReadonlySet<IngredientId> = new Set(['pancetta', 'chicken', 'spinach']);
 
+// --- パスタ皿：木の深皿に、少し山なりに盛った麺＋ソース＋粉状のトッピング ---
+const WOOD_BOWL_FLOOR = 0.034; // 木の皿の内側の底の高さ
+
+function makeCanvasTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  draw(canvas.getContext('2d')!);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+// 木目（皿の周りに沿って走る細い線）。一度だけ作って使い回す
+let woodTexture: THREE.CanvasTexture | null = null;
+function getWoodTexture(): THREE.CanvasTexture {
+  woodTexture ??= makeCanvasTexture(256, 128, (ctx) => {
+    ctx.fillStyle = '#a2602c';
+    ctx.fillRect(0, 0, 256, 128);
+    const rnd = seeded(11);
+    for (let i = 0; i < 90; i++) {
+      const y = rnd() * 128;
+      ctx.strokeStyle = rnd() < 0.5 ? 'rgba(70, 36, 12, 0.28)' : 'rgba(210, 150, 90, 0.22)';
+      ctx.lineWidth = 0.6 + rnd() * 2.4;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      for (let x = 0; x <= 256; x += 32) ctx.lineTo(x, y + (rnd() - 0.5) * 5);
+      ctx.stroke();
+    }
+  });
+  return woodTexture;
+}
+
+// 麺の筋（白〜薄いグレー）。色は素材の color（麺の色・ソースの色）を掛けて出す
+let strandTexture: THREE.CanvasTexture | null = null;
+function getStrandTexture(): THREE.CanvasTexture {
+  strandTexture ??= makeCanvasTexture(512, 256, (ctx) => {
+    ctx.fillStyle = '#e6e6e6';
+    ctx.fillRect(0, 0, 512, 256);
+    const rnd = seeded(23);
+    for (let i = 0; i < 260; i++) {
+      const y0 = rnd() * 256;
+      const slope = (rnd() - 0.5) * 70;
+      const amp = 3 + rnd() * 9;
+      const phase = rnd() * Math.PI * 2;
+      ctx.strokeStyle = i % 3 === 0 ? 'rgba(255, 255, 255, 0.9)' : 'rgba(150, 150, 150, 0.55)';
+      ctx.lineWidth = 1.5 + rnd() * 2;
+      ctx.beginPath();
+      for (let x = 0; x <= 512; x += 16) {
+        const y = y0 + slope * (x / 512) + Math.sin(x / 40 + phase) * amp;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  });
+  return strandTexture;
+}
+
+// 木の深皿（写真のような、ふちが少し立ち上がった丸い木の器）。原点は底の中心
+function buildWoodBowl(): THREE.Mesh {
+  const profile = [
+    [0.0001, 0],
+    [0.11, 0],
+    [0.135, 0.012],
+    [0.2, 0.05],
+    [0.232, 0.076],
+    [0.2255, 0.081],
+    [0.218, 0.076],
+    [0.2, 0.058],
+    [0.135, 0.04],
+    [0.1, WOOD_BOWL_FLOOR],
+    [0.0001, WOOD_BOWL_FLOOR],
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+  return new THREE.Mesh(
+    new THREE.LatheGeometry(profile, 48),
+    new THREE.MeshLambertMaterial({ map: getWoodTexture(), side: THREE.DoubleSide }),
+  );
+}
+
+// 皿の上の麺の山（回転楕円体の上半分が主役。下半分は皿の底に埋まる）
+const PASTA_DOME = { rx: 0.172, ry: 0.075, cy: 0.04 };
+// ソースの見た目の色（麺の筋の模様に掛けるので、素の色より少し明るくしてある）
+const PASTA_SAUCE_COLOR: Partial<Record<IngredientId, number>> = {
+  meatSauce: 0xd0602c,
+  tomatoSauce: 0xe5472b,
+  carbonaraSauce: 0xf6e6aa,
+  tarakoSauce: 0xf3a09a,
+  saltOilSauce: 0xeedc8a,
+};
+const PASTA_TOPPINGS: ReadonlySet<IngredientId> = new Set(['cheese', 'parsley', 'blackPepper', 'nori', 'chili', 'garlic']);
+
+function addPastaDish(g: THREE.Group, contents: readonly IngredientId[], seedBase: number): void {
+  const { rx, ry, cy } = PASTA_DOME;
+  const penne = contents.includes('penne');
+  const noodleColor = penne ? 0xe8c872 : 0xf4d77c;
+  const domeY = (r: number) => (r >= rx ? cy : cy + ry * Math.sqrt(1 - (r / rx) ** 2));
+  const strands = getStrandTexture();
+
+  // 麺の山
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 20), new THREE.MeshLambertMaterial({ color: noodleColor, map: strands }));
+  dome.scale.set(rx, ry, rx);
+  dome.position.y = cy;
+  g.add(dome);
+
+  // ソース：山の上からかぶせた薄い殻。かけた順に少しずつ小さく・厚くなる（ふちの麺は見えたまま）
+  const sauces = [...new Set(contents.filter((id) => PASTA_SAUCE_COLOR[id] !== undefined))];
+  let coverR = 0;
+  sauces.forEach((id, k) => {
+    const theta = Math.max(0.7, 1.22 - k * 0.14);
+    const s = 1.014 + k * 0.007;
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(1, 40, 14, 0, Math.PI * 2, 0, theta),
+      new THREE.MeshLambertMaterial({ color: PASTA_SAUCE_COLOR[id], map: strands }),
+    );
+    cap.scale.set(rx * s, ry * s, rx * s);
+    cap.position.y = cy;
+    g.add(cap);
+    coverR = Math.max(coverR, rx * s * Math.sin(theta));
+  });
+  const sauceLift = sauces.length > 0 ? 0.002 + sauces.length * 0.0035 : 0;
+  let cheeseH: (r: number) => number = () => 0; // 粉チーズの山の高さ（あとから載せる物は、この上に載る）
+  const top = (r: number) => domeY(r) + sauceLift + cheeseH(r);
+  const rnd = seeded(seedBase);
+
+  // 飛び出した麺：曲がった筋（ペンネは、短い筒）を山の表面にあしらう
+  if (penne) {
+    for (let i = 0; i < 56; i++) {
+      const r = Math.sqrt(rnd()) * rx * 0.92;
+      const a = rnd() * Math.PI * 2;
+      const tube = cyl(0.011, 0.011, 0.04 + rnd() * 0.01, r < coverR ? PASTA_SAUCE_COLOR[sauces[0]]! : noodleColor, Math.cos(a) * r, top(r) + 0.004, Math.sin(a) * r);
+      tube.rotation.set((rnd() - 0.5) * 1.6, rnd() * Math.PI, Math.PI / 2 + (rnd() - 0.5) * 0.8, 'YXZ');
+      g.add(tube);
+    }
+  } else {
+    for (let i = 0; i < 38; i++) {
+      const r = Math.sqrt(rnd()) * rx * 0.93;
+      const a = rnd() * Math.PI * 2;
+      const color = r < coverR ? PASTA_SAUCE_COLOR[sauces[0]]! : noodleColor;
+      const loop = new THREE.Mesh(
+        new THREE.TorusGeometry(0.02 + rnd() * 0.026, 0.0042, 5, 14, Math.PI * (1.1 + rnd() * 0.9)),
+        mat(color),
+      );
+      loop.position.set(Math.cos(a) * r, domeY(r) + sauceLift + 0.002, Math.sin(a) * r);
+      loop.rotation.set(-Math.PI / 2 + (rnd() - 0.5) * 0.9, rnd() * Math.PI * 2, 0, 'YXZ');
+      g.add(loop);
+    }
+  }
+
+  // 粒状の飾り（表面の高さ top に沿って、小さな破片をまく）
+  const sprinkle = (count: number, maxR: number, w: number, h: number, d: number, colors: number[]): void => {
+    for (let i = 0; i < count; i++) {
+      const r = Math.sqrt(rnd()) * maxR;
+      const a = rnd() * Math.PI * 2;
+      const m = box(w * (0.7 + rnd() * 0.6), h, d * (0.7 + rnd() * 0.6), colors[i % colors.length], Math.cos(a) * r, top(r) + h * 0.4, Math.sin(a) * r);
+      m.rotation.set((rnd() - 0.5) * 0.6, rnd() * Math.PI, (rnd() - 0.5) * 0.6);
+      g.add(m);
+    }
+  };
+
+  // ソースの具（ミートのひき肉、たらこの粒）
+  if (sauces.includes('meatSauce')) sprinkle(30, coverR * 0.95, 0.014, 0.01, 0.014, [0x5a2412, 0x7a3418, 0x4a1a0c]);
+  if (sauces.includes('tarakoSauce')) sprinkle(26, coverR * 0.95, 0.008, 0.006, 0.008, [0xd9706b, 0xf2b3a8]);
+
+  // 粉チーズ：中央にこんもり白い山。まわりにも粒が散る
+  const cheeseCount = contents.filter((id) => id === 'cheese').length;
+  if (cheeseCount > 0) {
+    const rc = Math.min(0.11, 0.07 + 0.016 * cheeseCount);
+    const hc = 0.012 + 0.004 * cheeseCount;
+    const base = top(0);
+    const pile = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(0xf7efcc));
+    pile.scale.set(rc, hc, rc);
+    pile.position.y = base - hc * 0.2;
+    g.add(pile);
+    cheeseH = (r: number) => (r < rc ? hc * 0.8 * Math.sqrt(1 - (r / rc) ** 2) : 0);
+    sprinkle(110 * cheeseCount, rc * 1.45, 0.009, 0.004, 0.009, [0xfff6d2, 0xf3e5b0, 0xfffbe6]);
+  }
+
+  // それ以外の具材と粉：入れた順に、いちばん上の面へ
+  contents.forEach((id, i) => {
+    if (id === 'noodle' || id === 'penne' || id === 'cheese' || PASTA_SAUCE_COLOR[id] !== undefined) return;
+    if (id === 'pancetta') {
+      addPancettaStrips(g, PANCETTA_STRIPS_PER_UNIT, hashId(id) + i, rx * 0.88, (r) => top(r) + 0.004);
+    } else if (id === 'parsley') {
+      sprinkle(40, rx * 0.9, 0.011, 0.003, 0.007, [0x3f8f3a, 0x2f7d32, 0x5fae4a]);
+    } else if (id === 'blackPepper') {
+      sprinkle(50, rx * 0.9, 0.005, 0.005, 0.005, [0x1d1d1d, 0x333333]);
+    } else if (id === 'nori') {
+      sprinkle(30, rx * 0.8, 0.05, 0.004, 0.007, [0x1d2b22, 0x25382c]);
+    } else if (id === 'chili') {
+      addChiliFlakes(g, 90, hashId(id) + i, rx * 0.85, top);
+    } else if (id === 'garlic') {
+      addGarlicSlices(g, 14, hashId(id) + i, rx * 0.85, top);
+    } else if (!PASTA_TOPPINGS.has(id)) {
+      g.add(cyl(0.05, 0.05, 0.012, INGREDIENTS[id].color, 0, top(0) + 0.006, 0)); // 想定外の物は、上に平たく載せる
+    }
+  });
+}
+
 function buildItemMesh(item: Item): THREE.Group {
   const root = new THREE.Group();
   const g = root; // plate 以外の見た目は root に直接積む（plate の中だけ、皿の本体 body を g として使う）
@@ -354,7 +661,9 @@ function buildItemMesh(item: Item): THREE.Group {
       } else if (LADLED.has(item.id)) {
         g.add(cyl(0.012, 0.012, 0.3, 0x8a8f94, 0, 0.17, 0)); // 柄
         g.add(cyl(0.06, 0.04, 0.05, 0xc9ced3, 0, 0.025, 0)); // お玉の器
-        g.add(cyl(0.05, 0.05, 0.01, color, 0, 0.05, 0)); // すくったソース
+        if (item.id === 'garlic') addGarlicSlices(g, 12, 11, 0.045, () => 0.052);
+        else if (item.id === 'chili') addChiliFlakes(g, 60, 12, 0.045, () => 0.052);
+        else g.add(cyl(0.05, 0.05, 0.01, color, 0, 0.05, 0)); // すくったソース
       } else if (TONGED.has(item.id)) {
         g.add(box(0.015, 0.3, 0.015, 0x8a8f94, -0.03, 0.17, 0).rotateZ(-0.1)); // トング
         g.add(box(0.015, 0.3, 0.015, 0x8a8f94, 0.03, 0.17, 0).rotateZ(0.1));
@@ -395,10 +704,18 @@ function buildItemMesh(item: Item): THREE.Group {
       if (style === 'bowl') {
         body.add(cyl(0.21, 0.11, 0.09, 0xf5f5f5, 0, 0.045, 0)); // 深い器
         y = 0.075;
-      } else {
+      } else if (style === 'small') {
         body.add(cyl(0.23, 0.18, 0.03, 0xf5f5f5, 0, 0.015, 0));
+      } else {
+        body.add(buildWoodBowl()); // パスタ皿：木の深皿
+        y = WOOD_BOWL_FLOOR;
       }
       const g = body; // 中身は body に積む
+      if (style === 'plate' && item.contents.some((id) => id === 'noodle' || id === 'penne')) {
+        addPastaDish(g, item.contents, hashId(item.contents.join(',')));
+        root.add(body);
+        break;
+      }
       item.contents.forEach((id, i) => {
         if (id === 'saladBase') {
           g.add(cyl(0.17, 0.13, 0.08, INGREDIENTS[id].color, 0, y + 0.04, 0)); // 器に盛ったサラダ
@@ -611,6 +928,22 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   ipadLabel.sprite.position.set(0, IPAD_WALL_Y + 0.55, roomMaxZ - 0.15);
   scene.add(ipadLabel.sprite);
 
+  // iPad の真上の壁に立てかけた看板（お店のロゴ）。練習でもゲームでも常にある
+  const SIGN_W = 1.5;
+  const SIGN_H = SIGN_W * (941 / 1672); // ロゴ画像の縦横比
+  const SIGN_D = 0.05;
+  const logoTexture = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}logo.png`);
+  logoTexture.colorSpace = THREE.SRGBColorSpace;
+  logoTexture.anisotropy = 8;
+  const sign = new THREE.Group();
+  sign.add(box(SIGN_W + 0.08, SIGN_H + 0.08, SIGN_D, 0x4a3320)); // 木のふち
+  const signFace = new THREE.Mesh(new THREE.PlaneGeometry(SIGN_W, SIGN_H), new THREE.MeshBasicMaterial({ map: logoTexture }));
+  signFace.rotation.y = Math.PI; // 部屋の側（-z）へ向ける
+  signFace.position.z = -(SIGN_D / 2 + 0.002);
+  sign.add(signFace);
+  sign.position.set(0, 2.62, roomMaxZ - 0.05 - SIGN_D / 2);
+  scene.add(sign);
+
   // 湯気の発生源。parent の中の (x, y, z) から立ちのぼる
   const addSteam = (parent: THREE.Object3D, x: number, y: number, z: number, opts?: SteamOptions): Steam => {
     const steam = new Steam(opts);
@@ -730,7 +1063,11 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   const NOODLE_RACK_Y = 2.15; // 生麺の棚の高さ（スープ皿の棚は、これより少し低くする）
   const rack = new THREE.Group();
   rack.add(box(2, 0.06, 0.5, 0x8a6a4b));
-  for (let i = 0; i < 5; i++) rack.add(cyl(0.05, 0.05, 0.36, 0xf3e9c0, (i - 2) * 0.35, 0.12, 0).rotateX(Math.PI / 2));
+  for (let i = -1; i <= 1; i++) {
+    const crate = buildMilkCrate();
+    crate.position.set(i * 0.63, 0.03, 0); // 棚板の上面に置く
+    rack.add(crate);
+  }
   rack.position.set(0, NOODLE_RACK_Y, RACK_Z);
   setTarget(rack, { kind: 'noodleRack' });
   scene.add(rack);
@@ -761,7 +1098,11 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   interactables.push(leftBody);
 
   const stack = new THREE.Group();
-  for (let i = 0; i < 6; i++) stack.add(cyl(0.23, 0.2, 0.03, 0xf5f5f5, 0, 0.015 + i * 0.032, 0));
+  for (let i = 0; i < 6; i++) {
+    const bowl = buildWoodBowl(); // 重ねた木の深皿
+    bowl.position.y = i * 0.032;
+    stack.add(bowl);
+  }
   stack.position.set(LX, 0.9, -1.5);
   setTarget(stack, { kind: 'plateStack' });
   scene.add(stack);
@@ -1049,8 +1390,12 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   ];
   for (const [id, x, z] of saladStocks) {
     const t = new THREE.Group();
-    t.add(box(0.4, 0.1, 0.4, 0xdad3c2, 0, 0.05, 0));
-    t.add(box(0.3, 0.04, 0.3, INGREDIENTS[id].color, 0, 0.12, 0));
+    if (id === 'garlic' || id === 'chili') {
+      t.add(buildSteelBin(id)); // ステンレスの丸い容器
+    } else {
+      t.add(box(0.4, 0.1, 0.4, 0xdad3c2, 0, 0.05, 0));
+      t.add(box(0.3, 0.04, 0.3, INGREDIENTS[id].color, 0, 0.12, 0));
+    }
     t.position.set(x, 0.9, z);
     setTarget(t, { kind: 'stock', id });
     saladSpot.add(t);

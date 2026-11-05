@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG as cfg } from './config';
+import { FRIDGE_ITEM_IDS, fitsOnShelf } from './fridge';
 import { Game } from './game';
 import { getMenu } from './recipe';
 import { createTicket } from './tickets';
@@ -1429,6 +1430,75 @@ describe('Game: 練習キッチンと iPad', () => {
     const g = practice();
     g.start();
     expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 2, x: 0.37, z: 0.25 });
+  });
+});
+
+describe('Game: iPad からのゲーム開始（操作説明つき）', () => {
+  function practice() {
+    const g = new Game(cfg, () => 0);
+    g.startPractice();
+    return g;
+  }
+
+  it('準備中は操作説明だけで、時間も伝票も進まない。begin() でゲームが始まる', () => {
+    const g = practice();
+    g.getReady();
+    expect(g.state.phase).toBe('ready');
+    expect(g.state.mode).toBe('game');
+    g.update(cfg.firstTicketAt + 10);
+    expect(g.state.time).toBe(0);
+    expect(g.state.tickets).toHaveLength(0);
+
+    g.begin();
+    expect(g.state.phase).toBe('playing');
+    g.update(1);
+    expect(g.state.time).toBe(1);
+  });
+
+  it('begin() は、準備中でなければ何もしない（一時停止中を勝手に再開しない）', () => {
+    const g = practice();
+    g.pause();
+    g.begin();
+    expect(g.state.phase).toBe('paused');
+  });
+
+  it('冷蔵庫から取って具材コーナーに置いたトレーは、冷蔵庫に戻る', () => {
+    const g = practice();
+    g.rightClick({ kind: 'fridgeDoor' });
+    g.interact(spinachTray);
+    g.interact(traySlot);
+    expect(g.state.trays.spinach).toBe('table');
+    g.getReady();
+    expect(g.state.trays.spinach).toBe('fridge');
+    expect(g.state.fridgeItems.spinachTray).toEqual(newGame().state.fridgeItems.spinachTray); // 空いていれば、もとの場所
+  });
+
+  it('トレーの場所にほかの物を置き直していたら、冷蔵庫の空いている場所に戻る', () => {
+    const g = practice();
+    g.rightClick({ kind: 'fridgeDoor' });
+    g.interact(spinachTray);
+    g.interact(traySlot); // ほうれん草のトレーを外へ
+    const home = { ...g.state.fridgeItems.spinachTray };
+    g.rightClick({ kind: 'stock', id: 'tomatoSauce', inFridge: true }); // トマトソースを持ち上げて
+    g.rightClick(fridgeShelf(home.shelf, home.x, home.z)); // トレーのもとの場所に置く
+    expect(g.state.fridgeItems.tomatoSauce.shelf).toBe(home.shelf);
+
+    g.getReady();
+    const items = g.state.fridgeItems;
+    const all = FRIDGE_ITEM_IDS.map((id) => ({ id, spot: items[id] }));
+    for (const { id, spot } of all) expect(fitsOnShelf(id, spot, all), id).toBe(true); // どれも重ならない
+    expect(items.spinachTray).not.toEqual(home);
+    expect(g.state.trays.spinach).toBe('fridge');
+  });
+
+  it('手に持っていたトレーも、冷蔵庫に戻る', () => {
+    const g = practice();
+    g.rightClick({ kind: 'fridgeDoor' });
+    g.interact(saltOilCase);
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'saltOil' });
+    g.getReady();
+    expect(g.state.hand).toBeNull();
+    expect(g.state.trays.saltOil).toBe('fridge');
   });
 });
 
