@@ -5,6 +5,7 @@ export type MenuItem = {
   name: string;
   station: Station;
   ingredients: IngredientId[]; // 完成品の中身（順序なし。同じ物は個数分並べる）
+  sauce?: IngredientId[]; // このうち、鍋に入れて加熱する分（既定のソース）。鍋がこの中身になったら、IHで加熱が始まる
   basePoints: number;
   enabled: boolean; // false の間は伝票に出ない（必要な設備が未実装）
 };
@@ -24,6 +25,7 @@ export const MENU: MenuItem[] = [
     name: 'ミートパスタ',
     station: 'pasta',
     ingredients: ['noodle', 'meatSauce', 'meatSauce', 'cheese', 'parsley'],
+    sauce: ['meatSauce', 'meatSauce'],
     basePoints: 50,
     enabled: true,
   },
@@ -32,6 +34,7 @@ export const MENU: MenuItem[] = [
     name: 'パルマ風パスタ',
     station: 'pasta',
     ingredients: ['noodle', 'tomatoSauce', 'pancetta', 'cheese'],
+    sauce: ['tomatoSauce', 'pancetta'],
     basePoints: 50,
     enabled: true,
   },
@@ -40,6 +43,7 @@ export const MENU: MenuItem[] = [
     name: 'カルボナーラ',
     station: 'pasta',
     ingredients: ['noodle', 'carbonaraSauce', 'cheese', 'blackPepper'],
+    sauce: ['carbonaraSauce'],
     basePoints: 50,
     enabled: true,
   },
@@ -48,6 +52,7 @@ export const MENU: MenuItem[] = [
     name: 'ペンネアラビアータ',
     station: 'pasta',
     ingredients: ['penne', 'tomatoSauce', 'garlic', 'chili', 'parsley'],
+    sauce: ['tomatoSauce', 'garlic', 'chili'],
     basePoints: 50,
     enabled: false,
   },
@@ -56,6 +61,7 @@ export const MENU: MenuItem[] = [
     name: 'ほうれん草のソテー',
     station: 'pasta',
     ingredients: ['spinach', 'spinach', 'pancetta', 'sauteSauce'],
+    sauce: ['spinach', 'spinach', 'pancetta', 'sauteSauce'],
     basePoints: 30,
     enabled: false,
   },
@@ -89,6 +95,36 @@ export function getMenu(id: string): MenuItem {
   const menu = MENU.find((m) => m.id === id);
   if (!menu) throw new Error(`unknown menu: ${id}`);
   return menu;
+}
+
+// --- 鍋で作るソース（既定の組み合わせ）---
+
+function sameItems(a: readonly IngredientId[], b: readonly IngredientId[]): boolean {
+  if (a.length !== b.length) return false;
+  const x = [...a].sort();
+  const y = [...b].sort();
+  return x.every((id, i) => id === y[i]);
+}
+
+// 鍋の中身が、既定のソースと一致していれば、そのメニューを返す（入れた順序は問わない）。
+// 一致したらIHで加熱が始まる。あるソースの材料が、別のソースの材料の一部になる組み合わせは作らないこと
+// （作ると、入れている途中で先に一致して、加熱が始まってしまう）
+export function findSauceRecipe(contents: readonly IngredientId[], menus: readonly MenuItem[] = MENU): MenuItem | null {
+  return menus.find((m) => m.enabled && m.sauce && sameItems(contents, m.sauce)) ?? null;
+}
+
+// 入れている途中（既定のソースの材料の一部）かどうか。false なら、どのソースにもならない組み合わせ
+export function isSaucePartial(contents: readonly IngredientId[], menus: readonly MenuItem[] = MENU): boolean {
+  return menus.some((m) => {
+    if (!m.enabled || !m.sauce) return false;
+    const rest = [...m.sauce];
+    for (const id of contents) {
+      const i = rest.indexOf(id);
+      if (i < 0) return false;
+      rest.splice(i, 1);
+    }
+    return true;
+  });
 }
 
 // 皿の中身とレシピが一致するか（順序は問わず、個数まで一致）

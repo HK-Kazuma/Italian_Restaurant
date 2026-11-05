@@ -1,3 +1,5 @@
+import type { BottleId, SurfaceId } from './types';
+
 // 設備の置き場所。ここの数値を直すと、その設備が動く（保存すると開発サーバーが自動で読み込み直す）。
 //
 // 座標は上から見たときの位置（単位 m）。プレイヤーが最初に立つ場所が (x=0, z=0)。
@@ -40,4 +42,22 @@ export const LAYOUT: Layout = {
   saladTable: { x: 2.00, z: 0.3
    },
   hotWater: { x: 1.95, z: -1.8},
+};
+
+// ボトルを置ける台（天板）。salad = 右のサラダ台、left = IHの左の台（皿・トッピング・提供台）。
+// 大きさは x 方向 × z 方向（m）。見た目・当たり判定・ボトルを置ける範囲が使う
+export const SURFACES = {
+  salad: { width: 1.1, depth: 2.7 },
+  left: { width: 1.4, depth: 3.6 },
+};
+
+// IHの左の台の中心（この台は layout の対象ではなく、位置は固定）
+export const LEFT_COUNTER = { x: -2.6, z: -0.2 };
+
+// ボトルの最初の置き場所。台の中心からの相対位置（x: 右、z: 手前）。
+// パセリは、もとのトッピングの位置（左の台の奥の列）
+export const BOTTLE_HOME: Record<BottleId, { surface: SurfaceId; x: number; z: number }> = {
+  dressing: { surface: 'salad', x: 0.3, z: -0.5 },
+  paprika: { surface: 'salad', x: 0.3, z: -0.95 },
+  parsley: { surface: 'left', x: -0.4, z: 0.95 },
 };

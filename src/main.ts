@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BOTTLE_ACTION } from './bottle';
 import { DEFAULT_CONFIG } from './config';
 import { Game } from './game';
 import { Hud } from './hud';
@@ -59,6 +60,15 @@ const hud = new Hud(document.getElementById('hud')!, cfg, () => input.requestLoc
 
 // 視点が合っている物に対する、左クリック以外の操作の案内
 function hintFor(target: Target | null): string {
+  const hand = game.state.hand;
+  if (hand?.kind === 'bottle') {
+    if (game.canUseBottleAt(target)) return `右クリック：${BOTTLE_ACTION[hand.id]}`;
+    const p = game.previewBottle(target);
+    if (p?.valid) return '左クリック：ここに置く';
+    if (p?.reason === 'surface') return 'このボトルは、この台には置けない';
+    if (p) return 'ここには置けない（ほかのボトルに近すぎる）';
+    return `右クリック：${BOTTLE_ACTION[hand.id]}（皿に視点を合わせて）　左クリック：台の上に置く`;
+  }
   if (target && (target.kind === 'fridgeDoor' || (target.kind === 'stock' && target.inFridge))) {
     return `右クリック：冷蔵庫の扉を${game.state.fridgeOpen ? '閉める' : '開ける'}`;
   }
@@ -104,7 +114,7 @@ function frame(): void {
   player.applyTo(camera);
   if (game.state.phase === 'playing') interactor.update(game);
   else interactor.clear();
-  kitchen.sync(game.state, dt);
+  kitchen.sync(game.state, dt, game.previewBottle(interactor.current));
   hud.update(game.state, best, hintFor(interactor.current));
   renderer.render(kitchen.scene, camera);
   requestAnimationFrame(frame);

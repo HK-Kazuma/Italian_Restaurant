@@ -21,7 +21,7 @@ import {
 const max = cfg.maxPotContents;
 
 describe('鍋の加熱', () => {
-  it('具材を入れると使用済みになり、ボタンで加熱開始できる', () => {
+  it('具材を入れると使用済みになり、加熱を開始できる', () => {
     const pot = createPot();
     expect(canStartHeating(pot)).toBe(false); // 空では加熱できない
     addIngredient(pot, 'meatSauce');

@@ -3,7 +3,7 @@ import type { IngredientId, Pot, Washer } from './types';
 
 // 鍋の循環：鍋置き場 → IH（具材を入れて加熱）→ 皿にかける → 洗浄機（5秒）→ 鍋置き場
 // 洗浄機は1台・1個ずつなので、使用済みの鍋が重なると渋滞する。
-// 鍋の状態：具材を入れる前（cold）→ ボタンで加熱（heating）→ 時間が来たら自動で完了（ready）
+// 鍋の状態：具材を入れる前（cold）→ 既定のソースになったら自動で加熱（heating）→ 時間が来たら自動で完了（ready）
 
 const NOODLES: ReadonlySet<IngredientId> = new Set(['noodle', 'penne']);
 

@@ -6,7 +6,6 @@ import {
   canAddIngredient,
   canInsert,
   canPour,
-  canStartHeating,
   createPot,
   createWasher,
   insertPot,
@@ -18,15 +17,21 @@ import {
   updateWasher,
 } from './pot';
 import { soakPack, stockItem } from './pack';
-import { MENU, findMatchingTicket, getMenu } from './recipe';
+import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
 import { serveScore } from './score';
 import { createTicket, nextTicketInterval, pickMenu } from './tickets';
-import type { GameState, Item, Phase, Target, Toast } from './types';
+import { BOTTLE_IDS, BOTTLE_PLATE, BOTTLE_SURFACES, BOTTLE_VERB } from './bottle';
+import { BOTTLE_HOME, SURFACES } from './layout';
+import type { BottleId, BottlePreview, BottleSpot, GameState, IngredientId, Item, Phase, Pot, Target, Toast } from './types';
 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
 type Action = () => void;
 
 const TOAST_SECONDS = 2.5;
+
+// ボトルをサラダ台の上に置くときの決まり
+const BOTTLE_EDGE = 0.06; // 天板の縁から、これだけ内側までしか置けない
+const BOTTLE_GAP = 0.14; // ボトルどうしの最小の間隔
 
 export class Game {
   state: GameState;
@@ -46,6 +51,7 @@ export class Game {
       boilers: Array.from({ length: this.cfg.boilerCount }, createBoiler),
       plateSlots: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => null),
       fridgeOpen: false,
+      bottles: Object.fromEntries(BOTTLE_IDS.map((id) => [id, { ...BOTTLE_HOME[id] }])) as Record<BottleId, BottleSpot>,
       hotWater: Array.from({ length: this.cfg.hotWaterSlotCount }, () => null),
       potSlots: Array.from({ length: this.cfg.potCount }, createPot),
       ihBurners: Array.from({ length: this.cfg.ihBurnerCount }, () => null),
@@ -120,13 +126,72 @@ export class Game {
       this.state.fridgeOpen = !this.state.fridgeOpen;
       return;
     }
+    if (this.state.hand?.kind === 'bottle') {
+      this.useBottle(target);
+      return;
+    }
     this.discard();
+  }
+
+  // ボトルを持っているとき、右クリックでサラダの皿にかける・振る。ボトルは手に残る
+  private useBottle(target: Target | null): void {
+    const hand = this.state.hand;
+    if (hand?.kind !== 'bottle') return;
+    const plate = this.plateForBottle(hand.id, target);
+    if (!plate) {
+      this.say(BOTTLE_PLATE[hand.id] === 'salad' ? 'サラダの皿に視点を合わせて右クリック' : 'パスタの皿に視点を合わせて右クリック', 'info');
+      return;
+    }
+    plate.push(hand.id);
+    this.say(`${INGREDIENTS[hand.id].name}を${BOTTLE_VERB[hand.id]}`, 'info');
+  }
+
+  // 視点が合っている皿のうち、このボトルをかけられるもの（サラダの皿 / パスタの皿。中身を増やせる間だけ）。なければ null
+  private plateForBottle(id: BottleId, target: Target | null): IngredientId[] | null {
+    if (target?.kind !== 'plateSlot') return null;
+    const isSaladSlot = target.index >= this.cfg.plateSlotCount;
+    if (isSaladSlot !== (BOTTLE_PLATE[id] === 'salad')) return null;
+    const plate = this.state.plateSlots[target.index];
+    return plate && plate.length < this.cfg.maxPlateContents ? plate : null;
+  }
+
+  // 手に持ったボトルを右クリックでかけられる場所か（HUD の案内に使う）
+  canUseBottleAt(target: Target | null): boolean {
+    const hand = this.state.hand;
+    return this.state.phase === 'playing' && hand?.kind === 'bottle' && this.plateForBottle(hand.id, target) !== null;
+  }
+
+  // 手に持ったボトルを、視点が合っている台の天板に置くとしたら、どこにどう置かれるか。
+  // 位置は天板の内側に収める。置けない台や、ほかのボトルに近すぎる場所では valid = false（reason に理由）
+  previewBottle(target: Target | null): BottlePreview | null {
+    const s = this.state;
+    const hand = s.hand;
+    if (s.phase !== 'playing' || hand?.kind !== 'bottle' || target?.kind !== 'tableTop') return null;
+    const { surface } = target;
+    const size = SURFACES[surface];
+    const halfW = size.width / 2 - BOTTLE_EDGE;
+    const halfD = size.depth / 2 - BOTTLE_EDGE;
+    const x = Math.min(halfW, Math.max(-halfW, target.x));
+    const z = Math.min(halfD, Math.max(-halfD, target.z));
+
+    if (!BOTTLE_SURFACES[hand.id].includes(surface)) return { id: hand.id, surface, x, z, valid: false, reason: 'surface' };
+    const tooClose = BOTTLE_IDS.some((id) => {
+      const spot = s.bottles[id];
+      return id !== hand.id && spot?.surface === surface && Math.hypot(spot.x - x, spot.z - z) < BOTTLE_GAP;
+    });
+    return tooClose
+      ? { id: hand.id, surface, x, z, valid: false, reason: 'gap' }
+      : { id: hand.id, surface, x, z, valid: true };
   }
 
   // 手に持っている物を捨てる
   discard(): void {
     const s = this.state;
     if (s.phase !== 'playing' || !s.hand) return;
+    if (s.hand.kind === 'bottle') {
+      this.say('ボトルは捨てられない（台の上に置く）', 'info');
+      return;
+    }
     if (s.hand.kind === 'pot') {
       // 鍋は総数が決まっているので、捨てると循環から消えてしまう
       this.say('鍋は捨てられない', 'info');
@@ -160,6 +225,23 @@ export class Game {
         // 左クリックでは開かない（右クリックで開閉）。閉まっている間だけ案内を出す
         if (s.fridgeOpen) return null;
         return () => this.say('右クリックで冷蔵庫を開ける', 'info');
+
+      case 'bottle': {
+        if (hand || !s.bottles[target.id]) return null;
+        return () => {
+          s.hand = { kind: 'bottle', id: target.id };
+          s.bottles[target.id] = null;
+        };
+      }
+
+      case 'tableTop': {
+        const p = this.previewBottle(target);
+        if (!p?.valid) return null;
+        return () => {
+          s.bottles[p.id] = { surface: p.surface, x: p.x, z: p.z };
+          s.hand = null;
+        };
+      }
 
       case 'boilerBasket': {
         const b = s.boilers[target.index];
@@ -248,6 +330,7 @@ export class Game {
           return () => {
             s.ihBurners[target.index] = hand.pot;
             s.hand = null;
+            this.tryAutoHeat(hand.pot);
           };
         }
         // 載せた鍋に、ソース（加熱前）や麺（加熱完了後）を入れる
@@ -255,6 +338,7 @@ export class Game {
           return () => {
             addIngredient(pot, hand.id);
             s.hand = null;
+            this.tryAutoHeat(pot);
           };
         }
         // 熱湯で温まったパック（カルボナーラ）は、加熱前の鍋に入れられる
@@ -262,6 +346,7 @@ export class Game {
           return () => {
             addIngredient(pot, hand.pack.id);
             s.hand = null;
+            this.tryAutoHeat(pot);
           };
         }
         return null;
@@ -282,12 +367,6 @@ export class Game {
           };
         }
         return null;
-      }
-
-      case 'ihButton': {
-        const pot = s.ihBurners[target.index];
-        if (!pot || !canStartHeating(pot)) return null;
-        return () => startHeating(pot, this.cfg);
       }
 
       case 'washer': {
@@ -315,6 +394,13 @@ export class Game {
     const b = this.state.boilers[target.index];
     if (b.state !== 'overdue') return null;
     return () => startShortBoil(b, this.cfg);
+  }
+
+  // IHに載っている鍋の中身が既定のソース（recipe.ts の sauce）になったら、ボタンなしで加熱を始める
+  private tryAutoHeat(pot: Pot): void {
+    if (pot.heat !== 'cold') return;
+    const recipe = findSauceRecipe(pot.contents);
+    if (recipe && startHeating(pot, this.cfg)) this.say(`${recipe.name}のソース 加熱開始`, 'info');
   }
 
   // 提供：皿の中身と一致する最も古い伝票を消してスコア加算。なければ注文ミス
@@ -360,6 +446,8 @@ export function describeItem(item: Item | null): string {
       return INGREDIENTS[item.id].name;
     case 'pack':
       return `${INGREDIENTS[item.pack.id].name}パック（${item.pack.warm ? '温まった' : '冷たい'}）`;
+    case 'bottle':
+      return `${INGREDIENTS[item.id].name}（ボトル）`;
     case 'pot': {
       const { pot } = item;
       if (pot.contents.length === 0) return pot.dirty ? '鍋（使用済み）' : '鍋';

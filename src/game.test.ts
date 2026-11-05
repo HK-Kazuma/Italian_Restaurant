@@ -132,11 +132,10 @@ describe('Game: のびかけとショート茹で', () => {
 
 const potSlot = (index: number): Target => ({ kind: 'potSlot', index });
 const burner = (index: number): Target => ({ kind: 'ihBurner', index });
-const ihButton = (index: number): Target => ({ kind: 'ihButton', index });
 const washer: Target = { kind: 'washer' };
 const can: Target = { kind: 'stock', id: 'meatSauce', inFridge: true };
 const cheese: Target = { kind: 'stock', id: 'cheese' };
-const parsley: Target = { kind: 'stock', id: 'parsley' };
+const parsley: Target = { kind: 'bottle', id: 'parsley' };
 
 // 鍋置き場から鍋を取ってIHに置き、ミートソースを n 杯入れる
 function setPot(g: Game, slotIndex: number, burnerIndex: number, scoops = 2) {
@@ -224,32 +223,75 @@ describe('Game: ミートソースの加熱', () => {
     expect(g.planInteract(can)).toBeNull();
   });
 
-  it('2杯入れてボタンを押すと加熱が始まり、40秒で自動で完了する', () => {
+  it('ミートソースをお玉2杯入れると、ボタンなしで加熱が始まり、時間が来たら自動で完了する', () => {
     const g = newGame();
-    setPot(g, 0, 0, 2);
+    setPot(g, 0, 0, 1);
     const pot = g.state.ihBurners[0]!;
-    expect(pot.contents).toEqual(['meatSauce', 'meatSauce']);
+    expect(pot.heat).toBe('cold'); // 1杯ではまだ始まらない
 
-    g.interact(ihButton(0));
+    g.interact(can);
+    g.interact(burner(0));
+    expect(pot.contents).toEqual(['meatSauce', 'meatSauce']);
     expect(pot.heat).toBe('heating');
+    expect(g.state.toast?.text).toContain('加熱開始');
+
     g.update(cfg.sauceHeatTime - 1);
     expect(pot.heat).toBe('heating');
     g.update(1.1);
     expect(pot.heat).toBe('ready');
   });
 
-  it('空の鍋や、鍋のない口ではボタンが効かない', () => {
+  it('パルマ風：トマトソースとパンチェッタは、どちらを先に入れても、そろったら加熱が始まる', () => {
+    for (const order of [
+      [tomatoSauce, pancetta],
+      [pancetta, tomatoSauce],
+    ]) {
+      const g = newGame();
+      g.interact(potSlot(0));
+      g.interact(burner(0));
+      g.interact(order[0]);
+      g.interact(burner(0));
+      expect(g.state.ihBurners[0]?.heat).toBe('cold'); // 片方だけではまだ
+      g.interact(order[1]);
+      g.interact(burner(0));
+      expect(g.state.ihBurners[0]?.heat).toBe('heating');
+    }
+  });
+
+  it('カルボナーラ：温まったパックを入れると加熱が始まる（冷たいままは入らない）', () => {
     const g = newGame();
-    expect(g.planInteract(ihButton(0))).toBeNull();
     g.interact(potSlot(0));
     g.interact(burner(0));
-    expect(g.planInteract(ihButton(0))).toBeNull();
+    g.interact(carbonaraPack);
+    g.interact(hotWater(0));
+    g.update(cfg.carbonaraWarmTime + 0.1);
+    g.interact(hotWater(0));
+    g.interact(burner(0));
+    expect(g.state.ihBurners[0]?.heat).toBe('heating');
+  });
+
+  it('既定のソースにならない組み合わせでは、加熱が始まらない', () => {
+    const g = newGame();
+    setPot(g, 0, 0, 1);
+    g.interact(tomatoSauce); // ミートソース + トマトソースは、どのソースでもない
+    g.interact(burner(0));
+    const pot = g.state.ihBurners[0]!;
+    expect(pot.contents).toEqual(['meatSauce', 'tomatoSauce']);
+    expect(pot.heat).toBe('cold');
+    g.update(100);
+    expect(pot.heat).toBe('cold');
+  });
+
+  it('空の鍋を置いただけでは加熱が始まらない', () => {
+    const g = newGame();
+    g.interact(potSlot(0));
+    g.interact(burner(0));
+    expect(g.state.ihBurners[0]?.heat).toBe('cold');
   });
 
   it('加熱が進むのはIHに載っている間だけ', () => {
     const g = newGame();
     setPot(g, 0, 0, 2);
-    g.interact(ihButton(0));
     const pot = g.state.ihBurners[0]!;
     g.update(10);
     g.interact(burner(0)); // 鍋を持ち上げる
@@ -279,7 +321,6 @@ describe('Game: ミートパスタを1皿出す（Aパターン）', () => {
   it('ソースを加熱し、麺を鍋に入れ、皿にかけ、粉チーズとパセリを振って提供する', () => {
     const g = gameWithTicket('meat');
     setPot(g, 0, 0, 2);
-    g.interact(ihButton(0));
     g.interact(plateStack);
     g.interact(slot(0)); // 皿を台に置く
     boilNoodle(g); // 麺が茹で上がる頃にはソースも完成している
@@ -295,8 +336,9 @@ describe('Game: ミートパスタを1皿出す（Aパターン）', () => {
     expect(g.state.hand).toBeNull();
     g.interact(cheese);
     g.interact(slot(0));
-    g.interact(parsley);
-    g.interact(slot(0));
+    g.interact(parsley); // パセリのボトルを持ち、右クリックで皿に振って、左の台に戻す
+    g.rightClick(slot(0));
+    g.interact(table(-0.4, 0.95, 'left'));
 
     g.interact(slot(0)); // 皿を手に取る
     g.interact(pass);
@@ -308,7 +350,6 @@ describe('Game: ミートパスタを1皿出す（Aパターン）', () => {
   it('加熱済みのソースを皿にかけ、麺を載せない（Bパターン）形でも中身は同じように移る', () => {
     const g = newGame();
     setPot(g, 0, 0, 2);
-    g.interact(ihButton(0));
     g.update(cfg.sauceHeatTime + 1);
     g.interact(plateStack);
     g.interact(slot(0));
@@ -337,7 +378,6 @@ describe('Game: パルマ風パスタを1皿出す（Aパターン）', () => {
     g.interact(burner(0));
     expect(g.state.ihBurners[0]?.contents).toEqual(['tomatoSauce', 'pancetta']);
 
-    g.interact(ihButton(0));
     g.interact(plateStack);
     g.interact(slot(0));
     boilNoodle(g);
@@ -392,7 +432,6 @@ describe('Game: カルボナーラを1皿出す（Bパターン）', () => {
     g.update(cfg.carbonaraWarmTime + 0.1);
     g.interact(hotWater(0));
     g.interact(burner(0));
-    g.interact(ihButton(0));
 
     g.interact(plateStack);
     g.interact(slot(0));
@@ -428,8 +467,10 @@ describe('Game: カルボナーラを1皿出す（Bパターン）', () => {
 const saladBase: Target = { kind: 'stock', id: 'saladBase', inFridge: true };
 const shrimp: Target = { kind: 'stock', id: 'shrimp' };
 const chicken: Target = { kind: 'stock', id: 'chicken' };
-const dressing: Target = { kind: 'stock', id: 'dressing' };
-const paprika: Target = { kind: 'stock', id: 'paprika' };
+const dressing: Target = { kind: 'bottle', id: 'dressing' };
+const paprika: Target = { kind: 'bottle', id: 'paprika' };
+// 台の天板の、視点が合っている点（台の中心からの相対）。既定はサラダ台
+const table = (x: number, z: number, surface: 'salad' | 'left' = 'salad'): Target => ({ kind: 'tableTop', surface, x, z });
 const saladSlot = (j: number): Target => ({ kind: 'plateSlot', index: cfg.plateSlotCount + j });
 
 describe('Game: 冷蔵庫の扉', () => {
@@ -480,6 +521,13 @@ describe('Game: 冷蔵庫の扉', () => {
   });
 });
 
+// ボトルを持ち、サラダの皿（サラダ台の j 番目）に右クリックでかけ、台の上に戻す
+function useBottle(g: Game, bottle: Target, j: number, putBackAt = table(0.3, -0.5)) {
+  g.interact(bottle);
+  g.rightClick(saladSlot(j));
+  g.interact(putBackAt);
+}
+
 describe('Game: サラダを作る', () => {
   it('冷蔵庫のサラダベースは「お皿にサラダが入ったもの」として手に取れる', () => {
     const g = newGame();
@@ -493,10 +541,8 @@ describe('Game: サラダを作る', () => {
     g.interact(saladSlot(0)); // サラダを作る台に置く
     g.interact(shrimp);
     g.interact(saladSlot(0));
-    g.interact(dressing);
-    g.interact(saladSlot(0));
-    g.interact(paprika);
-    g.interact(saladSlot(0));
+    useBottle(g, dressing, 0);
+    useBottle(g, paprika, 0, table(0.3, -0.95));
     expect(g.state.plateSlots[cfg.plateSlotCount]).toEqual(['saladBase', 'shrimp', 'dressing', 'paprika']);
 
     g.interact(saladSlot(0)); // 皿を持って提供台へ
@@ -512,10 +558,8 @@ describe('Game: サラダを作る', () => {
     g.interact(saladSlot(1));
     g.interact(shrimp); // 間違い
     g.interact(saladSlot(1));
-    g.interact(dressing);
-    g.interact(saladSlot(1));
-    g.interact(paprika);
-    g.interact(saladSlot(1));
+    useBottle(g, dressing, 1);
+    useBottle(g, paprika, 1, table(0.3, -0.95));
     g.interact(saladSlot(1));
     g.interact(pass);
     expect(g.state.mistakes).toBe(1);
@@ -525,10 +569,8 @@ describe('Game: サラダを作る', () => {
     g.interact(saladSlot(1));
     g.interact(chicken);
     g.interact(saladSlot(1));
-    g.interact(dressing);
-    g.interact(saladSlot(1));
-    g.interact(paprika);
-    g.interact(saladSlot(1));
+    useBottle(g, dressing, 1);
+    useBottle(g, paprika, 1, table(0.3, -0.95));
     g.interact(saladSlot(1));
     g.interact(pass);
     expect(g.state.served).toBe(1);
@@ -537,6 +579,150 @@ describe('Game: サラダを作る', () => {
   it('サラダを作る場所は皿の置き場の続き（左の台とは別のスロット）', () => {
     const g = newGame();
     expect(g.state.plateSlots).toHaveLength(cfg.plateSlotCount + cfg.saladSlotCount);
+  });
+});
+
+describe('Game: ボトル（ドレッシング・パプリカパウダー）', () => {
+  it('最初はサラダ台の上にある。左クリックで持つと、台の上からなくなる', () => {
+    const g = newGame();
+    expect(g.state.bottles.dressing).not.toBeNull();
+    g.interact(dressing);
+    expect(g.state.hand).toEqual({ kind: 'bottle', id: 'dressing' });
+    expect(g.state.bottles.dressing).toBeNull();
+  });
+
+  it('右クリックでサラダの皿にかけると、ボトルは手に残り、何度でもかけられる', () => {
+    const g = newGame();
+    g.interact(saladBase);
+    g.interact(saladSlot(0));
+    g.interact(dressing);
+    g.rightClick(saladSlot(0));
+    g.rightClick(saladSlot(0));
+    expect(g.state.hand).toEqual({ kind: 'bottle', id: 'dressing' });
+    expect(g.state.plateSlots[cfg.plateSlotCount]).toEqual(['saladBase', 'dressing', 'dressing']);
+  });
+
+  it('サラダの皿以外への右クリックでは、かけない。ボトルは捨てられない', () => {
+    const g = newGame();
+    g.interact(dressing);
+    g.rightClick(null);
+    g.rightClick(saladSlot(0)); // 皿が置かれていない
+    g.rightClick({ kind: 'plateSlot', index: 0 }); // 左の台の皿（サラダ台ではない）
+    expect(g.state.hand).toEqual({ kind: 'bottle', id: 'dressing' });
+    expect(g.state.plateSlots.every((p) => p === null)).toBe(true); // どの皿にも何も足されていない
+  });
+
+  it('サラダ台の天板の好きな場所に置ける', () => {
+    const g = newGame();
+    g.interact(paprika);
+    g.interact(table(-0.4, 1.0));
+    expect(g.state.hand).toBeNull();
+    expect(g.state.bottles.paprika).toEqual({ surface: 'salad', x: -0.4, z: 1.0 });
+  });
+
+  it('置く前に、置こうとしている場所と、置けるかどうかが分かる', () => {
+    const g = newGame();
+    expect(g.previewBottle(table(0, 0))).toBeNull(); // ボトルを持っていない
+    g.interact(paprika);
+    expect(g.previewBottle(table(0.1, 0.2))).toEqual({ id: 'paprika', surface: 'salad', x: 0.1, z: 0.2, valid: true });
+    expect(g.previewBottle({ kind: 'plateStack' })).toBeNull(); // サラダ台の天板以外
+  });
+
+  it('天板の縁を越える位置は、天板の内側に収める', () => {
+    const g = newGame();
+    g.interact(paprika);
+    const p = g.previewBottle(table(9, -9))!;
+    expect(p.x).toBeLessThan(0.55);
+    expect(p.z).toBeGreaterThan(-1.35);
+  });
+
+  it('ほかのボトルに近すぎる場所には置けない', () => {
+    const g = newGame();
+    g.interact(paprika);
+    const home = g.state.bottles.dressing!;
+    expect(g.previewBottle(table(home.x + 0.05, home.z))?.valid).toBe(false);
+    expect(g.planInteract(table(home.x + 0.05, home.z))).toBeNull();
+    expect(g.previewBottle(table(home.x + 0.3, home.z))?.valid).toBe(true);
+  });
+
+  it('台の上のボトルは、手が空いていないと持てない', () => {
+    const g = newGame();
+    g.interact(can);
+    expect(g.planInteract(dressing)).toBeNull();
+  });
+});
+
+describe('Game: パセリのボトル', () => {
+  it('最初は左の台の上にある。左クリックで持てる', () => {
+    const g = newGame();
+    expect(g.state.bottles.parsley?.surface).toBe('left');
+    g.interact(parsley);
+    expect(g.state.hand).toEqual({ kind: 'bottle', id: 'parsley' });
+  });
+
+  it('右クリックで、パスタの皿（左の台）に振る。サラダの皿には振れない', () => {
+    const g = newGame();
+    g.interact(plateStack);
+    g.interact(slot(0)); // 左の台の皿
+    g.interact(saladBase);
+    g.interact(saladSlot(0)); // サラダ台の皿
+    g.interact(parsley);
+
+    g.rightClick(saladSlot(0));
+    expect(g.state.plateSlots[cfg.plateSlotCount]).toEqual(['saladBase']);
+    g.rightClick(slot(0));
+    g.rightClick(slot(0));
+    expect(g.state.plateSlots[0]).toEqual(['parsley', 'parsley']);
+    expect(g.state.hand).toEqual({ kind: 'bottle', id: 'parsley' }); // ボトルは手に残る
+  });
+
+  it('ドレッシングとパプリカは、サラダの皿にだけかけられる', () => {
+    const g = newGame();
+    g.interact(plateStack);
+    g.interact(slot(0));
+    g.interact(dressing);
+    g.rightClick(slot(0));
+    expect(g.state.plateSlots[0]).toEqual([]);
+  });
+
+  it('パセリは、左の台にも、サラダ台にも置ける', () => {
+    const g = newGame();
+    g.interact(parsley);
+    g.interact(table(0.0, 0.5, 'salad'));
+    expect(g.state.bottles.parsley).toEqual({ surface: 'salad', x: 0, z: 0.5 });
+
+    g.interact(parsley);
+    g.interact(table(-0.2, 0.0, 'left'));
+    expect(g.state.bottles.parsley).toEqual({ surface: 'left', x: -0.2, z: 0 });
+  });
+
+  it('ドレッシングとパプリカは、サラダ台にしか置けない（左の台は赤）', () => {
+    const g = newGame();
+    for (const [i, bottle] of [dressing, paprika].entries()) {
+      g.interact(bottle);
+      const p = g.previewBottle(table(0, 0, 'left'));
+      expect(p?.valid).toBe(false);
+      expect(p?.reason).toBe('surface');
+      expect(g.planInteract(table(0, 0, 'left'))).toBeNull();
+      expect(g.previewBottle(table(-0.4, i * 0.5, 'salad'))?.valid).toBe(true);
+      g.interact(table(-0.4, i * 0.5, 'salad')); // 2本目は、1本目から離れた場所に置く
+    }
+  });
+
+  it('ボトルどうしの間隔は、同じ台の上でだけ数える', () => {
+    const g = newGame();
+    g.interact(parsley);
+    const dress = g.state.bottles.dressing!; // サラダ台の上
+    expect(g.previewBottle(table(dress.x + 0.05, dress.z, 'salad'))?.reason).toBe('gap');
+    expect(g.previewBottle(table(dress.x + 0.05, dress.z, 'left'))?.valid).toBe(true); // 左の台なら関係ない
+  });
+
+  it('左の台の上のどこに置いても、台の内側に収まる', () => {
+    const g = newGame();
+    g.interact(parsley);
+    const p = g.previewBottle(table(9, 9, 'left'))!;
+    expect(p.x).toBeLessThan(0.7);
+    expect(p.z).toBeLessThan(1.8);
   });
 });
 

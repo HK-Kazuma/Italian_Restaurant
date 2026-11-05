@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MENU, findMatchingTicket, getMenu, judge } from './recipe';
+import { MENU, findMatchingTicket, findSauceRecipe, getMenu, isSaucePartial, judge } from './recipe';
 
 describe('judge', () => {
   const tarako = getMenu('tarako');
@@ -31,5 +31,49 @@ describe('findMatchingTicket', () => {
   });
   it('一致なしは null', () => {
     expect(findMatchingTicket(['noodle'], [t(1, 0)])).toBeNull();
+  });
+});
+
+describe('既定のソース（鍋で加熱する分）', () => {
+  it('ミートソース：お玉2杯でそろう。1杯では途中', () => {
+    expect(findSauceRecipe(['meatSauce'])).toBeNull();
+    expect(findSauceRecipe(['meatSauce', 'meatSauce'])?.id).toBe('meat');
+    expect(isSaucePartial(['meatSauce'])).toBe(true);
+  });
+  it('パルマ風：トマトソースとパンチェッタが、順不同でそろう', () => {
+    expect(findSauceRecipe(['tomatoSauce', 'pancetta'])?.id).toBe('parma');
+    expect(findSauceRecipe(['pancetta', 'tomatoSauce'])?.id).toBe('parma');
+  });
+  it('カルボナーラ：パック1つでそろう', () => {
+    expect(findSauceRecipe(['carbonaraSauce'])?.id).toBe('carbonara');
+  });
+  it('どのソースにもならない組み合わせは、途中でもない', () => {
+    expect(findSauceRecipe(['meatSauce', 'tomatoSauce'])).toBeNull();
+    expect(isSaucePartial(['meatSauce', 'tomatoSauce'])).toBe(false);
+  });
+  it('有効でないメニュー（ペンネなど）のソースは対象外', () => {
+    expect(findSauceRecipe(['tomatoSauce', 'garlic', 'chili'])).toBeNull();
+  });
+  it('ソースの材料は、完成品の材料に含まれている', () => {
+    for (const m of MENU) {
+      if (!m.sauce) continue;
+      const rest = [...m.ingredients];
+      for (const id of m.sauce) {
+        const i = rest.indexOf(id);
+        expect(i, `${m.id} の ${id}`).toBeGreaterThanOrEqual(0);
+        rest.splice(i, 1);
+      }
+    }
+  });
+  it('あるソースの材料が、別のソースの材料の一部にならない（入れている途中で先に始まってしまうため）', () => {
+    const sauces = MENU.filter((m) => m.enabled && m.sauce);
+    for (const a of sauces) {
+      for (const b of sauces) {
+        if (a.id === b.id) continue;
+        expect(findSauceRecipe(a.sauce!, [b])).toBeNull();
+        // a が b の途中の状態になっていないこと（= b の一部だと、a が先に一致してしまう）
+        expect(a.sauce!.length >= b.sauce!.length || !isSaucePartial(a.sauce!, [b])).toBe(true);
+      }
+    }
   });
 });

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Game } from './game';
-import { TARGET_KEY } from './scene';
+import { RESOLVE_KEY, TARGET_KEY } from './scene';
 import type { Target } from './types';
 
 const HIGHLIGHT = 0x2f7d3a;
@@ -36,16 +36,25 @@ export class Interactor {
   update(game: Game): void {
     this.raycaster.setFromCamera(this.center, this.camera);
     const hit = this.raycaster.intersectObjects(this.roots, true)[0];
-    const root = hit ? findTargetRoot(hit.object) : null;
+    let root = hit ? findTargetRoot(hit.object) : null;
+    let target: Target | null = root ? (root.userData[TARGET_KEY] as Target) : null;
+
+    // 当たった点しだいで対象が変わる物（サラダ台の天板）。対象にならない面なら、何も狙っていないことにする
+    const resolve = root?.userData[RESOLVE_KEY] as ((h: THREE.Intersection) => Target | null) | undefined;
+    if (root && hit && resolve) {
+      target = resolve(hit);
+      if (!target) root = null;
+    }
 
     if (this.root && this.root !== root) setEmissive(this.root, 0x000000);
     this.root = root;
-    this.current = root ? (root.userData[TARGET_KEY] as Target) : null;
+    this.current = target;
 
     // 皿の中身が作り直されても光り続けるよう、毎フレーム当て直す。
-    // 冷蔵庫は大きく、左クリックで操作する物でもないので光らせない（ヒントは HUD に出す）
+    // 冷蔵庫・サラダ台の天板は大きいので光らせない（冷蔵庫のヒントは HUD、ボトルを置く場所は置く前の見せ方で示す）
     if (root && this.current) {
-      const glow = this.current.kind !== 'fridgeDoor' && game.planInteract(this.current);
+      const big = this.current.kind === 'fridgeDoor' || this.current.kind === 'tableTop';
+      const glow = !big && game.planInteract(this.current);
       setEmissive(root, glow ? HIGHLIGHT : 0x000000);
     }
   }
