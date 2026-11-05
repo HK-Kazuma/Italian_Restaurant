@@ -141,6 +141,10 @@ body {
   font-size: 44px;
   line-height: 1;
 }
+.guide .label {
+  max-width: 260px;
+  text-align: center;
+}
 
 .hand {
   bottom: 18px;
@@ -237,6 +241,39 @@ body {
 }
 .practice .practice-note {
   display: block;
+}
+
+/* 練習キッチンに入った直後のポップアップ（画面中央の少し上。数秒で消える） */
+.start-popup {
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(90vw, 640px);
+  padding: 18px 28px;
+  border-radius: 14px;
+  border: 2px solid #ffe08a;
+  background: rgba(20, 20, 20, 0.85);
+  color: #fff;
+  font-size: 22px;
+  font-weight: bold;
+  line-height: 1.5;
+  text-align: center;
+  text-shadow: 0 1px 4px #000;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  animation: start-popup-in 0.35s ease-out;
+}
+.start-popup.hidden {
+  display: none;
+}
+@keyframes start-popup-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 /* 手に持った iPad の画面（右クリックで開く）。開いている間はカーソルを出して操作する */
@@ -404,4 +441,158 @@ body {
 .ipad .recipe {
   color: #e6e0d4;
   font-size: 13px;
+}
+
+/* iPad のチュートリアルアプリ：メニューの一覧（タップで開始） */
+.ipad .icon.purple {
+  background: #af52de;
+}
+.tut-now {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(255, 213, 74, 0.22);
+  font-size: 14px;
+}
+.tut-now[hidden] {
+  display: none;
+}
+.tut-now button {
+  padding: 4px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.28);
+  font-size: 14px;
+}
+.tut-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.tut-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.16);
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: bold;
+  text-align: left;
+  color: #fff;
+}
+button.tut-card {
+  cursor: pointer;
+}
+button.tut-card:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+.tut-card.disabled {
+  opacity: 0.45;
+}
+.tut-card .badge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.25);
+  font-size: 11px;
+  font-weight: normal;
+}
+.tut-card .tut-meta {
+  flex: none;
+  font-size: 13px;
+  font-weight: normal;
+  color: #d8d2e8;
+}
+
+/* チュートリアル中の工程の一覧（画面の左）：いまの工程を大きく、次の工程は矢印でつなぐ */
+.tutorial {
+  top: 64px;
+  left: 16px;
+  width: 330px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(20, 16, 12, 0.72);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.tutorial.hidden {
+  display: none;
+}
+.tutorial-on .practice-note {
+  display: none;
+}
+.tut-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: #cfc7b8;
+  font-size: 12px;
+}
+.tut-head b {
+  font-size: 16px;
+  color: #fff;
+}
+.tut-finished {
+  color: #8be28b;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.tut-step {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #d9d3c6;
+}
+.tut-step.now {
+  padding: 8px 10px;
+  background: #ffd23f;
+  color: #2a2200;
+  font-size: 17px;
+  font-weight: bold;
+}
+.tut-no {
+  display: block;
+  font-size: 11px;
+  font-weight: normal;
+  opacity: 0.75;
+}
+.tut-progress {
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.tut-hint {
+  margin: 6px 2px 2px;
+  color: #ffe08a;
+  font-size: 13px;
+}
+.tut-arrow {
+  text-align: center;
+  color: #ffd23f;
+  font-size: 16px;
+  line-height: 1.2;
+}
+.tut-more {
+  text-align: center;
+  color: #a9a294;
+  font-size: 12px;
+}
+.tut-complete {
+  padding: 10px;
+  border-radius: 8px;
+  background: #34c759;
+  color: #04200c;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
 }

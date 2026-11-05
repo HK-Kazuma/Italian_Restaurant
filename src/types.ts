@@ -174,10 +174,14 @@ export type Toast = {
 // practice = 練習キッチン（時間制限なし。操作を覚える・気軽に料理する）、game = 本番（5分間のタイムアタック）
 export type Mode = 'practice' | 'game';
 
+// チュートリアルの進み具合。step = いま取り組んでいる工程の番号（total になったら完了）。工程の中身は tutorial.ts
+export type TutorialProgress = { menuId: string; step: number; total: number };
+
 export type GameState = {
   phase: Phase;
   mode: Mode;
   ipadOpen: boolean; // iPad の画面を開いている間（マウスのカーソルが出て、視点は動かせない）
+  tutorial: TutorialProgress | null; // チュートリアル中（練習キッチンで、選んだメニューを作り方の案内つきで作る）。なければ null
   time: number; // 経過時間（秒）
   hand: Item | null;
   boilers: Boiler[];

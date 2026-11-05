@@ -2,6 +2,7 @@ import type { GameConfig } from './config';
 import { describeItem } from './game';
 import { INGREDIENTS } from './ingredients';
 import { MENU, getMenu } from './recipe';
+import { hasTutorial, tutorialSteps, type TutorialView } from './tutorial';
 import type { GameState, Phase } from './types';
 
 const CONTROLS_HTML = `
@@ -12,11 +13,17 @@ const CONTROLS_HTML = `
     <tr><th>ダブルクリック</th><td>のびかけの茹で麺器をショート茹で（3秒）</td></tr>
     <tr><th>右クリック</th><td>冷蔵庫：扉の開閉（開けているときは、中の物を持ち上げて置き直す）　ボトル（ドレッシング・パプリカ・パセリ）を持っているとき：皿にかける・振る　iPadを持っているとき：画面を開く　それ以外：手に持っている物を捨てる</td></tr>
     <tr><th>E（押している間）</th><td>伝票を拡大表示</td></tr>
+    <tr><th>鍋を持って右クリック</th><td>鍋を持ったまま、右クリックすると投げられるよ！悪質なクレーマーや、ネズミ撃退に使えるかも...?(実装予定)</td></tr>
   </table>
 `;
 
-// iPad の画面から選べる操作。start = ゲーム開始（操作説明を出して、クリックで始まる）、close = 画面を閉じて練習キッチンに戻る
-export type IpadAction = 'start' | 'close';
+// iPad の画面から選べる操作。start = ゲーム開始（操作説明を出して、クリックで始まる）、close = 画面を閉じて練習キッチンに戻る、
+// tutorial = そのメニューのチュートリアルを始める、tutorialStop = チュートリアルをやめる
+export type IpadAction =
+  | { type: 'start' }
+  | { type: 'close' }
+  | { type: 'tutorial'; menuId: string }
+  | { type: 'tutorialStop' };
 
 // レシピ：メニュー表（recipe.ts）から作る。完成品の中身と、鍋で加熱する分
 function countedNames(ids: readonly string[]): string {
@@ -38,16 +45,39 @@ function recipeHtml(): string {
     .join('');
 }
 
-function ipadHtml(gameSeconds: number): string {
+// チュートリアルのメニュー一覧：メニュー表（recipe.ts）から作る。メニューを足せば、自動で並ぶ。
+// 工程がまだないメニューは「準備中」で、選べない
+function tutorialMenuHtml(cfg: GameConfig): string {
+  return MENU.filter((m) => m.enabled)
+    .map((m) => {
+      const steps = hasTutorial(m.id) ? tutorialSteps(m.id, cfg) : null;
+      const badge = `<span class="badge">${m.station === 'pasta' ? 'パスタ台' : 'サラダ台'}</span>`;
+      return steps
+        ? `<button class="tut-card" data-tutorial="${m.id}"><span class="tut-name">${m.name}${badge}</span><span class="tut-meta">${steps.length}工程 ›</span></button>`
+        : `<div class="tut-card disabled"><span class="tut-name">${m.name}${badge}</span><span class="tut-meta">準備中</span></div>`;
+    })
+    .join('');
+}
+
+function ipadHtml(cfg: GameConfig): string {
+  const gameSeconds = cfg.gameDuration;
   return `<div class="ipad-body"><div class="ipad-screen">
     <div class="ipad-status"><span>厨房 iPad</span><button data-act="close">✕ とじる</button></div>
     <section class="ipad-page" data-page="home">
       <div class="ipad-apps">
+        <button class="app" data-go="tutorial"><span class="icon purple">➜</span>チュートリアル</button>
         <button class="app" data-go="start"><span class="icon green">▶</span>ゲーム開始</button>
         <button class="app" data-go="recipe"><span class="icon orange">☰</span>レシピ</button>
         <button class="app" data-go="controls"><span class="icon blue">？</span>操作説明</button>
       </div>
       <p class="ipad-tip">ここでは時間制限なし。気がすむまで練習できます（右クリックでも閉じられます）</p>
+    </section>
+    <section class="ipad-page" data-page="tutorial" hidden>
+      <button class="back" data-go="home">‹ ホーム</button>
+      <h2>チュートリアル</h2>
+      <p class="ipad-tip">練習したいメニューをタップすると、厨房が最初の状態に戻り、作り方を矢印で順番に案内します。</p>
+      <div class="tut-now" hidden></div>
+      <div class="tut-list">${tutorialMenuHtml(cfg)}</div>
     </section>
     <section class="ipad-page" data-page="start" hidden>
       <button class="back" data-go="home">‹ ホーム</button>
@@ -71,6 +101,29 @@ function ipadHtml(gameSeconds: number): string {
   </div></div>`;
 }
 
+const START_POPUP_MS = 6000; // 練習キッチンに入った直後の案内を出しておく時間
+
+const UPCOMING_STEPS = 3; // いまの工程のあと、先に見せる工程の数
+
+function tutorialPanelHtml(v: TutorialView): string {
+  const total = v.labels.length;
+  const head = `<div class="tut-head"><span>チュートリアル</span><b>${v.menuName}</b></div>`;
+  if (v.done) {
+    return `${head}<div class="tut-complete">✔ 完成！おつかれさま</div>
+      <div class="tut-hint">iPad の「チュートリアル」から、ほかのメニューも練習できます</div>`;
+  }
+  const finished = v.step > 0 ? `<div class="tut-finished">✔ ${v.step}工程 完了</div>` : '';
+  const upcoming = v.labels
+    .slice(v.step + 1, v.step + 1 + UPCOMING_STEPS)
+    .map((t) => `<div class="tut-arrow">↓</div><div class="tut-step">${t}</div>`)
+    .join('');
+  const rest = total - (v.step + 1 + UPCOMING_STEPS);
+  const more = rest > 0 ? `<div class="tut-arrow">↓</div><div class="tut-more">…あと${rest}工程</div>` : '';
+  return `${head}${finished}
+    <div class="tut-step now"><span class="tut-no">${v.step + 1}/${total}</span>${v.labels[v.step]}${v.progress ? `<span class="tut-progress">（${v.progress}）</span>` : ''}</div>
+    ${v.hint ? `<div class="tut-hint">${v.hint}</div>` : ''}${upcoming}${more}`;
+}
+
 function formatTime(sec: number): string {
   const s = Math.max(0, Math.ceil(sec));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -89,8 +142,14 @@ export class Hud {
   private overlay = el('div', 'overlay');
   private crosshair = el('div', 'crosshair');
   private note = el('div', 'practice-note');
+  private startPopup = el('div', 'start-popup hidden');
+  private startPopupTimer = 0;
   private ipad = el('div', 'ipad hidden');
   private ipadWasOpen = false;
+  private ipadTutorialNow = '';
+  private ipadNow: HTMLElement | null = null;
+  private tutorial = el('div', 'tutorial hidden');
+  private lastTutorial = '';
   private root: HTMLElement;
   private lastRail = '';
   private lastPhase: Phase | null = null;
@@ -106,23 +165,37 @@ export class Hud {
     top.append(this.timer, this.score);
     this.guide.append(this.guideArrow, this.guideLabel);
     this.guideArrow.textContent = '▲';
-    this.note.textContent = '練習モード（時間制限なし）：後ろの壁の iPad を左クリックで取り、右クリックで開くと、ゲームを始められます';
-    this.ipad.innerHTML = ipadHtml(cfg.gameDuration);
-    root.append(top, this.note, this.rail, this.crosshair, this.hint, this.guide, this.hand, this.toast, this.ipad, this.overlay);
+    this.note.textContent = '練習モード（時間制限なし）：後ろの壁の iPad を左クリックで取り、右クリックで開くと、チュートリアルやゲーム開始ができます';
+    this.startPopup.textContent = 'まずは後ろのタブレットから操作方法とレシピを確認しよう！';
+    this.ipad.innerHTML = ipadHtml(cfg);
+    root.append(top, this.note, this.tutorial, this.rail, this.crosshair, this.hint, this.guide, this.hand, this.toast, this.startPopup, this.ipad, this.overlay);
     this.overlay.addEventListener('click', onOverlayClick);
 
     // iPad の画面：アプリを開く・戻る・ゲーム開始・閉じる。右クリックでも閉じる
     this.ipad.addEventListener('click', (e) => {
-      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-go], [data-act]');
+      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-go], [data-act], [data-tutorial]');
       if (!t) return;
       if (t.dataset.go) this.showIpadPage(t.dataset.go);
-      else if (t.dataset.act === 'start' || t.dataset.act === 'close') onIpad(t.dataset.act);
+      else if (t.dataset.tutorial) onIpad({ type: 'tutorial', menuId: t.dataset.tutorial });
+      else if (t.dataset.act === 'start' || t.dataset.act === 'close' || t.dataset.act === 'tutorialStop') onIpad({ type: t.dataset.act });
     });
     this.ipad.addEventListener('mousedown', (e) => {
       if (e.button !== 2) return;
       e.preventDefault();
-      onIpad('close');
+      onIpad({ type: 'close' });
     });
+  }
+
+  // 練習キッチンに入った直後のポップアップ。数秒で自然に消える（ポインターロック中でクリックできないため）
+  private showStartPopup(): void {
+    window.clearTimeout(this.startPopupTimer);
+    this.startPopup.classList.remove('hidden');
+    this.startPopupTimer = window.setTimeout(() => this.hideStartPopup(), START_POPUP_MS);
+  }
+
+  private hideStartPopup(): void {
+    window.clearTimeout(this.startPopupTimer);
+    this.startPopup.classList.add('hidden');
   }
 
   private showIpadPage(page: string): void {
@@ -144,9 +217,12 @@ export class Hud {
   }
 
   // hint: いま視点が合っている物に対する操作の案内（なければ空）
-  update(state: GameState, best: number, hint = ''): void {
+  // tutorial: チュートリアル中の工程の一覧（中でなければ null）
+  update(state: GameState, best: number, hint = '', tutorial: TutorialView | null = null): void {
     const practice = state.mode === 'practice';
     this.root.classList.toggle('practice', practice); // 練習中は、タイマーの代わりに「練習」を出して、スコアは隠す
+    this.root.classList.toggle('tutorial-on', tutorial !== null);
+    this.renderTutorial(tutorial);
     this.timer.textContent = practice ? '練習' : formatTime(this.cfg.gameDuration - state.time);
     this.timer.classList.toggle('low', !practice && this.cfg.gameDuration - state.time <= 30);
 
@@ -169,6 +245,30 @@ export class Hud {
     this.renderOverlay(state, best);
   }
 
+  // チュートリアルの工程の一覧：いまの工程を大きく、次からは矢印（↓）でつないで見せる。終わった工程は件数だけ
+  private renderTutorial(view: TutorialView | null): void {
+    this.tutorial.classList.toggle('hidden', view === null);
+    const key = view ? `${view.menuName}|${view.step}|${view.hint}|${view.progress}|${view.done}` : '';
+    if (key !== this.lastTutorial) {
+      this.lastTutorial = key;
+      if (view) this.tutorial.innerHTML = tutorialPanelHtml(view);
+    }
+    this.renderIpadTutorialNow(view);
+  }
+
+  // iPad のチュートリアル画面の上に出す、いま取り組んでいるメニューと「やめる」ボタン
+  private renderIpadTutorialNow(view: TutorialView | null): void {
+    const now = (this.ipadNow ??= this.ipad.querySelector<HTMLElement>('.tut-now'));
+    if (!now) return;
+    const html = view
+      ? `<span>「${view.menuName}」を練習中（${view.done ? '完了' : `${view.step + 1}/${view.labels.length}`}）</span><button data-act="tutorialStop">やめる</button>`
+      : '';
+    if (html === this.ipadTutorialNow) return;
+    this.ipadTutorialNow = html;
+    now.hidden = view === null;
+    now.innerHTML = html;
+  }
+
   private renderRail(state: GameState): void {
     const html = state.tickets
       .map((t) => {
@@ -187,7 +287,11 @@ export class Hud {
 
   private renderOverlay(state: GameState, best: number): void {
     if (state.phase === this.lastPhase) return;
+    const from = this.lastPhase;
     this.lastPhase = state.phase;
+    // タイトル／結果の「クリックで練習キッチンへ」を押した直後だけ、最初の案内を出す
+    if (state.phase === 'playing' && state.mode === 'practice' && (from === 'title' || from === 'result')) this.showStartPopup();
+    else if (state.phase !== 'playing') this.hideStartPopup();
     this.overlay.className = `overlay ${state.phase === 'playing' ? 'hidden' : ''}`;
 
     switch (state.phase) {

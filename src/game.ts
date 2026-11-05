@@ -22,6 +22,7 @@ import { canStackPack, createPack, findWarmPack, soakPack, stockItem } from './p
 import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
 import { serveScore } from './score';
 import { createTicket, nextTicketInterval, pickMenu } from './tickets';
+import { tutorialSteps, type GuideAt, type TutorialStep, type TutorialView } from './tutorial';
 import { BOTTLE_IDS, BOTTLE_PLATE, BOTTLE_SURFACES, BOTTLE_VERB } from './bottle';
 import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShelf, fridgeItemOf, returnToFridge } from './fridge';
 import { BOTTLE_HOME, SURFACES } from './layout';
@@ -61,6 +62,7 @@ export class Game {
       phase,
       mode,
       ipadOpen: false,
+      tutorial: null,
       time: 0,
       hand: null,
       boilers: Array.from({ length: this.cfg.boilerCount }, createBoiler),
@@ -125,6 +127,71 @@ export class Game {
     this.state.ipadOpen = false;
   }
 
+  // --- チュートリアル（練習キッチンで、選んだメニューを案内つきで作る）---
+
+  private tutorialCache = new Map<string, TutorialStep[] | null>();
+
+  private stepsOf(menuId: string): TutorialStep[] | null {
+    if (!this.tutorialCache.has(menuId)) this.tutorialCache.set(menuId, tutorialSteps(menuId, this.cfg));
+    return this.tutorialCache.get(menuId) ?? null;
+  }
+
+  // チュートリアルを始める。厨房は最初の状態に戻り（冷蔵庫の配置は引き継ぐ）、伝票はこのメニューの1枚だけ届いている。
+  // 手に持っていた iPad も壁に戻る。チュートリアルがないメニューなら何もせず false
+  startTutorial(menuId: string): boolean {
+    const steps = this.stepsOf(menuId);
+    if (!steps) return false;
+    this.state = this.initialState('playing', 'practice', this.carriedFridge());
+    const s = this.state;
+    s.tickets = [createTicket(s.nextTicketId++, getMenu(menuId), s.time)];
+    s.nextTicketAt = Infinity; // ほかの伝票は届かない
+    s.tutorial = { menuId, step: 0, total: steps.length };
+    return true;
+  }
+
+  // チュートリアルをやめる。厨房はそのまま、練習キッチンに戻る（伝票も、また届くようになる）
+  stopTutorial(): void {
+    const s = this.state;
+    if (!s.tutorial) return;
+    s.tutorial = null;
+    s.nextTicketAt = s.time + this.cfg.practiceTicketInterval;
+  }
+
+  // 終わった工程から次へ進める（戻らない）。いくつか続けて終わっていれば、まとめて進む
+  private advanceTutorial(): void {
+    const t = this.state.tutorial;
+    const steps = t && this.stepsOf(t.menuId);
+    if (!t || !steps || t.step >= steps.length) return;
+    while (t.step < steps.length && steps[t.step].done(this.state)) t.step++;
+    if (t.step >= steps.length) this.say(`${getMenu(t.menuId).name}のチュートリアル完了！`, 'good');
+  }
+
+  // 3D の矢印が指す先と、その一言（なければ null）。iPad を持っているときは、まず壁に戻すよう案内する
+  tutorialGuide(): { at: GuideAt; text: string } | null {
+    const s = this.state;
+    const t = s.tutorial;
+    const steps = t && this.stepsOf(t.menuId);
+    if (!t || !steps || t.step >= steps.length || s.phase !== 'playing') return null;
+    if (s.hand?.kind === 'ipad') return { at: { kind: 'ipadWall' }, text: 'iPadを壁に戻す（壁に向けて左クリック）' };
+    const step = steps[t.step];
+    const at = step.at(s);
+    if (!at) return null;
+    const progress = step.progress?.(s);
+    return { at, text: step.hint?.(s) || (progress ? `${step.label}（${progress}）` : step.label) };
+  }
+
+  // HUD の工程の一覧に出す内容（チュートリアル中でなければ null）
+  tutorialView(): TutorialView | null {
+    const s = this.state;
+    const t = s.tutorial;
+    const steps = t && this.stepsOf(t.menuId);
+    if (!t || !steps) return null;
+    const done = t.step >= steps.length;
+    const hint = done ? null : s.hand?.kind === 'ipad' ? 'iPadを壁に戻す（壁に向けて左クリック）' : (steps[t.step].hint?.(s) ?? null);
+    const progress = done ? null : (steps[t.step].progress?.(s) ?? null);
+    return { menuName: getMenu(t.menuId).name, labels: steps.map((x) => x.label), step: t.step, hint, progress, done };
+  }
+
   pause(): void {
     if (this.state.phase === 'playing') this.state.phase = 'paused';
   }
@@ -144,6 +211,7 @@ export class Game {
     for (const pot of s.ihBurners) if (pot) updateHeat(pot, dt); // 加熱が進むのはIHに載っている間だけ
     for (const thrown of s.thrownPots) stepThrownPot(thrown, dt, this.world);
     this.spawnTickets();
+    this.advanceTutorial();
 
     if (s.mode === 'game' && s.time >= this.cfg.gameDuration) {
       s.time = this.cfg.gameDuration;

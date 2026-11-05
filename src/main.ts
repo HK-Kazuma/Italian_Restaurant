@@ -74,12 +74,19 @@ const hud = new Hud(
   cfg,
   () => input.requestLock(),
   (action) => {
-    // iPad の画面から：ゲーム開始（最初の場所に戻り、操作説明を出す。クリックで始まる。冷蔵庫の配置は引き継ぐ）、または閉じて練習に戻る
-    if (action === 'start') {
+    // iPad の画面から：ゲーム開始（最初の場所に戻り、操作説明を出す。クリックで始まる。冷蔵庫の配置は引き継ぐ）、
+    // チュートリアルの開始（最初の場所で、厨房を作り直す）・中止、または閉じて練習に戻る
+    if (action.type === 'start') {
       game.getReady();
       player.reset();
       interactor.clear();
+    } else if (action.type === 'tutorial') {
+      if (!game.startTutorial(action.menuId)) return;
+      player.reset();
+      interactor.clear();
+      input.requestLock();
     } else {
+      if (action.type === 'tutorialStop') game.stopTutorial();
       game.closeIpad();
       input.requestLock();
     }
@@ -128,9 +135,16 @@ function hintFor(target: Target | null): string {
   return '';
 }
 
-// トレー・ケースを持っているとき、置き場が画面の外にあれば、画面の縁に向きを示す矢印を出す（見えていれば、3Dの印と矢印がある）
-function offscreenGuide(): { left: number; top: number; angle: number; label: string } | null {
-  const guide = kitchen.trayGuide(game.state);
+// チュートリアルの3Dの矢印を、いまの工程の指す先に出す（なければ消す）。矢印の先の位置と一言を返す
+function tutorialGuide(): { world: THREE.Vector3; label: string } | null {
+  const g = game.tutorialGuide();
+  const world = kitchen.setMarker(g?.at ?? null);
+  return g && world ? { world, label: g.text } : null;
+}
+
+// 案内したい場所（トレー・ケースの置き場、チュートリアルの指す先）が画面の外にあれば、画面の縁に向きを示す矢印を出す
+// （見えていれば、3Dの印と矢印がある）
+function offscreenGuide(guide: { world: THREE.Vector3; label: string } | null): { left: number; top: number; angle: number; label: string } | null {
   if (!guide) return null;
   const v = guide.world.clone().project(camera);
   let nx = v.x;
@@ -142,8 +156,8 @@ function offscreenGuide(): { left: number; top: number; angle: number; label: st
   }
   if (!behind && Math.abs(nx) < 0.9 && Math.abs(ny) < 0.85) return null;
   if (Math.abs(nx) < 1e-3 && Math.abs(ny) < 1e-3) ny = -1;
-  // 縁の少し内側に収める
-  const k = Math.max(Math.abs(nx) / 0.88, Math.abs(ny) / 0.8);
+  // 縁の少し内側に収める（横は、一言の文字がはみ出さないよう、さらに内側）
+  const k = Math.max(Math.abs(nx) / 0.76, Math.abs(ny) / 0.8);
   nx /= k;
   ny /= k;
   return { left: 50 + nx * 50, top: 50 - ny * 50, angle: Math.atan2(nx, ny), label: guide.label };
@@ -189,8 +203,9 @@ function frame(): void {
   if (game.state.phase === 'playing' && !game.state.ipadOpen) interactor.update(game);
   else interactor.clear();
   kitchen.sync(game.state, dt, game.previewBottle(interactor.current), game.previewFridge(interactor.current), interactor.current);
-  hud.update(game.state, best, hintFor(interactor.current));
-  hud.setGuide(game.state.phase === 'playing' ? offscreenGuide() : null);
+  const tutorial = tutorialGuide();
+  hud.update(game.state, best, hintFor(interactor.current), game.tutorialView());
+  hud.setGuide(game.state.phase === 'playing' && !game.state.ipadOpen ? offscreenGuide(kitchen.trayGuide(game.state) ?? tutorial) : null);
   renderer.render(kitchen.scene, camera);
   requestAnimationFrame(frame);
 }

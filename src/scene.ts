@@ -6,6 +6,7 @@ import { LAYOUT, LEFT_COUNTER, SURFACES, type Layout } from './layout';
 import { SAUCE_FILL_PER_UNIT, isNoodle } from './pot';
 import { plateLabel, potLabel } from './labels';
 import { Steam, type SteamOptions } from './steam';
+import { matchesTarget, type GuideAt } from './tutorial';
 import { type Rect, type World, rectAt } from './world';
 import { FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, FRIDGE_ITEM_SIZE, FRIDGE_SHELF_Y } from './fridge';
 import type { Boiler, BottleId, FridgeItemId, FridgePreview, FridgeShelf, NoodleKind, TrayId, BottlePreview, GameState, IngredientId, Item, Pot, SurfaceId, Target } from './types';
@@ -22,6 +23,9 @@ export type Kitchen = {
   handAnchor: THREE.Group; // カメラの子にする。手持ちの物の表示位置
   // トレー・ケースを手に持っているとき、サラダ台の置き場の位置と名前（HUD の矢印で使う）。持っていなければ null
   trayGuide: (state: GameState) => { world: THREE.Vector3; label: string } | null;
+  // チュートリアルの矢印を、指定した設備（または台の上の位置）の上に出す。null で消す。
+  // 矢印の先の位置（ワールド座標）を返す（画面の外にあるとき、HUD の縁の矢印で使う）。指す先が見つからなければ null
+  setMarker: (at: GuideAt | null) => THREE.Vector3 | null;
   // preview: 手に持ったボトルを置こうとしている場所（置く前の見せ方）。なければ null
   // fridgePreview: 冷蔵庫の中で持ち上げている物を、置こうとしている場所
   // hover: いま視点が合っている設備。鍋・皿の中身の名前を、視点を合わせたときだけ出すために使う
@@ -1848,6 +1852,43 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     }
   };
 
+  // --- チュートリアルの矢印：指す設備の真上で、上下に揺れる。壁や台に隠れても見えるようにしておく ---
+  const marker = new THREE.Group();
+  const markerArrow = new THREE.Group(); // 先が下。y = 0 が矢印の先
+  {
+    const markerMat = new THREE.MeshBasicMaterial({ color: 0xffd23f, depthTest: false, transparent: true });
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2, 16), markerMat);
+    head.rotation.x = Math.PI; // 先を下へ
+    head.position.y = 0.1;
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.22, 12), markerMat);
+    shaft.position.y = 0.31;
+    markerArrow.add(head, shaft);
+    markerArrow.traverse((o) => (o.renderOrder = 1000));
+  }
+  marker.add(markerArrow);
+  marker.visible = false;
+  scene.add(marker);
+
+  // 矢印が指す設備の位置：その設備の見えている部分の、真上（天面の中心）。設備は動く（かごの上下など）ので、毎フレーム調べる
+  const markerBox = new THREE.Box3();
+  const markerPart = new THREE.Box3();
+  const guidePosition = (at: GuideAt): THREE.Vector3 | null => {
+    if (at.kind === 'surfaceSpot') {
+      const o = surfaceOrigin(at.surface);
+      return new THREE.Vector3(o.x + at.x, 0.9, o.z + at.z);
+    }
+    const root = interactables.find((r) => r.userData[TARGET_KEY] && matchesTarget(r.userData[TARGET_KEY] as Target, at));
+    if (!root) return null;
+    root.updateWorldMatrix(true, true);
+    markerBox.makeEmpty();
+    root.traverseVisible((o) => {
+      if (o instanceof THREE.Mesh) markerBox.union(markerPart.setFromObject(o));
+    });
+    if (markerBox.isEmpty()) return root.getWorldPosition(new THREE.Vector3());
+    const c = markerBox.getCenter(new THREE.Vector3());
+    return new THREE.Vector3(c.x, markerBox.max.y, c.z);
+  };
+
   // --- 毎フレームの同期 ---
   let guideTime = 0;
   const sync = (
@@ -1929,6 +1970,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
         g.arrow.position.y = 0.3 + 0.07 * Math.sin(guideTime * 4);
       }
     }
+    markerArrow.position.y = 0.1 + 0.06 * Math.sin(guideTime * 5);
     hotWaterSteam.update(steamDt, 0.35);
 
     boilerViews.forEach((v, i) => {
@@ -2033,5 +2075,13 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     return { world, label: TRAY_NAMES[hand.id] };
   };
 
-  return { scene, interactables, world, handAnchor, trayGuide, sync };
+  const setMarker = (at: GuideAt | null): THREE.Vector3 | null => {
+    const pos = at ? guidePosition(at) : null;
+    marker.visible = pos !== null;
+    if (!pos) return null;
+    marker.position.copy(pos);
+    return pos.clone().setY(pos.y + 0.4); // 矢印の中ほど（画面の縁の矢印は、この位置の向きを指す）
+  };
+
+  return { scene, interactables, world, handAnchor, trayGuide, setMarker, sync };
 }
