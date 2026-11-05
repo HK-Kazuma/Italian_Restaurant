@@ -117,7 +117,7 @@ function newTutorial(menuId: string) {
 function play(menuId: string, acts: Act[]) {
   const g = newTutorial(menuId);
   let lastStep = 0;
-  const label = () => `${menuId} 工程${g.state.tutorial!.step + 1}`;
+  const label = () => `${menuId} 工程${(g.state.tutorial?.step ?? -1) + 1}`;
   const expectArrowAt = (target: Target) => {
     const guide = g.tutorialGuide();
     expect(guide, `${label()}: 矢印が出ていない`).not.toBeNull();
@@ -134,7 +134,7 @@ function play(menuId: string, acts: Act[]) {
       g.interact(act);
     }
     g.update(0.01);
-    const step = g.state.tutorial!.step;
+    const step = g.state.tutorial?.step ?? Infinity; // 最後まで終わると、チュートリアルは自動で終わる
     expect(step, '工程は戻らない').toBeGreaterThanOrEqual(lastStep);
     lastStep = step;
   }
@@ -203,6 +203,15 @@ describe('チュートリアル：始め方', () => {
     expect(g.tutorialView()).toBeNull();
     g.update(cfg.practiceTicketInterval);
     expect(g.state.tickets.length).toBeGreaterThan(1);
+  });
+
+  it('完了して終わったあとは、練習キッチンに戻る（伝票もまた届く）。もう一度始めることもできる', () => {
+    const g = play('tarako', SCRIPTS.tarako);
+    expect(g.state.tutorial).toBeNull();
+    g.update(cfg.practiceTicketInterval);
+    expect(g.state.tickets.length).toBe(1); // 新しい伝票が届いた（提供した伝票は消えている）
+    expect(g.startTutorial('tarako')).toBe(true);
+    expect(g.state.tutorial).toMatchObject({ step: 0 });
   });
 
   it('やり直すと、最初の工程に戻る', () => {
@@ -310,7 +319,6 @@ describe('チュートリアル：矢印と工程の進み方', () => {
     const v = g.tutorialView()!;
     expect(v.menuName).toBe('たらこのパスタ');
     expect(v.step).toBe(0);
-    expect(v.done).toBe(false);
     expect(v.labels).toEqual(tutorialSteps('tarako', cfg)!.map((s) => s.label));
   });
 
@@ -331,10 +339,10 @@ describe('チュートリアル：メニューを最後まで作る（矢印は�
       const g = play(m.id, script);
       expect(g.state.served).toBe(1);
       expect(g.state.mistakes).toBe(0);
-      const v = g.tutorialView()!;
-      expect(v.done).toBe(true);
-      expect(v.step).toBe(v.labels.length);
-      expect(g.tutorialGuide()).toBeNull(); // 完了したら、矢印は消える
+      expect(g.state.toast?.text).toBe(`${m.name}のチュートリアル完了！`);
+      expect(g.state.tutorial).toBeNull(); // 完了したら、自動で終わる
+      expect(g.tutorialView()).toBeNull(); // 工程の一覧も
+      expect(g.tutorialGuide()).toBeNull(); // 矢印も消える
     });
   }
 
@@ -390,7 +398,7 @@ describe('チュートリアル：メニューを最後まで作る（矢印は�
       g.update(0.01);
     }
     expect(g.state.served).toBe(1);
-    expect(g.tutorialView()!.done).toBe(true);
+    expect(g.state.tutorial).toBeNull();
   });
 });
 

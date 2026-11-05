@@ -50,10 +50,11 @@ export const FRIDGE_HOME: Record<FridgeItemId, FridgeSpot> = {
   spinachTray: { shelf: 3, x: 0.37, z: -0.22 },
   meatSauce: { shelf: 2, x: 0.37, z: 0.25 },
   tomatoSauce: { shelf: 2, x: 0.37, z: -0.2 },
-  carbonaraSauce: { shelf: 1, x: 0.37, z: 0.33 },
-  penne: { shelf: 1, x: 0.37, z: 0.1 },
-  cornSoup: { shelf: 1, x: 0.37, z: -0.12 },
-  saltOilCase: { shelf: 1, x: 0.62, z: -0.3 },
+  // 上から3段目（shelf 1）：奥行きをそろえ、物どうし・棚の左右の端との隙間がすべて 0.216 になるよう等間隔に並べる
+  carbonaraSauce: { shelf: 1, x: 0.37, z: 0.644 },
+  penne: { shelf: 1, x: 0.37, z: 0.258 },
+  cornSoup: { shelf: 1, x: 0.37, z: -0.128 },
+  saltOilCase: { shelf: 1, x: 0.37, z: -0.594 },
 };
 
 // 視点が合っている点を、物の大きさぶん棚板の内側に収める

@@ -587,12 +587,3 @@ button.tut-card:hover {
   color: #a9a294;
   font-size: 12px;
 }
-.tut-complete {
-  padding: 10px;
-  border-radius: 8px;
-  background: #34c759;
-  color: #04200c;
-  font-size: 18px;
-  font-weight: bold;
-  text-align: center;
-}

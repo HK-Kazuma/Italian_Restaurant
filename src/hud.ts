@@ -108,10 +108,6 @@ const UPCOMING_STEPS = 3; // いまの工程のあと、先に見せる工程の
 function tutorialPanelHtml(v: TutorialView): string {
   const total = v.labels.length;
   const head = `<div class="tut-head"><span>チュートリアル</span><b>${v.menuName}</b></div>`;
-  if (v.done) {
-    return `${head}<div class="tut-complete">✔ 完成！おつかれさま</div>
-      <div class="tut-hint">iPad の「チュートリアル」から、ほかのメニューも練習できます</div>`;
-  }
   const finished = v.step > 0 ? `<div class="tut-finished">✔ ${v.step}工程 完了</div>` : '';
   const upcoming = v.labels
     .slice(v.step + 1, v.step + 1 + UPCOMING_STEPS)
@@ -248,7 +244,7 @@ export class Hud {
   // チュートリアルの工程の一覧：いまの工程を大きく、次からは矢印（↓）でつないで見せる。終わった工程は件数だけ
   private renderTutorial(view: TutorialView | null): void {
     this.tutorial.classList.toggle('hidden', view === null);
-    const key = view ? `${view.menuName}|${view.step}|${view.hint}|${view.progress}|${view.done}` : '';
+    const key = view ? `${view.menuName}|${view.step}|${view.hint}|${view.progress}` : '';
     if (key !== this.lastTutorial) {
       this.lastTutorial = key;
       if (view) this.tutorial.innerHTML = tutorialPanelHtml(view);
@@ -261,7 +257,7 @@ export class Hud {
     const now = (this.ipadNow ??= this.ipad.querySelector<HTMLElement>('.tut-now'));
     if (!now) return;
     const html = view
-      ? `<span>「${view.menuName}」を練習中（${view.done ? '完了' : `${view.step + 1}/${view.labels.length}`}）</span><button data-act="tutorialStop">やめる</button>`
+      ? `<span>「${view.menuName}」を練習中（${view.step + 1}/${view.labels.length}）</span><button data-act="tutorialStop">やめる</button>`
       : '';
     if (html === this.ipadTutorialNow) return;
     this.ipadTutorialNow = html;

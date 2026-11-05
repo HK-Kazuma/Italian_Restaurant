@@ -149,7 +149,7 @@ export class Game {
     return true;
   }
 
-  // チュートリアルをやめる。厨房はそのまま、練習キッチンに戻る（伝票も、また届くようになる）
+  // チュートリアルをやめる（最後まで終わったときも、これで終わる）。厨房はそのまま、練習キッチンに戻る（伝票も、また届くようになる）
   stopTutorial(): void {
     const s = this.state;
     if (!s.tutorial) return;
@@ -157,13 +157,16 @@ export class Game {
     s.nextTicketAt = s.time + this.cfg.practiceTicketInterval;
   }
 
-  // 終わった工程から次へ進める（戻らない）。いくつか続けて終わっていれば、まとめて進む
+  // 終わった工程から次へ進める（戻らない）。いくつか続けて終わっていれば、まとめて進む。
+  // 最後の工程まで終わったら、「完了」と知らせて、チュートリアルを自動で終える（矢印と工程の一覧は消える）
   private advanceTutorial(): void {
     const t = this.state.tutorial;
     const steps = t && this.stepsOf(t.menuId);
-    if (!t || !steps || t.step >= steps.length) return;
+    if (!t || !steps) return;
     while (t.step < steps.length && steps[t.step].done(this.state)) t.step++;
-    if (t.step >= steps.length) this.say(`${getMenu(t.menuId).name}のチュートリアル完了！`, 'good');
+    if (t.step < steps.length) return;
+    this.say(`${getMenu(t.menuId).name}のチュートリアル完了！`, 'good');
+    this.stopTutorial();
   }
 
   // 3D の矢印が指す先と、その一言（なければ null）。iPad を持っているときは、まず壁に戻すよう案内する
@@ -171,7 +174,7 @@ export class Game {
     const s = this.state;
     const t = s.tutorial;
     const steps = t && this.stepsOf(t.menuId);
-    if (!t || !steps || t.step >= steps.length || s.phase !== 'playing') return null;
+    if (!t || !steps || s.phase !== 'playing') return null;
     if (s.hand?.kind === 'ipad') return { at: { kind: 'ipadWall' }, text: 'iPadを壁に戻す（壁に向けて左クリック）' };
     const step = steps[t.step];
     const at = step.at(s);
@@ -186,10 +189,9 @@ export class Game {
     const t = s.tutorial;
     const steps = t && this.stepsOf(t.menuId);
     if (!t || !steps) return null;
-    const done = t.step >= steps.length;
-    const hint = done ? null : s.hand?.kind === 'ipad' ? 'iPadを壁に戻す（壁に向けて左クリック）' : (steps[t.step].hint?.(s) ?? null);
-    const progress = done ? null : (steps[t.step].progress?.(s) ?? null);
-    return { menuName: getMenu(t.menuId).name, labels: steps.map((x) => x.label), step: t.step, hint, progress, done };
+    const hint = s.hand?.kind === 'ipad' ? 'iPadを壁に戻す（壁に向けて左クリック）' : (steps[t.step].hint?.(s) ?? null);
+    const progress = steps[t.step].progress?.(s) ?? null;
+    return { menuName: getMenu(t.menuId).name, labels: steps.map((x) => x.label), step: t.step, hint, progress };
   }
 
   pause(): void {

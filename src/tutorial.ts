@@ -37,10 +37,9 @@ export type TutorialStep = {
 export type TutorialView = {
   menuName: string;
   labels: string[]; // 全工程の言い方
-  step: number; // いまの工程の番号（labels.length になったら完了）
+  step: number; // いまの工程の番号（最後まで終わると、チュートリアルごと終わるので、見えなくなる）
   hint: string | null; // いまの工程への一言
   progress: string | null; // いまの工程の進み具合（「1/2」など）
-  done: boolean;
 };
 
 // 実際の設備（Target）が、矢印の指定（spec）に当てはまるか。spec に書いた項目だけ比べる
