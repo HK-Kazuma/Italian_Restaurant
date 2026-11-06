@@ -185,7 +185,7 @@ describe('チュートリアル：始め方', () => {
     g.rightClick({ kind: 'stock', id: 'meatSauce', inFridge: true });
     g.rightClick({ kind: 'fridgeShelf', shelf: 3, x: 0.66, z: 0 });
     g.startTutorial('meat');
-    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 3, x: 0.66, z: 0 });
+    expect(g.state.fridgeItems.meatSauce).toEqual({ unit: 0, shelf: 3, x: 0.66, z: 0 });
   });
 
   it('ゲーム（本番）を始めると、チュートリアルは消える', () => {

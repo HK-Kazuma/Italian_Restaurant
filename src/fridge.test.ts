@@ -28,16 +28,21 @@ describe('冷蔵庫の中の物の最初の置き場所', () => {
 
 describe('fitsOnShelf', () => {
   it('同じ棚で重なれば置けず、接するだけなら置ける', () => {
-    const a = { id: 'meatSauce' as const, spot: { shelf: 1 as const, x: 0.4, z: 0 } };
+    const a = { id: 'meatSauce' as const, spot: { unit: 0 as const, shelf: 1 as const, x: 0.4, z: 0 } };
     const w = FRIDGE_ITEM_SIZE.meatSauce.hz + FRIDGE_ITEM_SIZE.tomatoSauce.hz;
-    expect(fitsOnShelf('tomatoSauce', { shelf: 1, x: 0.4, z: w - 0.01 }, [a])).toBe(false);
-    expect(fitsOnShelf('tomatoSauce', { shelf: 1, x: 0.4, z: w }, [a])).toBe(true);
-    expect(fitsOnShelf('tomatoSauce', { shelf: 2, x: 0.4, z: 0 }, [a])).toBe(true); // 別の棚
+    expect(fitsOnShelf('tomatoSauce', { unit: 0, shelf: 1, x: 0.4, z: w - 0.01 }, [a])).toBe(false);
+    expect(fitsOnShelf('tomatoSauce', { unit: 0, shelf: 1, x: 0.4, z: w }, [a])).toBe(true);
+    expect(fitsOnShelf('tomatoSauce', { unit: 0, shelf: 2, x: 0.4, z: 0 }, [a])).toBe(true); // 別の棚
+  });
+  it('別の冷蔵庫の同じ位置とは重ならない', () => {
+    const a = { id: 'meatSauce' as const, spot: { unit: 0 as const, shelf: 1 as const, x: 0.4, z: 0 } };
+    expect(fitsOnShelf('tomatoSauce', { unit: 0, shelf: 1, x: 0.4, z: 0 }, [a])).toBe(false);
+    expect(fitsOnShelf('tomatoSauce', { unit: 1, shelf: 1, x: 0.4, z: 0 }, [a])).toBe(true);
   });
   it('冷蔵庫は4段で、最下段にも置ける', () => {
     expect(FRIDGE_SHELF_Y).toHaveLength(4);
     expect(clampOnShelf('meatSauce', 0.4, 0).z).toBe(0);
-    expect(fitsOnShelf('meatSauce', { shelf: 0, x: 0.4, z: 0 }, [])).toBe(true);
+    expect(fitsOnShelf('meatSauce', { unit: 0, shelf: 0, x: 0.4, z: 0 }, [])).toBe(true);
   });
 });
 

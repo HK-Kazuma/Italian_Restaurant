@@ -30,7 +30,7 @@ import { BOTTLE_HOME, SURFACES } from './layout';
 import { OPEN_WORLD, launchPot, stepThrownPot, type ThrowAim } from './throw';
 import type { World } from './world';
 import { TRAY_CONTENT, TRAY_FRIDGE_ITEM, TRAY_IDS, TRAY_NAME, TRAY_ZONE, trayAt, trayOfFridgeItem } from './tray';
-import type { BottleId, BottlePreview, BottleSpot, FridgeItemId, FridgePreview, FridgeSpot, GameState, IngredientId, Item, Mode, Phase, Pot, Target, Toast, TrayId } from './types';
+import type { BottleId, BottlePreview, BottleSpot, FridgeItemId, FridgePreview, FridgeSpot, FridgeUnit, GameState, IngredientId, Item, Mode, Phase, Pot, Target, Toast, TrayId } from './types';
 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
 type Action = () => void;
@@ -69,7 +69,7 @@ export class Game {
       plateStyles: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => 'plate' as const),
       trays: Object.fromEntries(TRAY_IDS.map((id) => [id, 'fridge'])) as GameState['trays'],
       traySpot: Object.fromEntries(TRAY_IDS.map((id) => [id, 0])) as GameState['traySpot'],
-      fridgeOpen: false,
+      fridgeOpen: [false, false],
       fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...(fridge ?? FRIDGE_HOME)[id] }])) as Record<FridgeItemId, FridgeSpot>,
       moving: null,
       bottles: Object.fromEntries(BOTTLE_IDS.map((id) => [id, { ...BOTTLE_HOME[id] }])) as Record<BottleId, BottleSpot>,
@@ -282,13 +282,14 @@ export class Game {
       return;
     }
     const item = fridgeItemOf(target);
-    if (s.fridgeOpen && item && this.isInFridge(item)) {
+    if (item && this.isInFridge(item) && s.fridgeOpen[s.fridgeItems[item].unit]) {
       s.moving = item;
       this.say(`${FRIDGE_ITEM_NAME[item]}を持ち上げた（棚に視点を合わせて右クリックで置く）`, 'info');
       return;
     }
-    if (target && (target.kind === 'fridgeDoor' || target.kind === 'fridgeShelf' || item)) {
-      this.state.fridgeOpen = !this.state.fridgeOpen;
+    const unit = this.fridgeUnitOf(target);
+    if (unit !== null) {
+      s.fridgeOpen[unit] = !s.fridgeOpen[unit];
       return;
     }
     if (this.state.hand?.kind === 'bottle') {
@@ -296,6 +297,20 @@ export class Game {
       return;
     }
     this.discard();
+  }
+
+  // 視点が合っているものが、どちらの冷蔵庫か（扉・棚板・中の物。冷蔵庫でなければ null）。扉の開閉の対象を決める
+  fridgeUnitOf(target: Target | null): FridgeUnit | null {
+    if (!target) return null;
+    if (target.kind === 'fridgeDoor' || target.kind === 'fridgeShelf') return target.unit ?? 0;
+    const item = fridgeItemOf(target);
+    return item ? this.state.fridgeItems[item].unit : null; // 取ったトレー・ケースは、最後にあった冷蔵庫
+  }
+
+  // 冷蔵庫の中の物（stock / fridgeTray）が入っている冷蔵庫の扉が開いているか
+  private fridgeDoorOpenFor(target: Target): boolean {
+    const item = fridgeItemOf(target);
+    return item ? this.state.fridgeOpen[this.state.fridgeItems[item].unit] : false;
   }
 
   // 冷蔵庫の中にある物か（トレー・ケースは、取ったあとは冷蔵庫にない）
@@ -318,14 +333,14 @@ export class Game {
     if (!at) return null;
     const item = s.moving;
     const { x, z } = clampOnShelf(item, at.x, at.z);
-    const spot: FridgeSpot = { shelf: at.shelf, x, z };
+    const spot: FridgeSpot = { unit: at.unit, shelf: at.shelf, x, z };
     const others = FRIDGE_ITEM_IDS.filter((id) => this.isInFridge(id)).map((id) => ({ id, spot: s.fridgeItems[id] }));
-    return { item, shelf: at.shelf, x, z, valid: fitsOnShelf(item, spot, others) };
+    return { item, unit: at.unit, shelf: at.shelf, x, z, valid: fitsOnShelf(item, spot, others) };
   }
 
   // 視点が合っている物を、棚の上の点として読む。棚板ならその点、別の物ならその物の位置（＝重なるので置けない）。それ以外は null
   private shelfPointOf(target: Target | null): FridgeSpot | null {
-    if (target?.kind === 'fridgeShelf') return { shelf: target.shelf, x: target.x, z: target.z };
+    if (target?.kind === 'fridgeShelf') return { unit: target.unit ?? 0, shelf: target.shelf, x: target.x, z: target.z };
     const other = fridgeItemOf(target);
     return other && other !== this.state.moving && this.isInFridge(other) ? this.state.fridgeItems[other] : null;
   }
@@ -338,7 +353,7 @@ export class Game {
     if (this.shelfPointOf(target)) {
       const p = this.previewFridge(target);
       if (p?.valid) {
-        s.fridgeItems[item] = { shelf: p.shelf, x: p.x, z: p.z };
+        s.fridgeItems[item] = { unit: p.unit, shelf: p.shelf, x: p.x, z: p.z };
         s.moving = null;
         this.say(`${FRIDGE_ITEM_NAME[item]}を置いた`, 'info');
       } else {
@@ -451,7 +466,7 @@ export class Game {
         return () => (s.hand = { kind: 'plate', contents: [], style: target.style ?? 'plate' });
 
       case 'stock':
-        if (target.inFridge && !s.fridgeOpen) return null; // 扉が閉まっていると取れない
+        if (target.inFridge && !this.fridgeDoorOpenFor(target)) return null; // 扉が閉まっていると取れない
         if (s.moving && fridgeItemOf(target) === s.moving) return null; // 持ち上げ中の物は取れない
         if (!hand) return () => (s.hand = stockItem(target.id, this.cfg)); // お玉1杯・パック1つ・1掴みなど
         // コーンスープのパックだけ、クリックした回数だけ重ねて持てる（最大5つ）
@@ -460,7 +475,7 @@ export class Game {
 
       case 'fridgeTray':
         // 冷蔵庫の中のトレー・ケース。取って、サラダ台の置き場に置く
-        if (hand || !s.fridgeOpen || s.trays[target.id] !== 'fridge') return null;
+        if (hand || !this.fridgeDoorOpenFor(target) || s.trays[target.id] !== 'fridge') return null;
         if (s.moving && fridgeItemOf(target) === s.moving) return null; // 持ち上げ中の物は取れない
         return () => {
           s.hand = { kind: 'tray', id: target.id };
@@ -498,7 +513,7 @@ export class Game {
 
       case 'fridgeDoor':
         // 左クリックでは開かない（右クリックで開閉）。閉まっている間だけ案内を出す
-        if (s.fridgeOpen) return null;
+        if (s.fridgeOpen[target.unit ?? 0]) return null;
         return () => this.say('右クリックで冷蔵庫を開ける', 'info');
 
       case 'bottle': {

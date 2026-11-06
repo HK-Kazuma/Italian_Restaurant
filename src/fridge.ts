@@ -1,8 +1,8 @@
 import { TRAY_FRIDGE_ITEM } from './tray';
-import type { FridgeItemId, FridgeSpot, Target } from './types';
+import type { FridgeItemId, FridgeSpot, FridgeUnit, Target } from './types';
 
 // 冷蔵庫の中の物。右クリックで持ち上げて、棚の好きな場所に置き直せる（置き場所は state.fridgeItems）。
-// 座標は冷蔵庫の基準点（前面の中央）からの相対：x は奥行き（0 = 扉側、0.8 = 奥）、z は幅。
+// 座標は、物が入っている冷蔵庫（FridgeSpot.unit。冷蔵庫は2台ある）の基準点（前面の中央）からの相対：x は奥行き（0 = 扉側、0.8 = 奥）、z は幅。
 
 export const FRIDGE_ITEM_IDS: FridgeItemId[] = [
   'saladBase',
@@ -59,20 +59,20 @@ export const FRIDGE_ITEM_SIZE: Record<FridgeItemId, { hx: number; hz: number }> 
 
 // 最初の置き場所
 export const FRIDGE_HOME: Record<FridgeItemId, FridgeSpot> = {
-  saladBase: { shelf: 3, x: 0.37, z: 0.22 },
-  spinachTray: { shelf: 3, x: 0.37, z: -0.22 },
-  meatSauce: { shelf: 2, x: 0.37, z: 0.25 },
-  tomatoSauce: { shelf: 2, x: 0.37, z: -0.2 },
+  saladBase: { unit: 0, shelf: 3, x: 0.37, z: 0.22 },
+  spinachTray: { unit: 0, shelf: 3, x: 0.37, z: -0.22 },
+  meatSauce: { unit: 0, shelf: 2, x: 0.37, z: 0.25 },
+  tomatoSauce: { unit: 0, shelf: 2, x: 0.37, z: -0.2 },
   // 上から3段目（shelf 1）：奥行きをそろえ、物どうし・棚の左右の端との隙間がすべて 0.216 になるよう等間隔に並べる
-  carbonaraSauce: { shelf: 1, x: 0.37, z: 0.644 },
-  penne: { shelf: 1, x: 0.37, z: 0.258 },
-  cornSoup: { shelf: 1, x: 0.37, z: -0.128 },
-  saltOilCase: { shelf: 1, x: 0.37, z: -0.594 },
+  carbonaraSauce: { unit: 0, shelf: 1, x: 0.37, z: 0.644 },
+  penne: { unit: 0, shelf: 1, x: 0.37, z: 0.258 },
+  cornSoup: { unit: 0, shelf: 1, x: 0.37, z: -0.128 },
+  saltOilCase: { unit: 0, shelf: 1, x: 0.37, z: -0.594 },
   // 上段・中段の空いている両端に、小エビ・チキン（上段）とパンチェッタ・ソテーソース（中段）
-  shrimpTray: { shelf: 3, x: 0.37, z: 0.7 },
-  chickenTray: { shelf: 3, x: 0.37, z: -0.7 },
-  pancettaTray: { shelf: 2, x: 0.37, z: 0.7 },
-  sauteSauceCase: { shelf: 2, x: 0.37, z: -0.7 },
+  shrimpTray: { unit: 0, shelf: 3, x: 0.37, z: 0.7 },
+  chickenTray: { unit: 0, shelf: 3, x: 0.37, z: -0.7 },
+  pancettaTray: { unit: 0, shelf: 2, x: 0.37, z: 0.7 },
+  sauteSauceCase: { unit: 0, shelf: 2, x: 0.37, z: -0.7 },
 };
 
 // 視点が合っている点を、物の大きさぶん棚板の内側に収める
@@ -92,7 +92,7 @@ export function fitsOnShelf(
 ): boolean {
   const a = FRIDGE_ITEM_SIZE[id];
   return others.every((o) => {
-    if (o.id === id || o.spot.shelf !== spot.shelf) return true;
+    if (o.id === id || o.spot.unit !== spot.unit || o.spot.shelf !== spot.shelf) return true;
     const b = FRIDGE_ITEM_SIZE[o.id];
     const overlapX = Math.abs(o.spot.x - spot.x) < a.hx + b.hx - 1e-9;
     const overlapZ = Math.abs(o.spot.z - spot.z) < a.hz + b.hz - 1e-9;
@@ -117,7 +117,8 @@ export function returnToFridge(
   return result;
 }
 
-// from の近くで、ほかの物に重ならない場所を探す（同じ棚を先に、なければ近い棚から）。どこにも空きがなければ from のまま
+// from の近くで、ほかの物に重ならない場所を探す（同じ冷蔵庫の同じ棚を先に、なければ同じ冷蔵庫の近い棚、それでもなければもう1台の冷蔵庫）。
+// どこにも空きがなければ from のまま
 function findFreeSpot(
   id: FridgeItemId,
   from: FridgeSpot,
@@ -127,21 +128,24 @@ function findFreeSpot(
   const shelves = FRIDGE_SHELF_Y.map((_, i) => i as FridgeSpot['shelf']).sort(
     (a, b) => Math.abs(a - from.shelf) - Math.abs(b - from.shelf),
   );
-  for (const shelf of shelves) {
-    let best: FridgeSpot | null = null;
-    let bestDist = Infinity;
-    for (let x = SHELF_X.min; x <= SHELF_X.max; x += STEP) {
-      for (let z = SHELF_Z.min; z <= SHELF_Z.max; z += STEP) {
-        const c = clampOnShelf(id, x, z);
-        const spot: FridgeSpot = { shelf, x: c.x, z: c.z };
-        const dist = Math.hypot(spot.x - from.x, spot.z - from.z);
-        if (dist < bestDist && fitsOnShelf(id, spot, others)) {
-          best = spot;
-          bestDist = dist;
+  const units: FridgeUnit[] = from.unit === 0 ? [0, 1] : [1, 0];
+  for (const unit of units) {
+    for (const shelf of shelves) {
+      let best: FridgeSpot | null = null;
+      let bestDist = Infinity;
+      for (let x = SHELF_X.min; x <= SHELF_X.max; x += STEP) {
+        for (let z = SHELF_Z.min; z <= SHELF_Z.max; z += STEP) {
+          const c = clampOnShelf(id, x, z);
+          const spot: FridgeSpot = { unit, shelf, x: c.x, z: c.z };
+          const dist = Math.hypot(spot.x - from.x, spot.z - from.z);
+          if (dist < bestDist && fitsOnShelf(id, spot, others)) {
+            best = spot;
+            bestDist = dist;
+          }
         }
       }
+      if (best) return best;
     }
-    if (best) return best;
   }
   return { ...from };
 }

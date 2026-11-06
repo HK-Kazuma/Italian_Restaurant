@@ -495,7 +495,7 @@ describe('Game: 冷蔵庫の扉', () => {
   it('最初は閉まっていて、中の物は取れない', () => {
     const g = new Game(cfg, () => 0);
     g.start();
-    expect(g.state.fridgeOpen).toBe(false);
+    expect(g.state.fridgeOpen[0]).toBe(false);
     expect(g.planInteract(can)).toBeNull();
     expect(g.planInteract(saladBase)).toBeNull();
     g.interact(saladBase);
@@ -506,22 +506,22 @@ describe('Game: 冷蔵庫の扉', () => {
     const g = new Game(cfg, () => 0);
     g.start();
     g.rightClick(fridgeDoor);
-    expect(g.state.fridgeOpen).toBe(true);
+    expect(g.state.fridgeOpen[0]).toBe(true);
     g.interact(can);
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'meatSauce' });
 
     g.rightClick(fridgeShelf(1, 0, 0)); // 棚・扉・本体への右クリックは、扉の開閉。手の物は捨てない
-    expect(g.state.fridgeOpen).toBe(false);
+    expect(g.state.fridgeOpen[0]).toBe(false);
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'meatSauce' });
     g.rightClick(fridgeDoor);
-    expect(g.state.fridgeOpen).toBe(true);
+    expect(g.state.fridgeOpen[0]).toBe(true);
   });
 
   it('扉が閉まっているとき、中の物への右クリックは、扉を開ける（持ち上げない）', () => {
     const g = new Game(cfg, () => 0);
     g.start();
     g.rightClick(can);
-    expect(g.state.fridgeOpen).toBe(true);
+    expect(g.state.fridgeOpen[0]).toBe(true);
     expect(g.state.moving).toBeNull();
   });
 
@@ -530,14 +530,14 @@ describe('Game: 冷蔵庫の扉', () => {
     g.interact(can);
     g.rightClick(null);
     expect(g.state.hand).toBeNull();
-    expect(g.state.fridgeOpen).toBe(true); // 扉はそのまま
+    expect(g.state.fridgeOpen[0]).toBe(true); // 扉はそのまま
   });
 
   it('閉まっている冷蔵庫を左クリックしても開かない（案内だけ出る）', () => {
     const g = new Game(cfg, () => 0);
     g.start();
     g.interact(fridgeDoor);
-    expect(g.state.fridgeOpen).toBe(false);
+    expect(g.state.fridgeOpen[0]).toBe(false);
     expect(g.state.toast?.text).toContain('右クリック');
   });
 
@@ -1402,16 +1402,75 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
     g.rightClick(can);
     g.rightClick(fridgeShelf(3, 0.66, 0.0)); // 上段の右端の空き
     expect(g.state.moving).toBeNull();
-    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 3, x: 0.66, z: 0 });
+    expect(g.state.fridgeItems.meatSauce).toEqual({ unit: 0, shelf: 3, x: 0.66, z: 0 });
     g.interact(can); // 置き直したあとも、取れる
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'meatSauce' });
+  });
+
+  describe('2台目の冷蔵庫', () => {
+    const door2: Target = { kind: 'fridgeDoor', unit: 1 };
+    const shelf2 = (shelf: 0 | 1 | 2 | 3, x: number, z: number): Target => ({ kind: 'fridgeShelf', unit: 1, shelf, x, z });
+
+    it('最初は空で、扉は1台目と別々に開け閉めできる', () => {
+      const g = newGame(); // 1台目は開けてある
+      expect(g.state.fridgeOpen).toEqual([true, false]);
+      expect(Object.values(g.state.fridgeItems).every((s) => s.unit === 0)).toBe(true);
+      g.rightClick(door2);
+      expect(g.state.fridgeOpen).toEqual([true, true]);
+      g.rightClick(fridgeShelf(1, 0, 0)); // 棚板の unit 省略 = 1台目
+      expect(g.state.fridgeOpen).toEqual([false, true]);
+      g.rightClick(shelf2(2, 0.4, 0));
+      expect(g.state.fridgeOpen).toEqual([false, false]);
+    });
+
+    it('1台目の物を持ち上げて、2台目の棚に置ける。同じ位置でも1台目の物とは重ならない', () => {
+      const g = newGame();
+      g.rightClick(door2);
+      const home = { ...g.state.fridgeItems.meatSauce };
+      g.rightClick(can);
+      g.rightClick(shelf2(home.shelf, home.x, home.z));
+      expect(g.state.moving).toBeNull();
+      expect(g.state.fridgeItems.meatSauce).toEqual({ ...home, unit: 1 });
+      // 1台目のトマトソースがあった位置にも、2台目なら置ける（1台目の中なら重なって置けない）
+      g.rightClick(tomatoSauce);
+      expect(g.previewFridge(fridgeShelf(home.shelf, home.x, home.z))).toMatchObject({ unit: 0, valid: true }); // 缶が出たあとの1台目の空き
+      expect(g.previewFridge(shelf2(home.shelf, home.x, home.z))).toMatchObject({ unit: 1, valid: false }); // 2台目の缶と重なる
+      expect(g.previewFridge(shelf2(3, 0.37, 0))).toMatchObject({ unit: 1, valid: true });
+    });
+
+    it('物を取れるのは、それが入っている冷蔵庫の扉が開いている間だけ', () => {
+      const g = newGame();
+      g.rightClick(door2);
+      g.rightClick(can);
+      g.rightClick(shelf2(2, 0.37, 0)); // ミートソース缶を2台目へ
+      g.rightClick(fridgeDoor); // 1台目を閉める
+      expect(g.state.fridgeOpen).toEqual([false, true]);
+      expect(g.planInteract(can)).not.toBeNull(); // 缶は2台目にあり、2台目の扉は開いている
+      expect(g.planInteract(tomatoSauce)).toBeNull(); // トマトソースは1台目で、扉が閉まっている
+      g.rightClick(door2); // 2台目も閉める
+      expect(g.planInteract(can)).toBeNull();
+    });
+
+    it('2台目の中の物を右クリックすると、持ち上げる。閉まっていれば、2台目の扉の開閉になる', () => {
+      const g = newGame();
+      g.rightClick(door2);
+      g.rightClick(can);
+      g.rightClick(shelf2(2, 0.37, 0));
+      g.rightClick(can); // 開いている：持ち上げ
+      expect(g.state.moving).toBe('meatSauce');
+      g.rightClick(shelf2(2, 0.37, 0));
+      g.rightClick(door2); // 2台目の扉を閉める
+      g.rightClick(can); // 閉まっている：扉を開ける
+      expect(g.state.moving).toBeNull();
+      expect(g.state.fridgeOpen).toEqual([true, true]);
+    });
   });
 
   it('置く前に、置こうとしている場所と、置けるかどうかが分かる', () => {
     const g = newGame();
     expect(g.previewFridge(fridgeShelf(1, 0.4, 0))).toBeNull(); // 持ち上げていない
     g.rightClick(can);
-    expect(g.previewFridge(fridgeShelf(3, 0.66, 0))).toEqual({ item: 'meatSauce', shelf: 3, x: 0.66, z: 0, valid: true });
+    expect(g.previewFridge(fridgeShelf(3, 0.66, 0))).toEqual({ item: 'meatSauce', unit: 0, shelf: 3, x: 0.66, z: 0, valid: true });
     expect(g.previewFridge(fridgeDoor)).toBeNull(); // 棚板以外
   });
 
@@ -1464,7 +1523,7 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
     g.rightClick(null);
     expect(g.state.moving).toBeNull();
     expect(g.state.fridgeItems.meatSauce).toEqual(home);
-    expect(g.state.fridgeOpen).toBe(true); // 扉は閉まらない
+    expect(g.state.fridgeOpen[0]).toBe(true); // 扉は閉まらない
   });
 
   it('持ち上げている間の右クリックは、扉の開閉にも、手の物を捨てるのにも使われない', () => {
@@ -1472,7 +1531,7 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
     g.interact(tomatoSauce);
     g.rightClick(can);
     g.rightClick(fridgeDoor); // 棚以外：やめるだけ
-    expect(g.state.fridgeOpen).toBe(true);
+    expect(g.state.fridgeOpen[0]).toBe(true);
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'tomatoSauce' });
   });
 
@@ -1489,7 +1548,7 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
     g.interact(traySlot);
     g.rightClick(spinachTray); // 冷蔵庫にない
     expect(g.state.moving).toBeNull();
-    expect(g.state.fridgeOpen).toBe(false); // 扉の開閉になる
+    expect(g.state.fridgeOpen[0]).toBe(false); // 扉の開閉になる
   });
 
   it('取ったトレーのあとの空きには、ほかの物を置ける', () => {
@@ -1614,11 +1673,11 @@ describe('Game: 練習キッチンと iPad', () => {
     g.rightClick(can);
     expect(g.state.moving).toBe('meatSauce');
     g.rightClick(fridgeShelf(3, 0.66, 0));
-    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 3, x: 0.66, z: 0 });
+    expect(g.state.fridgeItems.meatSauce).toEqual({ unit: 0, shelf: 3, x: 0.66, z: 0 });
 
     g.start();
-    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 3, x: 0.66, z: 0 });
-    expect(g.state.fridgeOpen).toBe(false); // 扉の開け閉めは引き継がない
+    expect(g.state.fridgeItems.meatSauce).toEqual({ unit: 0, shelf: 3, x: 0.66, z: 0 });
+    expect(g.state.fridgeOpen[0]).toBe(false); // 扉の開け閉めは引き継がない
     expect(g.state.moving).toBeNull();
     expect(g.state.fridgeItems.tomatoSauce).toEqual(newGame().state.fridgeItems.tomatoSauce); // 動かしていない物はそのまま
   });
@@ -1630,13 +1689,13 @@ describe('Game: 練習キッチンと iPad', () => {
     g.rightClick(fridgeShelf(3, 0.66, 0));
     g.start();
     g.startPractice();
-    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 3, x: 0.66, z: 0 });
+    expect(g.state.fridgeItems.meatSauce).toEqual({ unit: 0, shelf: 3, x: 0.66, z: 0 });
   });
 
   it('動かしていなければ、最初の配置のまま', () => {
     const g = practice();
     g.start();
-    expect(g.state.fridgeItems.meatSauce).toEqual({ shelf: 2, x: 0.37, z: 0.25 });
+    expect(g.state.fridgeItems.meatSauce).toEqual({ unit: 0, shelf: 2, x: 0.37, z: 0.25 });
   });
 });
 

@@ -125,13 +125,13 @@ function carry(c: CarrySpec): TutorialStep {
     progress: c.progress,
     at: (s) => {
       if (c.holding(s)) return c.to(s);
-      if (c.fridge && !s.fridgeOpen) return FRIDGE_DOOR;
+      if (c.fridge && !s.fridgeOpen[0]) return FRIDGE_DOOR;
       return c.from(s);
     },
     hint: (s) => {
       const holding = c.holding(s);
       if (holding) return c.hint?.(s, true) ?? null;
-      if (c.fridge && !s.fridgeOpen) return '冷蔵庫の扉を右クリックで開ける';
+      if (c.fridge && !s.fridgeOpen[0]) return '冷蔵庫の扉を右クリックで開ける';
       if (s.hand) return '手がふさがっています（置くか、右クリックで捨てる）';
       return c.hint?.(s, false) ?? null;
     },
@@ -168,7 +168,7 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
   const openFridge: TutorialStep = {
     label: '冷蔵庫の扉を右クリックで開ける',
     at: () => FRIDGE_DOOR,
-    done: (s) => s.fridgeOpen,
+    done: (s) => s.fridgeOpen[0],
     hint: () => '冷蔵庫に視点を合わせて、右クリック',
   };
 

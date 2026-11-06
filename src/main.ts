@@ -159,9 +159,11 @@ function hintFor(target: Target | null): string {
     return '棚に視点を合わせて右クリックで置く（それ以外で右クリックすると、やめる）';
   }
   const item = fridgeItemOf(target);
-  if (item && game.state.fridgeOpen) return `右クリック：${FRIDGE_ITEM_NAME[item]}を持ち上げて、置き直す`;
-  if (target && (target.kind === 'fridgeDoor' || target.kind === 'fridgeShelf' || item)) {
-    return `右クリック：冷蔵庫の扉を${game.state.fridgeOpen ? '閉める' : '開ける'}`;
+  const unit = game.fridgeUnitOf(target);
+  if (unit !== null) {
+    const open = game.state.fridgeOpen[unit];
+    if (item && open) return `右クリック：${FRIDGE_ITEM_NAME[item]}を持ち上げて、置き直す`;
+    return `右クリック：冷蔵庫の扉を${open ? '閉める' : '開ける'}`;
   }
   return '';
 }

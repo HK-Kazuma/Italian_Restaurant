@@ -77,11 +77,14 @@ export type FridgeItemId =
 // 冷蔵庫の棚の番号。0 = 最下段、1 = 下段、2 = 中段、3 = 上段
 export type FridgeShelf = 0 | 1 | 2 | 3;
 
-// 冷蔵庫の中の置き場所。x, z は冷蔵庫の基準点（前面の中央）からの相対（x: 奥行き、z: 幅）
-export type FridgeSpot = { shelf: FridgeShelf; x: number; z: number };
+// 冷蔵庫は2台ある。0 = 最初からある冷蔵庫（物が入っている）、1 = 隣に増やした冷蔵庫（最初は空）。どちらも同じ大きさで、棚の段数も同じ
+export type FridgeUnit = 0 | 1;
+
+// 冷蔵庫の中の置き場所。unit = どちらの冷蔵庫か。x, z は、その冷蔵庫の基準点（前面の中央）からの相対（x: 奥行き、z: 幅）
+export type FridgeSpot = { unit: FridgeUnit; shelf: FridgeShelf; x: number; z: number };
 
 // 持ち上げた物を、いま視点が合っている棚に置くとしたときの様子（置く前の見せ方に使う）
-export type FridgePreview = { item: FridgeItemId; shelf: FridgeShelf; x: number; z: number; valid: boolean };
+export type FridgePreview = { item: FridgeItemId; unit: FridgeUnit; shelf: FridgeShelf; x: number; z: number; valid: boolean };
 
 export type BoilerState = 'empty' | 'set' | 'boiling' | 'lifted' | 'overdue' | 'shortBoil';
 
@@ -156,8 +159,8 @@ export type Target =
   | { kind: 'noodleRack' }
   | { kind: 'plateStack'; style?: PlateStyle } // 皿の山。style 省略 = plate（小皿・スープ皿の山もある）
   | { kind: 'stock'; id: IngredientId; inFridge?: boolean } // クリックで手に取れる取り出し元（缶・パック・トッピングなど）。inFridge は冷蔵庫の中（扉が開いている間だけ取れる）
-  | { kind: 'fridgeDoor' } // 冷蔵庫（扉・本体）。右クリックで開閉
-  | { kind: 'fridgeShelf'; shelf: FridgeShelf; x: number; z: number } // 冷蔵庫の棚板。x, z は視点が合っている点（基準点からの相対）。物を置き直す場所を選ぶ
+  | { kind: 'fridgeDoor'; unit?: FridgeUnit } // 冷蔵庫（扉・本体）。右クリックで開閉。unit 省略 = 0（最初からある冷蔵庫）
+  | { kind: 'fridgeShelf'; unit?: FridgeUnit; shelf: FridgeShelf; x: number; z: number } // 冷蔵庫の棚板。x, z は視点が合っている点（その冷蔵庫の基準点からの相対）。物を置き直す場所を選ぶ。unit 省略 = 0
   | { kind: 'fridgeTray'; id: TrayId } // 冷蔵庫の中のトレー・ケース（扉が開いている間だけ取れる）
   | { kind: 'traySlot'; id: TrayZone; spot?: number } // サラダ台の上のトレー・ケース置き場。置いたものから、中身を1回分ずつ取れる。同じ区画の置き場が複数ある（id = 区画、spot = その番号、省略 = 0）
   | { kind: 'boilerBasket'; index: number }
@@ -201,7 +204,7 @@ export type GameState = {
   plateStyles: PlateStyle[]; // plateSlots と同じ並び。置いてある皿の種類
   trays: Record<TrayId, 'fridge' | 'hand' | 'table'>; // トレー・ケースの場所（冷蔵庫 / 手 / サラダ台）
   traySpot: Record<TrayId, number>; // サラダ台に置いてあるとき、その区画の何番目の置き場か（同じ区画の置き場が複数ある）
-  fridgeOpen: boolean; // 冷蔵庫の扉（最初は閉まっている）
+  fridgeOpen: [boolean, boolean]; // 冷蔵庫の扉（添字 = FridgeUnit。最初はどちらも閉まっている）
   fridgeItems: Record<FridgeItemId, FridgeSpot>; // 冷蔵庫の中の物の置き場所（トレー・ケースは、取ったあとは使わない）
   moving: FridgeItemId | null; // 右クリックで持ち上げている最中の物（手とは別。棚に右クリックで置く）
   bottles: Record<BottleId, BottleSpot>; // 台の上のボトル
