@@ -1,11 +1,11 @@
-import { BOTTLE_ACTION, BOTTLE_PLATE } from './bottle';
+import { BOTTLE_ACTION, BOTTLE_PLATE, isFridgeBottle } from './bottle';
 import type { GameConfig } from './config';
 import { INGREDIENTS } from './ingredients';
-import { BOTTLE_HOME } from './layout';
+import { BOTTLE_HOME, FREE_TRAY_HOME } from './layout';
 import { warmTime } from './pack';
 import { isNoodle } from './pot';
 import { getMenu, type MenuItem } from './recipe';
-import { TRAY_NAME, TRAY_ZONE, freeTraySpots } from './tray';
+import { TRAY_NAME, TRAY_ZONE, freeTraySpots, isFreeTray } from './tray';
 import type { BottleId, GameState, IngredientId, NoodleKind, Pot, SurfaceId, Target, TrayId } from './types';
 
 // チュートリアル：練習キッチンで、選んだメニューを「次はここ」と案内されながら作る。
@@ -241,19 +241,27 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
     done: (s) => s.ihBurners.some((p) => p !== null) || served(s),
   });
 
-  // 冷蔵庫のケース・トレーを、サラダ台の置き場に置く（矢印は、その種類を置ける空いている置き場を指す）
+  // 冷蔵庫のケース・トレーを、サラダ台の置き場に置く（矢印は、その種類を置ける空いている置き場を指す）。
+  // ガーリック・唐辛子の容器は置き場がなく、台の上のどこに置いてもよい（矢印は標準の場所を指す）
   const trayToTable = (id: TrayId) =>
     carry({
-      label: `${TRAY_NAME[id]}を取って、サラダ台の置き場に置く`,
+      label: isFreeTray(id) ? `${TRAY_NAME[id]}を取って、台の上に置く` : `${TRAY_NAME[id]}を取って、サラダ台の置き場に置く`,
       from: () => ({ kind: 'fridgeTray', id }),
       fridge: true,
       holding: (s) => s.hand?.kind === 'tray' && s.hand.id === id,
-      to: (s) => ({ kind: 'traySlot', id: TRAY_ZONE[id], spot: freeTraySpots(s, TRAY_ZONE[id])[0] }),
+      to: (s): GuideAt => {
+        const zone = TRAY_ZONE[id];
+        if (zone === null) return { kind: 'surfaceSpot', ...FREE_TRAY_HOME[id as keyof typeof FREE_TRAY_HOME] };
+        return { kind: 'traySlot', id: zone, spot: freeTraySpots(s, zone)[0] };
+      },
       done: (s) => s.trays[id] === 'table' || served(s),
     });
 
-  // 置き場に置いたトレー・ケース（置いた置き場を指す）
-  const trayPlaced = (id: TrayId) => (s: GameState): GuideAt => ({ kind: 'traySlot', id: TRAY_ZONE[id], spot: s.traySpot[id] });
+  // 置き場に置いたトレー・ケース（置いた置き場を指す。台の上に置いた容器は、その容器を指す）
+  const trayPlaced = (id: TrayId) => (s: GameState): GuideAt => {
+    const zone = TRAY_ZONE[id];
+    return zone === null ? { kind: 'tableTray', id: id as 'garlic' | 'chili' } : { kind: 'traySlot', id: zone, spot: s.traySpot[id] };
+  };
 
   // ソースの材料を、IHの鍋に入れる（n 回）。そろうと自動で加熱が始まる
   const sauceToPot = (id: IngredientId, n: number, from: GuideAt | ((s: GameState) => GuideAt), opts: { fridge?: boolean } = {}) => {
@@ -335,21 +343,28 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
       done: (s) => plateHasAny(s, [id]) || served(s),
     });
 
-  // ボトル：取って、皿に右クリックでかけ（振り）、元の場所に戻す。手を空けないと、皿を持てない
+  // ボトル：取って、皿に右クリックでかけ（振り）、元の場所に戻す。手を空けないと、皿を持てない。
+  // ドレッシング・パプリカパウダーは、冷蔵庫から取り出す（元の場所は、サラダ台の上）
   const bottle = (id: BottleId): TutorialStep => {
     const onPlate = (s: GameState) => plateHasAny(s, [id]);
     const holding = (s: GameState) => s.hand?.kind === 'bottle' && s.hand.id === id;
     const spot = BOTTLE_HOME[id];
     const plateTarget = (s: GameState) => (BOTTLE_PLATE[id] === 'salad' ? slotAt(plateIndex(s)) : plateAt(s));
+    const inFridge = (s: GameState) => isFridgeBottle(id) && s.bottles[id] === null && !holding(s);
     return {
       label: BOTTLE_ACTION[id],
       at: (s) => {
+        if (inFridge(s)) return s.fridgeOpen[0] ? { kind: 'fridgeBottle', id: id as 'dressing' | 'paprika' } : FRIDGE_DOOR;
         if (!holding(s)) return { kind: 'bottle', id };
         return onPlate(s) ? { kind: 'surfaceSpot', surface: spot.surface, x: spot.x, z: spot.z } : plateTarget(s);
       },
       done: (s) => (onPlate(s) && s.bottles[id] !== null) || served(s),
       hint: (s) => {
-        if (!holding(s)) return s.hand ? '手がふさがっています（置くか、右クリックで捨てる）' : 'ボトルを左クリックで取る';
+        if (!holding(s)) {
+          if (s.hand) return '手がふさがっています（置くか、右クリックで捨てる）';
+          if (inFridge(s) && !s.fridgeOpen[0]) return '冷蔵庫の扉を右クリックで開ける';
+          return 'ボトルを左クリックで取る';
+        }
         return onPlate(s) ? '元の場所に置く（台の上を左クリック）' : `皿に視点を合わせて、右クリック（${BOTTLE_ACTION[id]}）`;
       },
     };
@@ -469,10 +484,12 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.press,
     k.openFridge,
     k.trayToTable('saltOil'),
+    k.trayToTable('garlic'),
+    k.trayToTable('chili'),
     k.potToBurner,
     k.sauceToPot('saltOilSauce', 1, k.trayPlaced('saltOil')), // 置いた置き場を指す
-    k.sauceToPot('garlic', 1, stock('garlic')),
-    k.sauceToPot('chili', 1, stock('chili')),
+    k.sauceToPot('garlic', 1, k.trayPlaced('garlic')),
+    k.sauceToPot('chili', 1, k.trayPlaced('chili')),
     k.plate(),
     k.waitHeat,
     k.noodleOut('plate'),
@@ -503,12 +520,14 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
   penne: (k) => [
     k.openFridge,
     k.trayToTable('tomatoSauce'),
+    k.trayToTable('garlic'),
+    k.trayToTable('chili'),
     k.noodleToBasket('penne'),
     k.press,
     k.potToBurner,
     k.sauceToPot('tomatoSauce', 1, k.trayPlaced('tomatoSauce')),
-    k.sauceToPot('garlic', 1, stock('garlic')),
-    k.sauceToPot('chili', 1, stock('chili')),
+    k.sauceToPot('garlic', 1, k.trayPlaced('garlic')),
+    k.sauceToPot('chili', 1, k.trayPlaced('chili')),
     k.plate(),
     k.waitHeat,
     k.noodleOut('pot'),

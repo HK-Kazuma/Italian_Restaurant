@@ -1,3 +1,4 @@
+import { BOTTLE_FRIDGE_ITEM } from './bottle';
 import { TRAY_FRIDGE_ITEM } from './tray';
 import type { FridgeItemId, FridgeSpot, FridgeUnit, Target } from './types';
 
@@ -17,6 +18,10 @@ export const FRIDGE_ITEM_IDS: FridgeItemId[] = [
   'chickenTray',
   'pancettaTray',
   'sauteSauceCase',
+  'garlicBin',
+  'chiliBin',
+  'dressingBottle',
+  'paprikaBottle',
 ];
 
 export const FRIDGE_ITEM_NAME: Record<FridgeItemId, string> = {
@@ -32,6 +37,10 @@ export const FRIDGE_ITEM_NAME: Record<FridgeItemId, string> = {
   chickenTray: 'サラダチキン',
   pancettaTray: 'パンチェッタ',
   sauteSauceCase: 'ソテーソース',
+  garlicBin: 'ガーリック',
+  chiliBin: '唐辛子',
+  dressingBottle: 'ドレッシング',
+  paprikaBottle: 'パプリカパウダー',
 };
 
 // 棚（最下段・下段・中段・上段）の天板の高さ。添字 0 = 最下段（庫内の底）
@@ -55,6 +64,10 @@ export const FRIDGE_ITEM_SIZE: Record<FridgeItemId, { hx: number; hz: number }> 
   chickenTray: { hx: 0.2, hz: 0.2 },
   pancettaTray: { hx: 0.2, hz: 0.2 },
   sauteSauceCase: { hx: 0.15, hz: 0.17 },
+  garlicBin: { hx: 0.18, hz: 0.18 }, // ステンレスの丸い容器（半径 0.17）
+  chiliBin: { hx: 0.18, hz: 0.18 },
+  dressingBottle: { hx: 0.07, hz: 0.07 }, // ボトル（台の上と同じ 1.4 倍の大きさ）
+  paprikaBottle: { hx: 0.07, hz: 0.07 },
 };
 
 // 最初の置き場所
@@ -73,6 +86,12 @@ export const FRIDGE_HOME: Record<FridgeItemId, FridgeSpot> = {
   chickenTray: { unit: 0, shelf: 3, x: 0.37, z: -0.7 },
   pancettaTray: { unit: 0, shelf: 2, x: 0.37, z: 0.7 },
   sauteSauceCase: { unit: 0, shelf: 2, x: 0.37, z: -0.7 },
+  // 最下段：ガーリックと唐辛子の容器（取り出して、台の上の好きな場所に置く）
+  garlicBin: { unit: 0, shelf: 0, x: 0.37, z: 0.25 },
+  chiliBin: { unit: 0, shelf: 0, x: 0.37, z: -0.25 },
+  // 最下段の両はし：ドレッシングとパプリカパウダーのボトル（取り出して、サラダ台の上に置く）
+  dressingBottle: { unit: 0, shelf: 0, x: 0.37, z: 0.65 },
+  paprikaBottle: { unit: 0, shelf: 0, x: 0.37, z: -0.65 },
 };
 
 // 視点が合っている点を、物の大きさぶん棚板の内側に収める
@@ -154,6 +173,7 @@ function findFreeSpot(
 export function fridgeItemOf(target: Target | null): FridgeItemId | null {
   if (!target) return null;
   if (target.kind === 'fridgeTray') return TRAY_FRIDGE_ITEM[target.id];
+  if (target.kind === 'fridgeBottle') return BOTTLE_FRIDGE_ITEM[target.id];
   if (target.kind === 'stock' && target.inFridge) {
     return (FRIDGE_ITEM_IDS as string[]).includes(target.id) ? (target.id as FridgeItemId) : null;
   }

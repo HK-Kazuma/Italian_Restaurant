@@ -10,7 +10,7 @@ import { Player } from './player';
 import { loadTutorialCleared, saveTutorialCleared } from './mission';
 import { createKitchen } from './scene';
 import { loadSettings, lookScale, saveSettings } from './settings';
-import { TRAY_ZONE, trayContentName } from './tray';
+import { TRAY_ZONE, isFreeTray, trayContentName } from './tray';
 import type { Target } from './types';
 import './style.css';
 
@@ -138,6 +138,13 @@ function hintFor(target: Target | null): string {
     return target?.kind === 'ipadWall' ? '左クリック：iPadを壁に戻す　右クリック：iPadを開く' : '右クリック：iPadを開く（壁に向けて左クリックで戻す）';
   }
   if (target?.kind === 'ipadWall') return game.state.mode === 'practice' && !hand ? '左クリック：iPadを取る' : '';
+  if (hand?.kind === 'tray' && isFreeTray(hand.id)) {
+    // ガーリック・唐辛子の容器：ボトルと同じように、台の上のどこにでも置ける
+    const p = game.previewFreeTray(target);
+    if (p?.valid) return '左クリック：ここに置く';
+    if (p) return 'ここには置けない（ほかの容器・ボトルに近すぎる）';
+    return '台の上の好きな場所に視点を合わせて、左クリックで置く';
+  }
   if (hand?.kind === 'tray') {
     if (target?.kind === 'traySlot') {
       if (target.id !== TRAY_ZONE[hand.id]) return 'この置き場には置けない（種類が違う）';
@@ -146,7 +153,7 @@ function hintFor(target: Target | null): string {
     return 'サラダ台の緑の印（矢印の先）に置く';
   }
   // 置いたトレー・ケース：左クリックで中身を取る、右クリックで持ち上げて置き直す
-  const placedTray = !hand ? game.trayAtSlot(target) : null;
+  const placedTray = !hand ? game.placedTrayOf(target) : null;
   if (placedTray) return `左クリック：${trayContentName(placedTray)}を取る　右クリック：持ち上げて、置き直す`;
   if (hand?.kind === 'bottle') {
     if (game.canUseBottleAt(target)) return `右クリック：${BOTTLE_ACTION[hand.id]}`;
@@ -251,7 +258,7 @@ function frame(): void {
   player.applyTo(camera);
   if (game.state.phase === 'playing' && !game.state.ipadOpen) interactor.update(game);
   else interactor.clear();
-  kitchen.sync(game.state, dt, game.previewBottle(interactor.current), game.previewFridge(interactor.current), interactor.current);
+  kitchen.sync(game.state, dt, game.previewPlacement(interactor.current), game.previewFridge(interactor.current), interactor.current);
   const tutorial = tutorialGuide();
   hud.update(game.state, best, hintFor(interactor.current), game.tutorialView());
   hud.setGuide(game.state.phase === 'playing' && !game.state.ipadOpen ? offscreenGuide(kitchen.trayGuide(game.state) ?? tutorial) : null);

@@ -1,4 +1,4 @@
-import type { BottleId, SurfaceId } from './types';
+import type { BottleId, FreeTrayId, SurfaceId } from './types';
 
 // 設備の置き場所。ここの数値を直すと、その設備が動く（保存すると開発サーバーが自動で読み込み直す）。
 //
@@ -67,4 +67,11 @@ export const BOTTLE_HOME: Record<BottleId, { surface: SurfaceId; x: number; z: n
   paprika: { surface: 'salad', x: -0.45, z: -1.25 },
   parsley: { surface: 'left', x: -0.4, z: 0.95 },
   blackPepper: { surface: 'left', x: -0.4, z: 1.45 }, // もとのトッピングの位置
+};
+
+// ガーリック・唐辛子の容器の、台の上の標準の置き場所（チュートリアルの矢印が指す。台の中心からの相対位置）。
+// 置く場所は自由に選べる。ここはもとの具材コーナーの位置
+export const FREE_TRAY_HOME: Record<FreeTrayId, { surface: SurfaceId; x: number; z: number }> = {
+  garlic: { surface: 'salad', x: 0.1, z: -0.15 },
+  chili: { surface: 'salad', x: 0.1, z: -0.6 },
 };

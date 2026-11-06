@@ -27,16 +27,22 @@ export type IngredientId =
 // 手に持って、皿にかける・振るボトル。決まった台の上に自由に置ける（置ける台は bottle.ts）
 export type BottleId = Extract<IngredientId, 'dressing' | 'paprika' | 'parsley' | 'blackPepper'>;
 
+// 最初は冷蔵庫にしまってあるボトル（取り出してから、台の上に置く）
+export type FridgeBottleId = Extract<BottleId, 'dressing' | 'paprika'>;
+
 // ボトルを置ける台。salad = 右のサラダ台、left = IHの左の台
 export type SurfaceId = 'salad' | 'left';
 
-// ボトルの置き場所。台の中心からの相対位置（x: 右、z: 手前）。null = 手に持っている
-export type BottleSpot = { surface: SurfaceId; x: number; z: number } | null;
+// 台の上の置き場所。台の中心からの相対位置（x: 右、z: 手前）
+export type TableSpot = { surface: SurfaceId; x: number; z: number };
 
-// 手に持ったボトルを、いま視点が合っている場所に置こうとしたときの様子（置く前の見せ方に使う）。
-// valid = false のとき、reason は置けない理由（gap: ほかのボトルに近すぎる、surface: この台には置けない）
+// ボトルの置き場所。null = 台の上にない（手に持っている、または冷蔵庫にしまってある）
+export type BottleSpot = TableSpot | null;
+
+// 手に持ったボトル（または、台の上のどこにでも置ける容器）を、いま視点が合っている場所に置こうとしたときの様子（置く前の見せ方に使う）。
+// valid = false のとき、reason は置けない理由（gap: ほかの物に近すぎる、surface: この台には置けない）
 export type BottlePreview = {
-  id: BottleId;
+  id: BottleId | FreeTrayId;
   surface: SurfaceId;
   x: number;
   z: number;
@@ -54,7 +60,11 @@ export type PlateStyle = 'plate' | 'small' | 'bowl';
 // 冷蔵庫から取ってサラダ台に置くトレー・ケース。spinach = ほうれん草のトレー、saltOil = 塩オイルソースのパックが入ったケース、
 // shrimp / chicken / pancetta = 小エビ・サラダチキン・パンチェッタのトレー、sauteSauce / tomatoSauce = ソテーソース・トマトソースのパックが入ったケース。
 // どれを置けるかは置き場の区画（TrayZone）で決まる（種類と区画の対応は tray.ts）
-export type TrayId = 'spinach' | 'saltOil' | 'shrimp' | 'chicken' | 'pancetta' | 'sauteSauce' | 'tomatoSauce';
+// garlic / chili = ガーリック・唐辛子のステンレスの容器。置き場（区画）はなく、ボトルと同じように台の上のどこにでも置ける（FreeTrayId）
+export type TrayId = 'spinach' | 'saltOil' | 'shrimp' | 'chicken' | 'pancetta' | 'sauteSauce' | 'tomatoSauce' | 'garlic' | 'chili';
+
+// 台の上のどこにでも置ける容器（置き場の区画を持たないトレー・ケース）。置き場所は state.freeTraySpot
+export type FreeTrayId = Extract<TrayId, 'garlic' | 'chili'>;
 
 // トレー置き場の区画。spinach・saltOil はその専用の置き場、topping = 小エビ・チキン・パンチェッタ・ソテーソース・トマトソースのどれでも置ける置き場
 export type TrayZone = 'spinach' | 'saltOil' | 'topping';
@@ -72,7 +82,11 @@ export type FridgeItemId =
   | 'shrimpTray'
   | 'chickenTray'
   | 'pancettaTray'
-  | 'sauteSauceCase';
+  | 'sauteSauceCase'
+  | 'garlicBin'
+  | 'chiliBin'
+  | 'dressingBottle'
+  | 'paprikaBottle';
 
 // 冷蔵庫の棚の番号。0 = 最下段、1 = 下段、2 = 中段、3 = 上段
 export type FridgeShelf = 0 | 1 | 2 | 3;
@@ -163,6 +177,8 @@ export type Target =
   | { kind: 'fridgeShelf'; unit?: FridgeUnit; shelf: FridgeShelf; x: number; z: number } // 冷蔵庫の棚板。x, z は視点が合っている点（その冷蔵庫の基準点からの相対）。物を置き直す場所を選ぶ。unit 省略 = 0
   | { kind: 'fridgeTray'; id: TrayId } // 冷蔵庫の中のトレー・ケース（扉が開いている間だけ取れる）
   | { kind: 'traySlot'; id: TrayZone; spot?: number } // サラダ台の上のトレー・ケース置き場。置いたものから、中身を1回分ずつ取れる。同じ区画の置き場が複数ある（id = 区画、spot = その番号、省略 = 0）
+  | { kind: 'fridgeBottle'; id: FridgeBottleId } // 冷蔵庫の中のボトル（ドレッシング・パプリカパウダー。扉が開いている間だけ取れる）
+  | { kind: 'tableTray'; id: FreeTrayId } // 台の上に置いた容器（ガーリック・唐辛子）。左クリックで1杯すくう、右クリックで持ち上げる
   | { kind: 'boilerBasket'; index: number }
   | { kind: 'boilerButton'; index: number }
   | { kind: 'plateSlot'; index: number }
@@ -204,6 +220,7 @@ export type GameState = {
   plateStyles: PlateStyle[]; // plateSlots と同じ並び。置いてある皿の種類
   trays: Record<TrayId, 'fridge' | 'hand' | 'table'>; // トレー・ケースの場所（冷蔵庫 / 手 / サラダ台）
   traySpot: Record<TrayId, number>; // サラダ台に置いてあるとき、その区画の何番目の置き場か（同じ区画の置き場が複数ある）
+  freeTraySpot: Record<FreeTrayId, TableSpot>; // 台の上のどこにでも置ける容器の置き場所（trays が 'table' のときだけ意味がある）
   fridgeOpen: [boolean, boolean]; // 冷蔵庫の扉（添字 = FridgeUnit。最初はどちらも閉まっている）
   fridgeItems: Record<FridgeItemId, FridgeSpot>; // 冷蔵庫の中の物の置き場所（トレー・ケースは、取ったあとは使わない）
   moving: FridgeItemId | null; // 右クリックで持ち上げている最中の物（手とは別。棚に右クリックで置く）

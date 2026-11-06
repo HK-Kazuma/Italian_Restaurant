@@ -37,6 +37,11 @@ const wait = (seconds: number): Act => ({ wait: seconds });
 const parsleyBack = table(-0.4, 0.95, 'left');
 const pepperBack = table(-0.4, 1.45, 'left');
 const saladBack = table(0.3, -0.5, 'salad');
+// ガーリック・唐辛子の容器は、台の上のどこに置いてもよい（矢印は標準の場所を指す）
+const fridgeBottle = (id: 'dressing' | 'paprika'): Target => ({ kind: 'fridgeBottle', id });
+const bin = (id: 'garlic' | 'chili'): Target => ({ kind: 'tableTray', id });
+const garlicHome = table(0.1, -0.15, 'salad');
+const chiliHome = table(0.1, -0.6, 'salad');
 
 // 洗い終わった鍋を、鍋置き場に戻す（最後の工程）
 const returnPot = (): Act[] => [wait(cfg.potWashTime + 1), washer, potSlot(0)];
@@ -63,8 +68,9 @@ const SCRIPTS: Record<string, Act[]> = {
     stock('cheese'), slot(0), slot(0), pass, ...returnPot(),
   ],
   peperoncino: [
-    rack, basket(0), button(0), { right: fridgeDoor }, fridgeTray('saltOil'), tray('saltOil'), potSlot(0), burner(0),
-    tray('saltOil'), burner(0), stock('garlic'), burner(0), stock('chili'), burner(0),
+    rack, basket(0), button(0), { right: fridgeDoor }, fridgeTray('saltOil'), tray('saltOil'),
+    fridgeTray('garlic'), { free: garlicHome }, fridgeTray('chili'), { free: chiliHome }, potSlot(0), burner(0),
+    tray('saltOil'), burner(0), bin('garlic'), burner(0), bin('chili'), burner(0),
     plateStack, slot(0), wait(cfg.boilTime + 1),
     basket(0), slot(0), burner(0), slot(0), washer,
     bottle('parsley'), { right: slot(0) }, { free: parsleyBack }, slot(0), pass, ...returnPot(),
@@ -78,8 +84,10 @@ const SCRIPTS: Record<string, Act[]> = {
     slot(0), pass, ...returnPot(),
   ],
   penne: [
-    { right: fridgeDoor }, fridgeTray('tomatoSauce'), topping(0), fridgeStock('penne'), basket(0), button(0), potSlot(0), burner(0),
-    topping(0), burner(0), stock('garlic'), burner(0), stock('chili'), burner(0),
+    { right: fridgeDoor }, fridgeTray('tomatoSauce'), topping(0),
+    fridgeTray('garlic'), { free: garlicHome }, fridgeTray('chili'), { free: chiliHome },
+    fridgeStock('penne'), basket(0), button(0), potSlot(0), burner(0),
+    topping(0), burner(0), bin('garlic'), burner(0), bin('chili'), burner(0),
     plateStack, slot(0), wait(cfg.penneBoilTime + 1),
     basket(0), burner(0), ...mix(), burner(0), slot(0), washer,
     bottle('parsley'), { right: slot(0) }, { free: parsleyBack }, slot(0), pass, ...returnPot(),
@@ -93,14 +101,14 @@ const SCRIPTS: Record<string, Act[]> = {
   ],
   shrimpSalad: [
     { right: fridgeDoor }, fridgeTray('shrimp'), topping(0), fridgeStock('saladBase'), saladSlot(0), topping(0), saladSlot(0),
-    bottle('dressing'), { right: saladSlot(0) }, { free: saladBack },
-    bottle('paprika'), { right: saladSlot(0) }, { free: table(0.3, -0.95, 'salad') },
+    fridgeBottle('dressing'), { right: saladSlot(0) }, { free: saladBack },
+    fridgeBottle('paprika'), { right: saladSlot(0) }, { free: table(0.3, -0.95, 'salad') },
     saladSlot(0), pass,
   ],
   chickenSalad: [
     { right: fridgeDoor }, fridgeTray('chicken'), topping(0), fridgeStock('saladBase'), saladSlot(0), topping(0), saladSlot(0),
-    bottle('dressing'), { right: saladSlot(0) }, { free: saladBack },
-    bottle('paprika'), { right: saladSlot(0) }, { free: table(0.3, -0.95, 'salad') },
+    fridgeBottle('dressing'), { right: saladSlot(0) }, { free: saladBack },
+    fridgeBottle('paprika'), { right: saladSlot(0) }, { free: table(0.3, -0.95, 'salad') },
     saladSlot(0), pass,
   ],
   cornSoup: [

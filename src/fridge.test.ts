@@ -55,6 +55,8 @@ describe('fridgeItemOf', () => {
     expect(fridgeItemOf({ kind: 'fridgeTray', id: 'chicken' })).toBe('chickenTray');
     expect(fridgeItemOf({ kind: 'fridgeTray', id: 'pancetta' })).toBe('pancettaTray');
     expect(fridgeItemOf({ kind: 'fridgeTray', id: 'sauteSauce' })).toBe('sauteSauceCase');
+    expect(fridgeItemOf({ kind: 'fridgeTray', id: 'garlic' })).toBe('garlicBin');
+    expect(fridgeItemOf({ kind: 'fridgeTray', id: 'chili' })).toBe('chiliBin');
   });
   it('冷蔵庫の外の物・ほかの対象は null', () => {
     expect(fridgeItemOf({ kind: 'stock', id: 'shrimp' })).toBeNull();
@@ -65,7 +67,7 @@ describe('fridgeItemOf', () => {
 
 describe('returnToFridge', () => {
   it('もとの場所が空いていれば、そのまま', () => {
-    const r = returnToFridge(FRIDGE_HOME, ['spinachTray', 'saltOilCase', 'shrimpTray', 'chickenTray', 'pancettaTray', 'sauteSauceCase', 'tomatoSauceCase']);
+    const r = returnToFridge(FRIDGE_HOME, ['spinachTray', 'saltOilCase', 'shrimpTray', 'chickenTray', 'pancettaTray', 'sauteSauceCase', 'tomatoSauceCase', 'garlicBin', 'chiliBin']);
     expect(r).toEqual(FRIDGE_HOME);
   });
   it('もとの場所にほかの物があれば、重ならない近くの場所へ', () => {

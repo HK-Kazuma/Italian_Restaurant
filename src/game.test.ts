@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG as cfg } from './config';
 import { FRIDGE_ITEM_IDS, fitsOnShelf } from './fridge';
 import { Game } from './game';
+import { BOTTLE_HOME } from './layout';
 import { getMenu } from './recipe';
 import { createTicket } from './tickets';
 import type { Target, TrayId } from './types';
@@ -28,6 +29,12 @@ function newGame() {
   const g = new Game(cfg, () => 0); // 伝票は先頭のメニュー（たらこ）になる
   g.start();
   g.rightClick(fridgeDoor);
+  // 冷蔵庫にしまってあるドレッシング・パプリカパウダーは、取り出して、サラダ台の上のもとの場所に置いておく
+  for (const id of ['dressing', 'paprika'] as const) {
+    const home = BOTTLE_HOME[id];
+    g.interact({ kind: 'fridgeBottle', id });
+    g.interact({ kind: 'tableTop', surface: home.surface, x: home.x, z: home.z });
+  }
   return g;
 }
 
@@ -548,8 +555,8 @@ describe('Game: 冷蔵庫の扉', () => {
   it('冷蔵庫の外の取り出し元は、扉が閉まっていても取れる', () => {
     const g = new Game(cfg, () => 0);
     g.start();
-    g.interact(garlic);
-    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'garlic' });
+    g.interact(cheese);
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'cheese' });
   });
 
   it('小エビ・チキン・パンチェッタ・ソテーソース・トマトソースは冷蔵庫の中にあり、扉が閉まっていると取れない', () => {
@@ -842,8 +849,18 @@ describe('Game: 進行', () => {
 
 const penneStock: Target = { kind: 'stock', id: 'penne', inFridge: true };
 const cornSoupStock: Target = { kind: 'stock', id: 'cornSoup', inFridge: true };
-const garlic: Target = { kind: 'stock', id: 'garlic' };
-const chili: Target = { kind: 'stock', id: 'chili' };
+// ガーリック・唐辛子の容器（冷蔵庫の最下段から取って、台の上に置く）
+const garlicBin = fridgeTray('garlic');
+const chiliBin = fridgeTray('chili');
+const garlic: Target = { kind: 'tableTray', id: 'garlic' }; // 台の上に置いた容器
+const chili: Target = { kind: 'tableTray', id: 'chili' };
+// 冷蔵庫のガーリック・唐辛子の容器を取って、サラダ台の上に置く（場所は台の中心からの相対）
+function putBins(g: Game, garlicAt = { x: 0.1, z: -0.15 }, chiliAt = { x: 0.1, z: -0.6 }) {
+  g.interact(garlicBin);
+  g.interact(table(garlicAt.x, garlicAt.z));
+  g.interact(chiliBin);
+  g.interact(table(chiliAt.x, chiliAt.z));
+}
 const sauteSauce = toppingSlot(1); // ソテーソースのケースを、トッピングの1番の置き場に置いたあと
 const spinachTray: Target = { kind: 'fridgeTray', id: 'spinach' };
 const saltOilCase: Target = { kind: 'fridgeTray', id: 'saltOil' };
@@ -860,6 +877,7 @@ describe('Game: ペンネアラビアータを1皿出す（Aパターン）', ()
   it('ペンネを茹で、トマトソース・ガーリック・唐辛子の鍋に入れ、皿にかけ、パセリを振って提供する', () => {
     const g = gameWithTicket('penne');
     putTopping(g, 'tomatoSauce', 1);
+    putBins(g);
     g.interact(potSlot(0));
     g.interact(burner(0));
     for (const stock of [tomatoSauce, garlic, chili]) {
@@ -1371,6 +1389,7 @@ describe('Game: ペペロンチーノを1皿出す（Bパターン）', () => {
     expect(g.planInteract(traySlot)).toBeNull(); // ほうれん草のトレーの置き場には置けない
     g.interact(caseSlot);
     expect(g.state.trays.saltOil).toBe('table');
+    putBins(g);
 
     g.interact(potSlot(0));
     g.interact(burner(0));
@@ -1576,18 +1595,18 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
 
   it('持ち上げている間の右クリックは、扉の開閉にも、手の物を捨てるのにも使われない', () => {
     const g = newGame();
-    g.interact(garlic);
+    g.interact(cheese);
     g.rightClick(can);
     g.rightClick(fridgeDoor); // 棚以外：やめるだけ
     expect(g.state.fridgeOpen[0]).toBe(true);
-    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'garlic' });
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'cheese' });
   });
 
   it('トレー・ケースも置き直せる。取ったあと（冷蔵庫にないとき）は持ち上げられない', () => {
     const g = newGame();
     g.rightClick(spinachTray);
     expect(g.state.moving).toBe('spinachTray');
-    g.rightClick(fridgeShelf(0, 0.7, 0.3)); // 下段の手前右の空き（棚の内側に収められる）
+    g.rightClick(fridgeShelf(0, 0.7, 0.7)); // 最下段の右はしの空き（ガーリック・唐辛子の容器と重ならない。棚の内側に収められる）
     expect(g.state.fridgeItems.spinachTray).toMatchObject({ shelf: 0 });
 
     g.interact(spinachTray); // 置き直した場所のまま、取れる
@@ -1803,8 +1822,9 @@ describe('Game: iPad からのゲーム開始（操作説明つき）', () => {
 
   it('練習で置き直したボトルの位置は、ゲームにも反映される。ほかの設備（鍋・皿・パックなど）は最初に戻る', () => {
     const g = practice();
-    g.interact({ kind: 'bottle', id: 'dressing' });
-    g.interact({ kind: 'tableTop', surface: 'salad', x: 0.3, z: 0.6 }); // サラダ台の別の場所に置く
+    g.rightClick(fridgeDoor);
+    g.interact({ kind: 'fridgeBottle', id: 'dressing' }); // 冷蔵庫から取り出す
+    g.interact({ kind: 'tableTop', surface: 'salad', x: 0.3, z: 0.6 }); // サラダ台の好きな場所に置く
     const moved = g.state.bottles.dressing;
     expect(moved).toMatchObject({ surface: 'salad', x: 0.3, z: 0.6 });
     g.interact({ kind: 'plateStack' });
@@ -1813,7 +1833,7 @@ describe('Game: iPad からのゲーム開始（操作説明つき）', () => {
 
     g.getReady();
     expect(g.state.bottles.dressing).toEqual(moved);
-    expect(g.state.bottles.paprika).toEqual(newGame().state.bottles.paprika); // 動かしていないボトルは最初の位置
+    expect(g.state.bottles.paprika).toBeNull(); // 取り出していないボトルは、冷蔵庫のまま
     expect(g.state.plateSlots[0]).toBeNull();
     g.begin();
     g.start();
@@ -1902,5 +1922,188 @@ describe('Game: 取り出した麺を茹で麺器のかごに戻す', () => {
     g.interact(basket(0)); // かごは使用中：麺は手に残り、かごも変わらない
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'noodle' });
     expect(g.state.boilers[0]).toMatchObject({ state: 'overdue', noodle: 'penne' });
+  });
+});
+
+describe('Game: ガーリック・唐辛子の容器（冷蔵庫から取って、ボトルと同じように台の上の好きな場所に置く）', () => {
+  it('最初は冷蔵庫の最下段に入っていて、扉が閉まっていると取れない', () => {
+    const g = new Game(cfg, () => 0);
+    g.start();
+    for (const id of ['garlic', 'chili'] as const) {
+      expect(g.state.trays[id]).toBe('fridge');
+      expect(g.planInteract(fridgeTray(id)), id).toBeNull();
+    }
+    expect(g.state.fridgeItems.garlicBin.shelf).toBe(0);
+    expect(g.state.fridgeItems.chiliBin.shelf).toBe(0);
+    g.rightClick(fridgeDoor);
+    g.interact(garlicBin);
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'garlic' });
+    expect(g.state.trays.garlic).toBe('hand');
+  });
+
+  it('台の天板の好きな場所に置ける。サラダ台にも、左の台にも置ける', () => {
+    const g = newGame();
+    g.interact(garlicBin);
+    g.interact(table(0.3, 0.5));
+    expect(g.state.hand).toBeNull();
+    expect(g.state.trays.garlic).toBe('table');
+    expect(g.state.freeTraySpot.garlic).toEqual({ surface: 'salad', x: 0.3, z: 0.5 });
+
+    g.interact(chiliBin);
+    g.interact(table(-0.2, 0.0, 'left'));
+    expect(g.state.freeTraySpot.chili).toEqual({ surface: 'left', x: -0.2, z: 0 });
+  });
+
+  it('置く前に、置こうとしている場所と、置けるかどうかが分かる。天板の縁は内側に収める', () => {
+    const g = newGame();
+    expect(g.previewFreeTray(table(0, 0))).toBeNull(); // 容器を持っていない
+    g.interact(garlicBin);
+    expect(g.previewFreeTray(table(0.1, 0.2))).toEqual({ id: 'garlic', surface: 'salad', x: 0.1, z: 0.2, valid: true });
+    expect(g.previewPlacement(table(0.1, 0.2))?.id).toBe('garlic');
+    expect(g.previewFreeTray({ kind: 'plateStack' })).toBeNull(); // 台の天板以外
+    const p = g.previewFreeTray(table(9, -9))!;
+    expect(p.x).toBeLessThan(0.75 - 0.17); // 容器が台からはみ出さない
+    expect(p.z).toBeGreaterThan(-1.5 + 0.17);
+  });
+
+  it('ほかの容器・ボトルに近すぎる場所には置けない（同じ台の上でだけ）', () => {
+    const g = newGame();
+    putBins(g, { x: 0.1, z: -0.15 }, { x: 0.1, z: 0.8 });
+    g.rightClick(garlic); // 持ち上げて、置き直す
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'garlic' });
+    expect(g.previewFreeTray(table(0.1, 0.8 + 0.2))?.reason).toBe('gap'); // 唐辛子の容器に近すぎる
+    expect(g.planInteract(table(0.1, 0.8 + 0.2))).toBeNull();
+    expect(g.previewFreeTray(table(0.1, 0.8 + 0.5))?.valid).toBe(true);
+    expect(g.previewFreeTray(table(0.1, 0.8 + 0.2, 'left'))?.valid).toBe(true); // 左の台なら関係ない
+    const dress = g.state.bottles.dressing!;
+    expect(g.previewFreeTray(table(dress.x + 0.1, dress.z))?.reason).toBe('gap'); // ボトルにも近すぎる
+  });
+
+  it('容器の近くにはボトルも置けない', () => {
+    const g = newGame();
+    putBins(g, { x: 0.1, z: -0.15 });
+    g.interact(paprika);
+    expect(g.previewBottle(table(0.1 + 0.1, -0.15))?.reason).toBe('gap');
+    expect(g.previewBottle(table(0.1 + 0.4, -0.15))?.valid).toBe(true);
+  });
+
+  it('置いた容器は、左クリックでお玉1杯ずつすくえる（なくならない）。手がふさがっていると取れない', () => {
+    const g = newGame();
+    putBins(g);
+    g.interact(garlic);
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'garlic' });
+    expect(g.planInteract(chili)).toBeNull(); // 手がふさがっている
+    g.discard();
+    g.interact(garlic);
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'garlic' });
+    g.discard();
+    g.interact(chili);
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'chili' });
+    expect(g.state.trays.garlic).toBe('table'); // 容器は台の上に残る
+  });
+
+  it('冷蔵庫にある間・手に持っている間は、台の上の容器としては取れない', () => {
+    const g = newGame();
+    expect(g.planInteract(garlic)).toBeNull(); // まだ冷蔵庫の中
+    g.interact(garlicBin);
+    expect(g.planInteract(garlic)).toBeNull(); // 手に持っている
+  });
+
+  it('右クリックで持ち上げて、別の場所に置き直せる。手がふさがっていると持ち上げられない', () => {
+    const g = newGame();
+    putBins(g);
+    g.interact(cheese);
+    g.rightClick(garlic);
+    expect(g.state.trays.garlic).toBe('table'); // 手がふさがっている（捨てる操作になる）
+    g.discard();
+
+    g.rightClick(garlic);
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'garlic' });
+    expect(g.state.trays.garlic).toBe('hand');
+    g.interact(table(-0.2, 0.9));
+    expect(g.state.trays.garlic).toBe('table');
+    expect(g.state.freeTraySpot.garlic).toEqual({ surface: 'salad', x: -0.2, z: 0.9 });
+  });
+
+  it('容器は捨てられない。トレー・ケースの置き場にも置けない', () => {
+    const g = newGame();
+    g.interact(garlicBin);
+    g.rightClick(null);
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'garlic' });
+    expect(g.planInteract(toppingSlot(0))).toBeNull();
+    expect(g.planInteract({ kind: 'traySlot', id: 'spinach' })).toBeNull();
+    expect(g.planInteract({ kind: 'traySlot', id: 'saltOil' })).toBeNull();
+  });
+
+  it('置いた場所は、次の練習・ゲームにも引き継がれる。手に持っていた容器は冷蔵庫に戻る', () => {
+    const g = newGame();
+    g.interact(garlicBin);
+    g.interact(table(0.3, 0.5));
+    g.interact(chiliBin); // 手に持ったまま
+    g.start();
+    expect(g.state.trays.garlic).toBe('table');
+    expect(g.state.freeTraySpot.garlic).toEqual({ surface: 'salad', x: 0.3, z: 0.5 });
+    expect(g.state.trays.chili).toBe('fridge');
+  });
+});
+
+describe('Game: ドレッシング・パプリカパウダーのボトルは冷蔵庫にしまってある', () => {
+  const fridgeBottle = (id: 'dressing' | 'paprika'): Target => ({ kind: 'fridgeBottle', id });
+
+  it('最初は冷蔵庫の最下段に入っていて、台の上にはない。扉が閉まっていると取れない', () => {
+    const g = new Game(cfg, () => 0);
+    g.start();
+    for (const id of ['dressing', 'paprika'] as const) {
+      expect(g.state.bottles[id], id).toBeNull();
+      expect(g.planInteract(fridgeBottle(id)), id).toBeNull();
+      expect(g.planInteract({ kind: 'bottle', id }), id).toBeNull();
+    }
+    expect(g.state.fridgeItems.dressingBottle.shelf).toBe(0);
+    expect(g.state.fridgeItems.paprikaBottle.shelf).toBe(0);
+    expect(g.state.bottles.parsley).not.toBeNull(); // パセリ・ブラックペッパーは最初から台の上
+  });
+
+  it('扉を開けて取り出し、台の上に置くと、ほかのボトルと同じように使える', () => {
+    const g = new Game(cfg, () => 0);
+    g.start();
+    g.rightClick(fridgeDoor);
+    g.interact(fridgeBottle('dressing'));
+    expect(g.state.hand).toEqual({ kind: 'bottle', id: 'dressing' });
+    expect(g.planInteract(fridgeBottle('dressing'))).toBeNull(); // 手に持っている間は、冷蔵庫の中にない
+    g.interact(table(0.2, 0.4));
+    expect(g.state.bottles.dressing).toEqual({ surface: 'salad', x: 0.2, z: 0.4 });
+    expect(g.planInteract(fridgeBottle('dressing'))).toBeNull(); // 台の上にある間も
+    g.interact(dressing); // 台の上から、また持てる
+    expect(g.state.hand).toEqual({ kind: 'bottle', id: 'dressing' });
+  });
+
+  it('手がふさがっていると取り出せない。置き直し（右クリック）はほかの物と同じようにできる', () => {
+    const g = new Game(cfg, () => 0);
+    g.start();
+    g.rightClick(fridgeDoor);
+    g.interact(cheese);
+    expect(g.planInteract(fridgeBottle('paprika'))).toBeNull();
+    g.discard();
+    g.rightClick(fridgeBottle('paprika'));
+    expect(g.state.moving).toBe('paprikaBottle');
+    g.rightClick({ kind: 'fridgeShelf', unit: 1, shelf: 2, x: 0.37, z: 0 }); // 2台目の冷蔵庫（空）の棚へ
+    expect(g.state.fridgeItems.paprikaBottle).toMatchObject({ unit: 1, shelf: 2, z: 0 });
+    g.rightClick({ kind: 'fridgeDoor', unit: 1 });
+    g.interact(fridgeBottle('paprika'));
+    expect(g.state.hand).toEqual({ kind: 'bottle', id: 'paprika' });
+  });
+
+  it('手に持ったまま次のゲームを始めると、冷蔵庫に戻る。台の上に置いたボトルは、そのまま', () => {
+    const g = new Game(cfg, () => 0);
+    g.startPractice();
+    g.rightClick(fridgeDoor);
+    g.interact(fridgeBottle('dressing'));
+    g.interact(table(0.2, 0.4));
+    g.interact(fridgeBottle('paprika')); // 手に持ったまま
+    g.start();
+    expect(g.state.bottles.dressing).toEqual({ surface: 'salad', x: 0.2, z: 0.4 });
+    expect(g.state.bottles.paprika).toBeNull();
+    g.rightClick(fridgeDoor);
+    expect(g.planInteract(fridgeBottle('paprika'))).not.toBeNull(); // 冷蔵庫から、また取り出せる
   });
 });

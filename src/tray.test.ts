@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FRIDGE_HOME, FRIDGE_ITEM_IDS } from './fridge';
 import {
+  FREE_TRAY_IDS,
   TRAY_CONTENT,
   TRAY_FRIDGE_ITEM,
   TRAY_IDS,
@@ -48,6 +49,15 @@ describe('トレー・ケースの決まり', () => {
     expect(TRAY_ZONE.spinach).toBe('spinach');
     expect(TRAY_ZONE.saltOil).toBe('saltOil');
     expect(TRAY_SPOT_COUNT).toEqual({ spinach: 1, saltOil: 3, topping: 5 });
+  });
+
+  it('ガーリック・唐辛子の容器は置き場（区画）を持たず、台の上のどこにでも置ける', () => {
+    expect(FREE_TRAY_IDS).toEqual(['garlic', 'chili']);
+    for (const id of FREE_TRAY_IDS) expect(TRAY_ZONE[id]).toBeNull();
+    expect(TRAY_CONTENT.garlic).toBe('garlic');
+    expect(trayContentName('garlic')).toBe('ガーリック');
+    expect(trayContentName('chili')).toBe('唐辛子');
+    expect(freeTraySpots(placement(), 'topping')).toEqual([0, 1, 2, 3, 4]); // 置き場の空きには数えない
   });
 });
 
