@@ -1,4 +1,5 @@
 import type { GameConfig } from './config';
+import { DIFFICULTIES, getDifficulty, isDifficulty, type Difficulty } from './difficulty';
 import { describeItem } from './game';
 import { INGREDIENTS } from './ingredients';
 import { MENU, getMenu } from './recipe';
@@ -17,10 +18,10 @@ const CONTROLS_HTML = `
   </table>
 `;
 
-// iPad の画面から選べる操作。start = ゲーム開始（操作説明を出して、クリックで始まる）、close = 画面を閉じて練習キッチンに戻る、
+// iPad の画面から選べる操作。start = 選んだ難易度でゲーム開始（操作説明を出して、クリックで始まる）、close = 画面を閉じて練習キッチンに戻る、
 // tutorial = そのメニューのチュートリアルを始める、tutorialStop = チュートリアルをやめる
 export type IpadAction =
-  | { type: 'start' }
+  | { type: 'start'; difficulty: Difficulty }
   | { type: 'close' }
   | { type: 'tutorial'; menuId: string }
   | { type: 'tutorialStop' };
@@ -59,6 +60,17 @@ function tutorialMenuHtml(cfg: GameConfig): string {
     .join('');
 }
 
+// ゲーム開始の難易度えらび：カードを押すと、その難易度でゲームの準備に入る
+function difficultyHtml(): string {
+  return DIFFICULTIES.map(
+    (d) => `<button class="diff-card ${d.id}" data-difficulty="${d.id}">
+      <span class="diff-name">${d.name}</span>
+      <span class="diff-tagline">${d.tagline}</span>
+      <span class="diff-summary">${d.summary}</span>
+    </button>`,
+  ).join('');
+}
+
 function ipadHtml(cfg: GameConfig): string {
   const gameSeconds = cfg.gameDuration;
   return `<div class="ipad-body"><div class="ipad-screen">
@@ -82,10 +94,9 @@ function ipadHtml(cfg: GameConfig): string {
     <section class="ipad-page" data-page="start" hidden>
       <button class="back" data-go="home">‹ ホーム</button>
       <h2>ゲーム開始</h2>
-      <p>${Math.round(gameSeconds / 60)}分間のタイムアタックを始めます。伝票は時間とともに届く間隔が短くなっていきます。</p>
-      <p>最初に立っていた場所に戻り、操作説明が出ます。クリックするとゲームが始まります。</p>
-      <p>冷蔵庫の中の物を置き直していれば、その配置のままゲームが始まります（取り出して具材コーナーに置いた物は、冷蔵庫の空いている場所に戻ります）。それ以外（鍋・皿・伝票など）は最初の状態に戻ります。</p>
-      <button class="go" data-act="start">ゲームを始める</button>
+      <p>${Math.round(gameSeconds / 60)}分間のタイムアタックです。伝票は時間とともに届く間隔が短くなっていきます。難易度を選ぶと、伝票の量と出てくる料理が変わります。</p>
+      <div class="diff-list">${difficultyHtml()}</div>
+      <p class="ipad-tip">選ぶと、最初に立っていた場所に戻り、操作説明が出ます。クリックするとゲームが始まります。冷蔵庫の中の物を置き直していれば、その配置のままです（鍋・皿・伝票などは最初の状態に戻ります）。</p>
     </section>
     <section class="ipad-page" data-page="recipe" hidden>
       <button class="back" data-go="home">‹ ホーム</button>
@@ -103,6 +114,7 @@ function ipadHtml(cfg: GameConfig): string {
 
 const START_POPUP_MS = 6000; // 練習キッチンに入った直後の案内を出しておく時間
 
+const RAIL_VISIBLE_TICKETS = 6; // 伝票を横に並べて見せる枚数。それを超えた分は6枚目の裏に重ねて「+x枚」と出す
 const UPCOMING_STEPS = 3; // いまの工程のあと、先に見せる工程の数
 
 function tutorialPanelHtml(v: TutorialView): string {
@@ -169,11 +181,12 @@ export class Hud {
 
     // iPad の画面：アプリを開く・戻る・ゲーム開始・閉じる。右クリックでも閉じる
     this.ipad.addEventListener('click', (e) => {
-      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-go], [data-act], [data-tutorial]');
+      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-go], [data-act], [data-tutorial], [data-difficulty]');
       if (!t) return;
       if (t.dataset.go) this.showIpadPage(t.dataset.go);
       else if (t.dataset.tutorial) onIpad({ type: 'tutorial', menuId: t.dataset.tutorial });
-      else if (t.dataset.act === 'start' || t.dataset.act === 'close' || t.dataset.act === 'tutorialStop') onIpad({ type: t.dataset.act });
+      else if (isDifficulty(t.dataset.difficulty)) onIpad({ type: 'start', difficulty: t.dataset.difficulty });
+      else if (t.dataset.act === 'close' || t.dataset.act === 'tutorialStop') onIpad({ type: t.dataset.act });
     });
     this.ipad.addEventListener('mousedown', (e) => {
       if (e.button !== 2) return;
@@ -266,14 +279,19 @@ export class Hud {
   }
 
   private renderRail(state: GameState): void {
-    const html = state.tickets
-      .map((t) => {
+    const visible = state.tickets.slice(0, RAIL_VISIBLE_TICKETS);
+    const hidden = state.tickets.length - visible.length;
+    const html = visible
+      .map((t, i) => {
         const menu = getMenu(t.menuId);
         const waited = Math.floor(state.time - t.arrivedAt);
         const urgency =
           waited >= this.cfg.speedBonusWindow * 0.8 ? 'late' : waited >= this.cfg.speedBonusWindow * 0.45 ? 'mid' : '';
         const items = menu.ingredients.map((id) => INGREDIENTS[id].name).join('・');
-        return `<div class="ticket ${urgency}"><div class="name">${menu.name}</div><div class="items">${items}</div><div class="wait">${waited}秒</div></div>`;
+        // 表示しきれない分は、いちばん右の伝票の裏に重ねて、枚数を「+x枚」で示す
+        const stack = i === RAIL_VISIBLE_TICKETS - 1 && hidden > 0 ? ' stacked' : '';
+        const more = stack ? `<div class="more">+${hidden}枚</div>` : '';
+        return `<div class="ticket ${urgency}${stack}"><div class="name">${menu.name}</div><div class="items">${items}</div><div class="wait">${waited}秒</div>${more}</div>`;
       })
       .join('');
     if (html === this.lastRail) return;
@@ -298,6 +316,7 @@ export class Hud {
         break;
       case 'ready':
         this.overlay.innerHTML = `<h1>ゲーム開始</h1>
+          ${state.difficulty ? `<p class="difficulty-now">難易度：<b>${getDifficulty(state.difficulty).name}</b></p>` : ''}
           <p>${Math.round(this.cfg.gameDuration / 60)}分間のタイムアタック。届く伝票をできるだけ多く、正確にさばこう。</p>${CONTROLS_HTML}
           <p class="cta">クリックでゲーム開始</p>`;
         break;
@@ -306,6 +325,7 @@ export class Hud {
         break;
       case 'result':
         this.overlay.innerHTML = `<h1>タイムアップ！</h1>
+          ${state.difficulty ? `<p class="difficulty-now">難易度：<b>${getDifficulty(state.difficulty).name}</b></p>` : ''}
           <p class="big">${state.score} 点</p>
           <p>${best <= state.score && state.score > 0 ? '🎉 ハイスコア更新！' : `ハイスコア ${best} 点`}</p>
           <p>提供 ${state.served} 皿 ／ 最大コンボ ${state.maxCombo} ／ 注文ミス ${state.mistakes}</p>

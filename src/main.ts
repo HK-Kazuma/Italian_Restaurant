@@ -77,7 +77,7 @@ const hud = new Hud(
     // iPad の画面から：ゲーム開始（最初の場所に戻り、操作説明を出す。クリックで始まる。冷蔵庫の配置は引き継ぐ）、
     // チュートリアルの開始（最初の場所で、厨房を作り直す）・中止、または閉じて練習に戻る
     if (action.type === 'start') {
-      game.getReady();
+      game.getReady(action.difficulty);
       player.reset();
       interactor.clear();
     } else if (action.type === 'tutorial') {

@@ -52,7 +52,7 @@ body {
   font-weight: bold;
 }
 
-/* 伝票は横一列（最大6枚）。左上のタイマー・スコアの右から画面の右端までを使い、被らないようにする */
+/* 伝票は横一列（見せるのは6枚まで。残りは6枚目の裏に重ねる）。左上のタイマー・スコアの右から画面の右端までを使い、被らないようにする */
 .rail {
   --rail-left: 440px; /* タイマー＋スコア（コンボ表示込み）の幅の分だけ空ける */
   --rail-right: 16px;
@@ -83,6 +83,40 @@ body {
   border-radius: 3px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   font-size: 12px;
+}
+/* 6枚を超えた分：6枚目の裏に伝票が重なっているように見せ、「+x枚」で枚数を示す */
+.ticket.stacked {
+  position: relative;
+  isolation: isolate;
+}
+.ticket.stacked::before,
+.ticket.stacked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: #e8e3cf;
+  border-top: 5px solid #b9b49c;
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.ticket.stacked::before {
+  transform: translate(5px, 4px);
+}
+.ticket.stacked::after {
+  z-index: -2;
+  background: #d6d1bb;
+  transform: translate(10px, 8px);
+}
+.ticket .more {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 0 6px;
+  background: #333;
+  color: #fff;
+  border-radius: 8px;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
 }
 .ticket.mid {
   border-top-color: #e6b422;
@@ -400,6 +434,54 @@ body {
 }
 .ipad .go:hover {
   filter: brightness(1.12);
+}
+/* ゲーム開始：難易度えらび */
+.diff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.ipad .diff-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 14px;
+  align-items: baseline;
+  padding: 12px 16px;
+  border: 0;
+  border-left: 8px solid var(--diff, #34c759);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.16);
+  text-align: left;
+}
+.ipad .diff-card:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+.diff-card.trial {
+  --diff: #34c759;
+}
+.diff-card.leading {
+  --diff: #ff9f0a;
+}
+.diff-card.associate {
+  --diff: #ff453a;
+}
+.diff-name {
+  font-size: 20px;
+  font-weight: bold;
+}
+.diff-tagline {
+  font-size: 14px;
+  color: #d8d2e8;
+}
+.diff-summary {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+.difficulty-now b {
+  color: #ffd166;
 }
 .recipe-list {
   display: grid;

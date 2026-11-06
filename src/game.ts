@@ -1,5 +1,6 @@
 import { createBoiler, pressButton, returnNoodle, setNoodle, startShortBoil, takeNoodle, updateBoiler } from './boiler';
 import { DEFAULT_CONFIG, type GameConfig } from './config';
+import { DEFAULT_DIFFICULTY, configFor, getDifficulty, type Difficulty } from './difficulty';
 import { INGREDIENTS } from './ingredients';
 import {
   addIngredient,
@@ -57,10 +58,11 @@ export class Game {
   }
 
   // fridge: 引き継ぐ冷蔵庫の中の物の置き場所（練習で置き直した配置を、ゲームにも反映する）。省略 = 最初の配置
-  private initialState(phase: Phase, mode: Mode, fridge?: Record<FridgeItemId, FridgeSpot>): GameState {
+  private initialState(phase: Phase, mode: Mode, fridge?: Record<FridgeItemId, FridgeSpot>, difficulty: Difficulty | null = null): GameState {
     return {
       phase,
       mode,
+      difficulty,
       ipadOpen: false,
       tutorial: null,
       time: 0,
@@ -80,7 +82,7 @@ export class Game {
       thrownPots: [],
       washer: createWasher(),
       tickets: [],
-      nextTicketAt: this.cfg.firstTicketAt,
+      nextTicketAt: configFor(this.cfg, difficulty).firstTicketAt,
       nextTicketId: 1,
       score: 0,
       combo: 0,
@@ -108,13 +110,14 @@ export class Game {
   }
 
   // ゲーム（5分間のタイムアタック）を始める。練習で置き直した冷蔵庫の配置は、そのまま引き継ぐ。それ以外は最初から
-  start(): void {
-    this.state = this.initialState('playing', 'game', this.carriedFridge());
+  start(difficulty: Difficulty = DEFAULT_DIFFICULTY): void {
+    this.state = this.initialState('playing', 'game', this.carriedFridge(), difficulty);
   }
 
-  // ゲームの準備（iPad から）：状態を最初に戻して、操作説明を出す。時間は進まず、begin() で始まる
-  getReady(): void {
-    this.state = this.initialState('ready', 'game', this.carriedFridge());
+  // ゲームの準備（iPad から）：状態を最初に戻して、操作説明を出す。時間は進まず、begin() で始まる。
+  // difficulty で伝票の量と出てくる料理が決まる
+  getReady(difficulty: Difficulty = DEFAULT_DIFFICULTY): void {
+    this.state = this.initialState('ready', 'game', this.carriedFridge(), difficulty);
   }
 
   // 操作説明を読み終えて、ゲームを始める
@@ -225,13 +228,16 @@ export class Game {
     const s = this.state;
     if (s.time < s.nextTicketAt) return;
     // 練習キッチン：一定の間隔で、上限（5枚）に達していない間だけ届く。ゲーム：だんだん間隔が短くなる
+    // （間隔・上限・出てくる料理は、選んだ難易度で変わる）
     const practice = s.mode === 'practice';
-    const max = practice ? this.cfg.practiceMaxTickets : this.cfg.maxOpenTickets;
+    const cfg = configFor(this.cfg, s.difficulty);
+    const weights = s.difficulty ? getDifficulty(s.difficulty).menuWeights : undefined;
+    const max = practice ? cfg.practiceMaxTickets : cfg.maxOpenTickets;
     if (s.tickets.length < max) {
-      s.tickets.push(createTicket(s.nextTicketId++, pickMenu(MENU, this.rng), s.time));
+      s.tickets.push(createTicket(s.nextTicketId++, pickMenu(MENU, this.rng, weights), s.time));
     }
-    const progress = s.time / this.cfg.gameDuration;
-    s.nextTicketAt = s.time + (practice ? this.cfg.practiceTicketInterval : nextTicketInterval(progress, this.cfg, this.rng));
+    const progress = s.time / cfg.gameDuration;
+    s.nextTicketAt = s.time + (practice ? cfg.practiceTicketInterval : nextTicketInterval(progress, cfg, this.rng));
   }
 
   // --- 操作 ---

@@ -1,3 +1,5 @@
+import type { Difficulty } from './difficulty';
+
 export type IngredientId =
   | 'noodle' // 茹で上がった麺
   | 'penne'
@@ -180,6 +182,7 @@ export type TutorialProgress = { menuId: string; step: number; total: number };
 export type GameState = {
   phase: Phase;
   mode: Mode;
+  difficulty: Difficulty | null; // ゲームの難易度（iPad で選ぶ）。練習キッチンは null
   ipadOpen: boolean; // iPad の画面を開いている間（マウスのカーソルが出て、視点は動かせない）
   tutorial: TutorialProgress | null; // チュートリアル中（練習キッチンで、選んだメニューを作り方の案内つきで作る）。なければ null
   time: number; // 経過時間（秒）

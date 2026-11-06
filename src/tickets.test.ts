@@ -22,4 +22,21 @@ describe('pickMenu', () => {
   it('enabled なメニューからだけ選ぶ', () => {
     for (const r of [0, 0.5, 0.999]) expect(pickMenu(MENU, () => r).enabled).toBe(true);
   });
+  it('重みが 0 の品は出ない', () => {
+    for (let i = 0; i < 100; i++) {
+      expect(pickMenu(MENU, () => i / 100, { tarako: 0 }).id).not.toBe('tarako');
+    }
+  });
+  it('重みの比率で選ばれる（2 : 1）', () => {
+    const only = MENU.filter((m) => m.id === 'tarako' || m.id === 'meat');
+    const weights = { tarako: 2, meat: 1 };
+    expect(pickMenu(only, () => 0, weights).id).toBe('tarako');
+    expect(pickMenu(only, () => 0.66, weights).id).toBe('tarako');
+    expect(pickMenu(only, () => 0.67, weights).id).toBe('meat');
+    expect(pickMenu(only, () => 0.999, weights).id).toBe('meat');
+  });
+  it('全部の重みが 0 なら選べない', () => {
+    const w = Object.fromEntries(MENU.map((m) => [m.id, 0]));
+    expect(() => pickMenu(MENU, () => 0, w)).toThrow();
+  });
 });

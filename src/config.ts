@@ -82,7 +82,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   ticketIntervalStart: 25,
   ticketIntervalEnd: 10,
   ticketIntervalJitter: 0.25,
-  maxOpenTickets: 6, // 画面に横一列で並べられる枚数に合わせる
+  maxOpenTickets: 10, // 画面に並べるのは6枚まで（hud.ts の RAIL_VISIBLE_TICKETS）。それを超えた分は6枚目の裏に重ねて「+x枚」と表示する
   practiceTicketInterval: 25,
   practiceMaxTickets: 5,
 
