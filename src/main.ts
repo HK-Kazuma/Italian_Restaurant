@@ -9,6 +9,7 @@ import { Interactor } from './interaction';
 import { Player } from './player';
 import { createKitchen } from './scene';
 import { loadSettings, lookScale, saveSettings } from './settings';
+import { TRAY_ZONE, trayContentName } from './tray';
 import type { Target } from './types';
 import './style.css';
 
@@ -130,9 +131,15 @@ function hintFor(target: Target | null): string {
   }
   if (target?.kind === 'ipadWall') return game.state.mode === 'practice' && !hand ? '左クリック：iPadを取る' : '';
   if (hand?.kind === 'tray') {
-    if (target?.kind === 'traySlot') return target.id === hand.id ? '左クリック：ここに置く' : 'この置き場には置けない（種類が違う）';
+    if (target?.kind === 'traySlot') {
+      if (target.id !== TRAY_ZONE[hand.id]) return 'この置き場には置けない（種類が違う）';
+      return game.trayAtSlot(target) ? 'この置き場は使用中（緑の印の空いている置き場に置く）' : '左クリック：ここに置く';
+    }
     return 'サラダ台の緑の印（矢印の先）に置く';
   }
+  // 置いたトレー・ケース：左クリックで中身を取る、右クリックで持ち上げて置き直す
+  const placedTray = !hand ? game.trayAtSlot(target) : null;
+  if (placedTray) return `左クリック：${trayContentName(placedTray)}を取る　右クリック：持ち上げて、置き直す`;
   if (hand?.kind === 'bottle') {
     if (game.canUseBottleAt(target)) return `右クリック：${BOTTLE_ACTION[hand.id]}`;
     const p = game.previewBottle(target);

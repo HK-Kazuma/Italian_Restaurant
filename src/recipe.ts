@@ -49,7 +49,8 @@ export const MENU: MenuItem[] = [
     ingredients: ['noodle', 'tomatoSauce', 'pancetta', 'cheese'],
     sauce: ['tomatoSauce', 'pancetta'],
     steps: [
-      "具材コーナーのトマトソース1杯と、パンチェッタ1掴みを鍋に入れる",
+      "冷蔵庫からパンチェッタのトレーを出して、サラダ台のトレー置き場に置く",
+      "冷蔵庫のトマトソースのパック1つと、パンチェッタ1掴みを鍋に入れる",
       "鍋をIHにセットして加熱",
       "麺が上がったら、加熱した鍋に麺を入れて混ぜる",
       "皿に盛り、粉チーズ1杯を振る",
@@ -112,7 +113,7 @@ export const MENU: MenuItem[] = [
     ingredients: ['spinach', 'spinach', 'pancetta', 'sauteSauce'],
     sauce: ['spinach', 'spinach', 'pancetta', 'sauteSauce'],
     steps: [
-      "冷蔵庫からほうれん草のトレーを取り、サラダ台に置く",
+      "冷蔵庫からほうれん草のトレー、パンチェッタのトレー、ソテーソースのケースを取り、サラダ台の置き場に置く",
       "トングでほうれん草を2掴み、鍋に入れる",
       "パンチェッタ1掴みと、ソテーソースのパックを鍋に入れる",
       "鍋をIHにセットして加熱",
@@ -129,7 +130,8 @@ export const MENU: MenuItem[] = [
     ingredients: ['saladBase', 'shrimp', 'dressing', 'paprika'],
     steps: [
       "冷蔵庫からサラダベースを取り、サラダ台に置く",
-      "具材コーナーの小エビを1杯、サラダに盛る",
+      "冷蔵庫から小エビのトレーを出して、サラダ台のトレー置き場に置く",
+      "トレーの小エビをお玉1杯、サラダに盛る",
       "ドレッシングをかける",
       "パプリカパウダーを振る",
     ],
@@ -143,7 +145,8 @@ export const MENU: MenuItem[] = [
     ingredients: ['saladBase', 'chicken', 'dressing', 'paprika'],
     steps: [
       "冷蔵庫からサラダベースを取り、サラダ台に置く",
-      "具材コーナーのサラダチキンをトング1掴み、サラダに盛る",
+      "冷蔵庫からサラダチキンのトレーを出して、サラダ台のトレー置き場に置く",
+      "トレーのサラダチキンをトング1掴み、サラダに盛る",
       "ドレッシングをかける",
       "パプリカパウダーを振る",
     ],

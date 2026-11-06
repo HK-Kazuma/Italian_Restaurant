@@ -5,6 +5,7 @@ import { BOTTLE_HOME } from './layout';
 import { warmTime } from './pack';
 import { isNoodle } from './pot';
 import { getMenu, type MenuItem } from './recipe';
+import { TRAY_NAME, TRAY_ZONE, freeTraySpots } from './tray';
 import type { BottleId, GameState, IngredientId, NoodleKind, Pot, SurfaceId, Target, TrayId } from './types';
 
 // チュートリアル：練習キッチンで、選んだメニューを「次はここ」と案内されながら作る。
@@ -240,16 +241,19 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
     done: (s) => s.ihBurners.some((p) => p !== null) || served(s),
   });
 
-  // 冷蔵庫のケース・トレーを、サラダ台の置き場に置く
-  const trayToTable = (id: TrayId, name: string) =>
+  // 冷蔵庫のケース・トレーを、サラダ台の置き場に置く（矢印は、その種類を置ける空いている置き場を指す）
+  const trayToTable = (id: TrayId) =>
     carry({
-      label: `${name}を取って、サラダ台の置き場に置く`,
+      label: `${TRAY_NAME[id]}を取って、サラダ台の置き場に置く`,
       from: () => ({ kind: 'fridgeTray', id }),
       fridge: true,
       holding: (s) => s.hand?.kind === 'tray' && s.hand.id === id,
-      to: () => ({ kind: 'traySlot', id }),
+      to: (s) => ({ kind: 'traySlot', id: TRAY_ZONE[id], spot: freeTraySpots(s, TRAY_ZONE[id])[0] }),
       done: (s) => s.trays[id] === 'table' || served(s),
     });
+
+  // 置き場に置いたトレー・ケース（置いた置き場を指す）
+  const trayPlaced = (id: TrayId) => (s: GameState): GuideAt => ({ kind: 'traySlot', id: TRAY_ZONE[id], spot: s.traySpot[id] });
 
   // ソースの材料を、IHの鍋に入れる（n 回）。そろうと自動で加熱が始まる
   const sauceToPot = (id: IngredientId, n: number, from: GuideAt | ((s: GameState) => GuideAt), opts: { fridge?: boolean } = {}) => {
@@ -322,10 +326,10 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
   });
 
   // 具材・トッピングを取って、皿にのせる
-  const top = (id: IngredientId, from?: GuideAt) =>
+  const top = (id: IngredientId, from?: GuideAt | ((s: GameState) => GuideAt)) =>
     carry({
       label: `${INGREDIENTS[id].name}を取って、${menu.station === 'pasta' ? '皿' : 'サラダ'}にのせる`,
-      from: () => from ?? { kind: 'stock', id },
+      from: (s) => (typeof from === 'function' ? from(s) : (from ?? { kind: 'stock', id })),
       holding: (s) => s.hand?.kind === 'ingredient' && s.hand.id === id,
       to: plateAt,
       done: (s) => plateHasAny(s, [id]) || served(s),
@@ -400,6 +404,7 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
     plate,
     potToBurner,
     trayToTable,
+    trayPlaced,
     sauceToPot,
     waitHeat,
     mix,
@@ -444,9 +449,10 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.noodleToBasket(),
     k.press,
     k.openFridge,
+    k.trayToTable('pancetta'),
     k.potToBurner,
     k.sauceToPot('tomatoSauce', 1, stock('tomatoSauce'), { fridge: true }),
-    k.sauceToPot('pancetta', 1, stock('pancetta')),
+    k.sauceToPot('pancetta', 1, k.trayPlaced('pancetta')),
     k.plate(),
     k.waitHeat,
     k.noodleOut('pot'),
@@ -461,9 +467,9 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.noodleToBasket(),
     k.press,
     k.openFridge,
-    k.trayToTable('saltOil', '塩オイルソースのケース'),
+    k.trayToTable('saltOil'),
     k.potToBurner,
-    k.sauceToPot('saltOilSauce', 1, (s) => ({ kind: 'traySlot', id: 'saltOil', spot: s.traySpot.saltOil })), // 置いた置き場を指す
+    k.sauceToPot('saltOilSauce', 1, k.trayPlaced('saltOil')), // 置いた置き場を指す
     k.sauceToPot('garlic', 1, stock('garlic')),
     k.sauceToPot('chili', 1, stock('chili')),
     k.plate(),
@@ -513,11 +519,13 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
   ],
   spinach: (k) => [
     k.openFridge,
-    k.trayToTable('spinach', 'ほうれん草のトレー'),
+    k.trayToTable('spinach'),
+    k.trayToTable('pancetta'),
+    k.trayToTable('sauteSauce'),
     k.potToBurner,
-    k.sauceToPot('spinach', 2, { kind: 'traySlot', id: 'spinach' }),
-    k.sauceToPot('pancetta', 1, stock('pancetta')),
-    k.sauceToPot('sauteSauce', 1, stock('sauteSauce')),
+    k.sauceToPot('spinach', 2, k.trayPlaced('spinach')),
+    k.sauceToPot('pancetta', 1, k.trayPlaced('pancetta')),
+    k.sauceToPot('sauteSauce', 1, k.trayPlaced('sauteSauce')),
     k.plate('small'),
     k.waitHeat,
     k.pour,
@@ -525,8 +533,24 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.serve,
     k.returnPot,
   ],
-  shrimpSalad: (k) => [k.openFridge, k.plate('saladBase'), k.top('shrimp'), k.bottle('dressing'), k.bottle('paprika'), k.serve],
-  chickenSalad: (k) => [k.openFridge, k.plate('saladBase'), k.top('chicken'), k.bottle('dressing'), k.bottle('paprika'), k.serve],
+  shrimpSalad: (k) => [
+    k.openFridge,
+    k.trayToTable('shrimp'),
+    k.plate('saladBase'),
+    k.top('shrimp', k.trayPlaced('shrimp')),
+    k.bottle('dressing'),
+    k.bottle('paprika'),
+    k.serve,
+  ],
+  chickenSalad: (k) => [
+    k.openFridge,
+    k.trayToTable('chicken'),
+    k.plate('saladBase'),
+    k.top('chicken', k.trayPlaced('chicken')),
+    k.bottle('dressing'),
+    k.bottle('paprika'),
+    k.serve,
+  ],
   cornSoup: (k) => [
     k.openFridge,
     k.packToHotWater('cornSoup'),

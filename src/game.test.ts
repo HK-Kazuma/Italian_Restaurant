@@ -4,7 +4,11 @@ import { FRIDGE_ITEM_IDS, fitsOnShelf } from './fridge';
 import { Game } from './game';
 import { getMenu } from './recipe';
 import { createTicket } from './tickets';
-import type { Target } from './types';
+import type { Target, TrayId } from './types';
+
+// 冷蔵庫の中のトレー・ケース、サラダ台のトッピングの置き場（小エビ・チキン・パンチェッタのトレーとソテーソースのケースを置く、4か所）
+const fridgeTray = (id: TrayId): Target => ({ kind: 'fridgeTray', id });
+const toppingSlot = (spot: number): Target => ({ kind: 'traySlot', id: 'topping', spot });
 
 const rack: Target = { kind: 'noodleRack' };
 const basket = (index: number): Target => ({ kind: 'boilerBasket', index });
@@ -33,6 +37,12 @@ function gameWithTicket(menuId: string) {
   g.state.tickets = [createTicket(1, getMenu(menuId), 0)];
   g.state.nextTicketAt = Infinity;
   return g;
+}
+
+// 冷蔵庫のトレー・ケースを取って、トッピングの置き場（spot 番目）に置く
+function putTopping(g: Game, id: TrayId, spot = 0) {
+  g.interact(fridgeTray(id));
+  g.interact(toppingSlot(spot));
 }
 
 // 麺をセットして茹で上がりまで進める
@@ -250,6 +260,7 @@ describe('Game: ミートソースの加熱', () => {
       [pancetta, tomatoSauce],
     ]) {
       const g = newGame();
+      putTopping(g, 'pancetta'); // パンチェッタのトレーを、トレー置き場に置いておく
       g.interact(potSlot(0));
       g.interact(burner(0));
       g.interact(order[0]);
@@ -366,19 +377,20 @@ describe('Game: ミートパスタを1皿出す（Aパターン）', () => {
 
 const hotWater = (index: number): Target => ({ kind: 'hotWaterSlot', index });
 const tomatoSauce: Target = { kind: 'stock', id: 'tomatoSauce', inFridge: true };
-const pancetta: Target = { kind: 'stock', id: 'pancetta' };
+const pancetta = toppingSlot(0); // パンチェッタのトレーを、トッピングの0番の置き場に置いたあと
 const carbonaraPack: Target = { kind: 'stock', id: 'carbonaraSauce', inFridge: true };
 const blackPepper: Target = { kind: 'bottle', id: 'blackPepper' };
 
 describe('Game: パルマ風パスタを1皿出す（Aパターン）', () => {
   it('トマトソースのパックとパンチェッタを鍋に入れて加熱し、麺と合わせ、粉チーズを振って提供する', () => {
     const g = gameWithTicket('parma');
+    putTopping(g, 'pancetta'); // 冷蔵庫のトレーを、サラダ台のトレー置き場に置く
     g.interact(potSlot(0));
     g.interact(burner(0));
     g.interact(tomatoSauce); // 冷蔵庫の容器からパックを取る
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'tomatoSauce' });
     g.interact(burner(0));
-    g.interact(pancetta); // サラダ台の具材コーナーからトングで1掴み
+    g.interact(pancetta); // 置いたトレーからトングで1掴み
     g.interact(burner(0));
     expect(g.state.ihBurners[0]?.contents).toEqual(['tomatoSauce', 'pancetta']);
 
@@ -471,8 +483,8 @@ describe('Game: カルボナーラを1皿出す（Bパターン）', () => {
 });
 
 const saladBase: Target = { kind: 'stock', id: 'saladBase', inFridge: true };
-const shrimp: Target = { kind: 'stock', id: 'shrimp' };
-const chicken: Target = { kind: 'stock', id: 'chicken' };
+const shrimp = toppingSlot(0); // 小エビのトレーを、トッピングの0番の置き場に置いたあと
+const chicken = toppingSlot(1); // チキンのトレーを、トッピングの1番の置き場に置いたあと
 const dressing: Target = { kind: 'bottle', id: 'dressing' };
 const paprika: Target = { kind: 'bottle', id: 'paprika' };
 // 台の天板の、視点が合っている点（台の中心からの相対）。既定はサラダ台
@@ -532,8 +544,21 @@ describe('Game: 冷蔵庫の扉', () => {
   it('冷蔵庫の外の取り出し元は、扉が閉まっていても取れる', () => {
     const g = new Game(cfg, () => 0);
     g.start();
-    g.interact(shrimp);
-    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'shrimp' });
+    g.interact(garlic);
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'garlic' });
+  });
+
+  it('小エビ・チキン・パンチェッタ・ソテーソースは冷蔵庫の中にあり、扉が閉まっていると取れない', () => {
+    const g = new Game(cfg, () => 0);
+    g.start();
+    for (const id of ['shrimp', 'chicken', 'pancetta', 'sauteSauce'] as const) {
+      expect(g.state.trays[id]).toBe('fridge');
+      expect(g.planInteract(fridgeTray(id)), id).toBeNull();
+    }
+    g.rightClick(fridgeDoor);
+    for (const id of ['shrimp', 'chicken', 'pancetta', 'sauteSauce'] as const) {
+      expect(g.planInteract(fridgeTray(id)), id).not.toBeNull();
+    }
   });
 });
 
@@ -553,9 +578,11 @@ describe('Game: サラダを作る', () => {
 
   it('小エビのサラダ：サラダ台に置き、小エビ・ドレッシング・パプリカパウダーを載せて提供する', () => {
     const g = gameWithTicket('shrimpSalad');
+    putTopping(g, 'shrimp'); // 冷蔵庫の小エビのトレーを、トレー置き場に置く
     g.interact(saladBase);
     g.interact(saladSlot(0)); // サラダを作る台に置く
     g.interact(shrimp);
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'shrimp' });
     g.interact(saladSlot(0));
     useBottle(g, dressing, 0);
     useBottle(g, paprika, 0, table(0.3, -0.95));
@@ -570,6 +597,8 @@ describe('Game: サラダを作る', () => {
 
   it('チキンのサラダ：小エビの代わりにチキンを載せる。小エビを載せると注文ミス', () => {
     const g = gameWithTicket('chickenSalad');
+    putTopping(g, 'shrimp', 0);
+    putTopping(g, 'chicken', 1);
     g.interact(saladBase);
     g.interact(saladSlot(1));
     g.interact(shrimp); // 間違い
@@ -811,7 +840,7 @@ const penneStock: Target = { kind: 'stock', id: 'penne', inFridge: true };
 const cornSoupStock: Target = { kind: 'stock', id: 'cornSoup', inFridge: true };
 const garlic: Target = { kind: 'stock', id: 'garlic' };
 const chili: Target = { kind: 'stock', id: 'chili' };
-const sauteSauce: Target = { kind: 'stock', id: 'sauteSauce' };
+const sauteSauce = toppingSlot(1); // ソテーソースのケースを、トッピングの1番の置き場に置いたあと
 const spinachTray: Target = { kind: 'fridgeTray', id: 'spinach' };
 const saltOilCase: Target = { kind: 'fridgeTray', id: 'saltOil' };
 const traySlot: Target = { kind: 'traySlot', id: 'spinach' };
@@ -881,6 +910,8 @@ describe('Game: ほうれん草のソテーを1皿出す', () => {
     g.interact(traySlot); // サラダ台のトレー置き場に置く
     expect(g.state.trays.spinach).toBe('table');
     expect(g.state.hand).toBeNull();
+    putTopping(g, 'pancetta', 0); // パンチェッタのトレーとソテーソースのケースも、トッピングの置き場へ
+    putTopping(g, 'sauteSauce', 1);
 
     g.interact(potSlot(0));
     g.interact(burner(0));
@@ -1153,6 +1184,137 @@ describe('Game: ケース置き場（塩オイルソースは3か所のどこに
   });
 });
 
+describe('Game: トッピングのトレー置き場（小エビ・チキン・パンチェッタ・ソテーソース）', () => {
+  const TOPPINGS = [
+    ['shrimp', 'shrimp'],
+    ['chicken', 'chicken'],
+    ['pancetta', 'pancetta'],
+    ['sauteSauce', 'sauteSauce'],
+  ] as const;
+
+  it('4種類とも冷蔵庫から左クリックで取れて、4か所のどこの置き場にも置ける。置いた置き場からだけ中身を取れる', () => {
+    for (const [tray, content] of TOPPINGS) {
+      for (const spot of [0, 1, 2, 3]) {
+        const g = newGame();
+        g.interact(fridgeTray(tray));
+        expect(g.state.hand).toEqual({ kind: 'tray', id: tray });
+        expect(g.state.trays[tray]).toBe('hand');
+        g.interact(toppingSlot(spot));
+        expect(g.state.hand).toBeNull();
+        expect(g.state.trays[tray]).toBe('table');
+        expect(g.state.traySpot[tray]).toBe(spot);
+        for (const other of [0, 1, 2, 3].filter((i) => i !== spot)) expect(g.planInteract(toppingSlot(other))).toBeNull();
+        g.interact(toppingSlot(spot));
+        expect(g.state.hand, `${tray} を ${spot} 番に置いた`).toEqual({ kind: 'ingredient', id: content });
+      }
+    }
+  });
+
+  it('4種類を同時に置ける（置き場は1か所に1つ）。どれがどの置き場でもよい', () => {
+    const g = newGame();
+    putTopping(g, 'sauteSauce', 0);
+    putTopping(g, 'chicken', 1);
+    putTopping(g, 'shrimp', 2);
+    putTopping(g, 'pancetta', 3);
+    expect(g.state.trays).toMatchObject({ sauteSauce: 'table', chicken: 'table', shrimp: 'table', pancetta: 'table' });
+    for (const [spot, content] of [[0, 'sauteSauce'], [1, 'chicken'], [2, 'shrimp'], [3, 'pancetta']] as const) {
+      g.interact(toppingSlot(spot));
+      expect(g.state.hand).toEqual({ kind: 'ingredient', id: content });
+      g.discard();
+    }
+  });
+
+  it('置いてある置き場には、ほかのトレーを置けない（空いている置き場にだけ置ける）', () => {
+    const g = newGame();
+    putTopping(g, 'shrimp', 0);
+    g.interact(fridgeTray('chicken'));
+    expect(g.planInteract(toppingSlot(0))).toBeNull();
+    g.interact(toppingSlot(0));
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'chicken' }); // 置けず、手に持ったまま
+    expect(g.state.trays.shrimp).toBe('table');
+    expect(g.planInteract(toppingSlot(1))).not.toBeNull();
+  });
+
+  it('トッピングのトレーは、ほうれん草・塩オイルソースの専用の置き場には置けない。逆も置けない', () => {
+    const g = newGame();
+    g.interact(fridgeTray('shrimp'));
+    expect(g.planInteract(traySlot)).toBeNull();
+    expect(g.planInteract(caseSlot)).toBeNull();
+    g.discard();
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'shrimp' }); // 捨てられない
+    g.interact(toppingSlot(0));
+
+    g.interact(spinachTray);
+    expect(g.planInteract(toppingSlot(1))).toBeNull(); // ほうれん草のトレーは、トッピングの置き場には置けない
+    g.interact(traySlot);
+    g.interact(saltOilCase);
+    expect(g.planInteract(toppingSlot(1))).toBeNull(); // 塩オイルソースのケースも
+  });
+
+  it('置く前は中身を取れない。冷蔵庫から取ったあとは、冷蔵庫に残らない', () => {
+    const g = newGame();
+    expect(g.planInteract(toppingSlot(0))).toBeNull();
+    g.interact(fridgeTray('pancetta'));
+    expect(g.planInteract(fridgeTray('pancetta'))).toBeNull();
+    expect(g.planInteract(toppingSlot(0))).not.toBeNull(); // 手に持っていれば置ける
+  });
+
+  it('右クリックで置いたトレーを持ち上げて、別の置き場に置き直せる', () => {
+    const g = newGame();
+    putTopping(g, 'chicken', 0);
+    g.rightClick(toppingSlot(0));
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'chicken' });
+    expect(g.state.trays.chicken).toBe('hand');
+    expect(g.planInteract(toppingSlot(0))).not.toBeNull(); // もとの置き場は空いた（置き直せる）
+    g.interact(toppingSlot(3));
+    expect(g.state.trays.chicken).toBe('table');
+    expect(g.state.traySpot.chicken).toBe(3);
+    expect(g.planInteract(toppingSlot(0))).toBeNull(); // もとの置き場からは取れない
+    g.interact(toppingSlot(3));
+    expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'chicken' });
+  });
+
+  it('持ち上げたトレーは、そのまま同じ置き場にも戻せる', () => {
+    const g = newGame();
+    putTopping(g, 'shrimp', 2);
+    g.rightClick(toppingSlot(2));
+    g.interact(toppingSlot(2));
+    expect(g.state.traySpot.shrimp).toBe(2);
+    expect(g.state.hand).toBeNull();
+  });
+
+  it('右クリックは、手が空で、トレーが置いてある置き場に向けたときだけ持ち上げる', () => {
+    const g = newGame();
+    g.rightClick(toppingSlot(0)); // 何も置いていない
+    expect(g.state.hand).toBeNull();
+    putTopping(g, 'shrimp', 0);
+    g.interact(can); // 手がふさがっている：トレーは持ち上げない
+    g.rightClick(toppingSlot(0));
+    expect(g.state.trays.shrimp).toBe('table');
+    expect(g.state.hand).toBeNull(); // 右クリックは、手の物を捨てる
+  });
+
+  it('塩オイルソースのケースも、右クリックで別のケース置き場に置き直せる', () => {
+    const g = newGame();
+    g.interact(saltOilCase);
+    g.interact({ kind: 'traySlot', id: 'saltOil', spot: 0 });
+    g.rightClick({ kind: 'traySlot', id: 'saltOil', spot: 0 });
+    expect(g.state.hand).toEqual({ kind: 'tray', id: 'saltOil' });
+    g.interact({ kind: 'traySlot', id: 'saltOil', spot: 2 });
+    expect(g.state.traySpot.saltOil).toBe(2);
+  });
+
+  it('次のゲームでは、外に出ていたトレーは冷蔵庫に戻り、置き場も空になる', () => {
+    const g = newGame();
+    putTopping(g, 'shrimp', 0);
+    g.interact(fridgeTray('pancetta')); // 手に持ったまま
+    g.start();
+    expect(g.state.hand).toBeNull();
+    for (const id of ['shrimp', 'chicken', 'pancetta', 'sauteSauce'] as const) expect(g.state.trays[id]).toBe('fridge');
+    expect(g.planInteract(toppingSlot(0))).toBeNull();
+  });
+});
+
 describe('Game: ペペロンチーノを1皿出す（Bパターン）', () => {
   it('塩オイルソースのケースをサラダ台に置き、1杯・ガーリック・唐辛子を鍋に入れて加熱し、麺を盛った皿にかけ、パセリを振る', () => {
     const g = gameWithTicket('peperoncino');
@@ -1204,11 +1366,11 @@ describe('Game: ペペロンチーノを1皿出す（Bパターン）', () => {
     expect(g.planInteract(saltOilCase)).toBeNull(); // 扉が閉まっている
     g.rightClick(fridgeDoor);
     g.interact(spinachTray);
-    expect(g.state.trays).toEqual({ spinach: 'hand', saltOil: 'fridge' });
+    expect(g.state.trays).toMatchObject({ spinach: 'hand', saltOil: 'fridge' });
     g.interact(traySlot);
     g.interact(saltOilCase);
     g.interact(caseSlot);
-    expect(g.state.trays).toEqual({ spinach: 'table', saltOil: 'table' });
+    expect(g.state.trays).toMatchObject({ spinach: 'table', saltOil: 'table' });
     g.interact(caseSlot);
     expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'saltOilSauce' });
   });
@@ -1275,7 +1437,7 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
 
     expect(g.previewFridge(fridgeShelf(3, 0.66, 0.0))?.valid).toBe(true); // 上段の空き
     expect(g.previewFridge(fridgeShelf(0, 0.66, 0.3))?.valid).toBe(true); // 最下段（空き）
-    expect(g.previewFridge(fridgeShelf(2, 0.37, 0.9))?.valid).toBe(true); // 広くなった幅の端
+    expect(g.previewFridge(fridgeShelf(1, 0.37, 0.9))?.valid).toBe(true); // 広くなった幅の端
   });
 
   it('自分自身のもとの場所には、置き直せる（重なりとは数えない）', () => {

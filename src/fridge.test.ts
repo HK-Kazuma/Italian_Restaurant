@@ -46,6 +46,10 @@ describe('fridgeItemOf', () => {
     expect(fridgeItemOf({ kind: 'stock', id: 'meatSauce', inFridge: true })).toBe('meatSauce');
     expect(fridgeItemOf({ kind: 'fridgeTray', id: 'spinach' })).toBe('spinachTray');
     expect(fridgeItemOf({ kind: 'fridgeTray', id: 'saltOil' })).toBe('saltOilCase');
+    expect(fridgeItemOf({ kind: 'fridgeTray', id: 'shrimp' })).toBe('shrimpTray');
+    expect(fridgeItemOf({ kind: 'fridgeTray', id: 'chicken' })).toBe('chickenTray');
+    expect(fridgeItemOf({ kind: 'fridgeTray', id: 'pancetta' })).toBe('pancettaTray');
+    expect(fridgeItemOf({ kind: 'fridgeTray', id: 'sauteSauce' })).toBe('sauteSauceCase');
   });
   it('冷蔵庫の外の物・ほかの対象は null', () => {
     expect(fridgeItemOf({ kind: 'stock', id: 'shrimp' })).toBeNull();
@@ -56,7 +60,7 @@ describe('fridgeItemOf', () => {
 
 describe('returnToFridge', () => {
   it('もとの場所が空いていれば、そのまま', () => {
-    const r = returnToFridge(FRIDGE_HOME, ['spinachTray', 'saltOilCase']);
+    const r = returnToFridge(FRIDGE_HOME, ['spinachTray', 'saltOilCase', 'shrimpTray', 'chickenTray', 'pancettaTray', 'sauteSauceCase']);
     expect(r).toEqual(FRIDGE_HOME);
   });
   it('もとの場所にほかの物があれば、重ならない近くの場所へ', () => {
@@ -64,7 +68,8 @@ describe('returnToFridge', () => {
     const r = returnToFridge(items, ['spinachTray']);
     expect(r.tomatoSauce).toEqual(items.tomatoSauce); // 冷蔵庫の中の物は動かさない
     expect(r.spinachTray).not.toEqual(items.spinachTray);
-    expect(r.spinachTray.shelf).toBe(FRIDGE_HOME.spinachTray.shelf); // 同じ棚に空きがあれば、同じ棚
+    // できるだけ近くへ：同じ棚に空きがあれば同じ棚、なければ隣の棚（上段・中段はトレーが並んでいて、空きが少ない）
+    expect(Math.abs(r.spinachTray.shelf - FRIDGE_HOME.spinachTray.shelf)).toBeLessThanOrEqual(1);
     const all = FRIDGE_ITEM_IDS.map((id) => ({ id, spot: r[id] }));
     for (const { id, spot } of all) expect(fitsOnShelf(id, spot, all), id).toBe(true);
     const c = clampOnShelf('spinachTray', r.spinachTray.x, r.spinachTray.z);

@@ -29,16 +29,13 @@ import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShe
 import { BOTTLE_HOME, SURFACES } from './layout';
 import { OPEN_WORLD, launchPot, stepThrownPot, type ThrowAim } from './throw';
 import type { World } from './world';
+import { TRAY_CONTENT, TRAY_FRIDGE_ITEM, TRAY_IDS, TRAY_NAME, TRAY_ZONE, trayAt, trayOfFridgeItem } from './tray';
 import type { BottleId, BottlePreview, BottleSpot, FridgeItemId, FridgePreview, FridgeSpot, GameState, IngredientId, Item, Mode, Phase, Pot, Target, Toast, TrayId } from './types';
 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
 type Action = () => void;
 
 const TOAST_SECONDS = 2.5;
-
-// トレー・ケースから取れる中身
-const TRAY_CONTENT: Record<TrayId, IngredientId> = { spinach: 'spinach', saltOil: 'saltOilSauce' };
-const TRAY_NAME: Record<TrayId, string> = { spinach: 'ほうれん草のトレー', saltOil: '塩オイルソースのケース' };
 
 // ボトルをサラダ台の上に置くときの決まり
 const BOTTLE_EDGE = 0.06; // 天板の縁から、これだけ内側までしか置けない
@@ -70,8 +67,8 @@ export class Game {
       boilers: Array.from({ length: this.cfg.boilerCount }, createBoiler),
       plateSlots: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => null),
       plateStyles: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => 'plate' as const),
-      trays: { spinach: 'fridge', saltOil: 'fridge' },
-      traySpot: { spinach: 0, saltOil: 0 },
+      trays: Object.fromEntries(TRAY_IDS.map((id) => [id, 'fridge'])) as GameState['trays'],
+      traySpot: Object.fromEntries(TRAY_IDS.map((id) => [id, 0])) as GameState['traySpot'],
       fridgeOpen: false,
       fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...(fridge ?? FRIDGE_HOME)[id] }])) as Record<FridgeItemId, FridgeSpot>,
       moving: null,
@@ -99,9 +96,7 @@ export class Game {
   private carriedFridge(): Record<FridgeItemId, FridgeSpot> | undefined {
     const prev = this.state;
     if (!prev) return undefined;
-    const out: FridgeItemId[] = [];
-    if (prev.trays.spinach !== 'fridge') out.push('spinachTray');
-    if (prev.trays.saltOil !== 'fridge') out.push('saltOilCase');
+    const out = TRAY_IDS.filter((id) => prev.trays[id] !== 'fridge').map((id) => TRAY_FRIDGE_ITEM[id]);
     return returnToFridge(prev.fridgeItems, out);
   }
 
@@ -255,6 +250,7 @@ export class Game {
 
   // 右クリック：
   //  - 冷蔵庫の中の物を持ち上げている最中：棚に視点が合っていればそこに置く。それ以外ならやめる
+  //  - 手が空で、サラダ台のトレー置き場に置いたトレー・ケースに視点が合っていれば、それを手に持ち上げる（左クリックで別の置き場に置き直せる）
   //  - 扉が開いていて、冷蔵庫の中の物に視点が合っていれば、その物を持ち上げる（棚の好きな場所に置き直せる）
   //  - 冷蔵庫の扉・棚・本体に視点が合っていれば、扉を開閉する
   //  - iPad を持っていれば、画面を開く（ゲーム開始・レシピ）
@@ -277,6 +273,14 @@ export class Game {
       s.hand = null;
       return;
     }
+    // サラダ台に置いたトレー・ケースを、手が空なら持ち上げる（別の置き場に置き直せる）
+    const placed = this.trayAtSlot(target);
+    if (!s.hand && placed) {
+      s.hand = { kind: 'tray', id: placed };
+      s.trays[placed] = 'hand';
+      this.say(`${TRAY_NAME[placed]}を持ち上げた（置き場に視点を合わせて左クリックで置く）`, 'info');
+      return;
+    }
     const item = fridgeItemOf(target);
     if (s.fridgeOpen && item && this.isInFridge(item)) {
       s.moving = item;
@@ -296,9 +300,13 @@ export class Game {
 
   // 冷蔵庫の中にある物か（トレー・ケースは、取ったあとは冷蔵庫にない）
   private isInFridge(id: FridgeItemId): boolean {
-    if (id === 'spinachTray') return this.state.trays.spinach === 'fridge';
-    if (id === 'saltOilCase') return this.state.trays.saltOil === 'fridge';
-    return true;
+    const tray = trayOfFridgeItem(id);
+    return tray ? this.state.trays[tray] === 'fridge' : true;
+  }
+
+  // 視点が合っているトレー置き場に置いてあるトレー・ケース（なければ null。HUD の案内に使う）
+  trayAtSlot(target: Target | null): TrayId | null {
+    return target?.kind === 'traySlot' ? trayAt(this.state, target.id, target.spot ?? 0) : null;
   }
 
   // 持ち上げた物を、視点が合っている棚に置くとしたら、どこにどう置かれるか。
@@ -411,7 +419,7 @@ export class Game {
       return;
     }
     if (s.hand.kind === 'tray') {
-      this.say('トレー・ケースは捨てられない（サラダ台の上に置く）', 'info');
+      this.say('トレー・ケースは捨てられない（サラダ台の置き場に置く）', 'info');
       return;
     }
     if (s.hand.kind === 'ipad') {
@@ -459,20 +467,24 @@ export class Game {
           s.trays[target.id] = 'hand';
         };
 
-      case 'traySlot':
-        // 同じ種類の置き場にだけ置ける（同じ種類の置き場が複数あるときは、どれでもよい）
-        if (hand?.kind === 'tray' && hand.id === target.id) {
+      case 'traySlot': {
+        const spot = target.spot ?? 0;
+        const here = trayAt(s, target.id, spot);
+        // 同じ区画の、空いている置き場にだけ置ける（トッピングの区画は、4種類のどれでもよい）
+        if (hand?.kind === 'tray' && TRAY_ZONE[hand.id] === target.id && !here) {
           return () => {
-            s.trays[target.id] = 'table';
-            s.traySpot[target.id] = target.spot ?? 0;
+            s.trays[hand.id] = 'table';
+            s.traySpot[hand.id] = spot;
             s.hand = null;
           };
         }
-        // 置いたものから1回分を取る：ほうれん草（トングで1掴み）、塩オイルソース（お玉1杯）。置いた置き場からだけ取れる
-        if (!hand && s.trays[target.id] === 'table' && s.traySpot[target.id] === (target.spot ?? 0)) {
-          return () => (s.hand = { kind: 'ingredient', id: TRAY_CONTENT[target.id] });
+        // 置いたものから1回分を取る：ほうれん草・チキン・パンチェッタ（トングで1掴み）、塩オイルソース・小エビ（お玉1杯）、ソテーソース（パック1つ）。
+        // 置いた置き場からだけ取れる。置き直すときは右クリックで持ち上げる
+        if (!hand && here) {
+          return () => (s.hand = { kind: 'ingredient', id: TRAY_CONTENT[here] });
         }
         return null;
+      }
 
       case 'ipadWall':
         // 練習キッチンだけ。手が空なら取る、iPad を持っていれば壁に戻す

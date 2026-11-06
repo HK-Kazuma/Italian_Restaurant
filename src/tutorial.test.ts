@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG as cfg } from './config';
 import { Game } from './game';
 import { MENU } from './recipe';
 import { hasTutorial, matchesTarget, tutorialSteps, type GuideAt } from './tutorial';
-import type { Target } from './types';
+import type { Target, TrayId } from './types';
 
 // --- 設備の指定（game.test.ts と同じ書き方）---
 const rack: Target = { kind: 'noodleRack' };
@@ -24,7 +24,9 @@ const stock = (id: Extract<Target, { kind: 'stock' }>['id']): Target => ({ kind:
 const fridgeStock = (id: Extract<Target, { kind: 'stock' }>['id']): Target => ({ kind: 'stock', id, inFridge: true });
 const bottle = (id: Extract<Target, { kind: 'bottle' }>['id']): Target => ({ kind: 'bottle', id });
 const tray = (id: 'spinach' | 'saltOil'): Target => ({ kind: 'traySlot', id });
-const fridgeTray = (id: 'spinach' | 'saltOil'): Target => ({ kind: 'fridgeTray', id });
+const fridgeTray = (id: TrayId): Target => ({ kind: 'fridgeTray', id });
+// 小エビ・チキン・パンチェッタのトレーとソテーソースのケースを置く、トッピングの置き場（spot 番目）
+const topping = (spot: number): Target => ({ kind: 'traySlot', id: 'topping', spot });
 const table = (x: number, z: number, surface: 'salad' | 'left'): Target => ({ kind: 'tableTop', surface, x, z });
 
 // 台本の1手：左クリック / 右クリック / 時間を進める / 矢印が指さない場所への左クリック（ボトルを台に置くなど）
@@ -54,8 +56,8 @@ const SCRIPTS: Record<string, Act[]> = {
     slot(0), pass, ...returnPot(),
   ],
   parma: [
-    rack, basket(0), button(0), { right: fridgeDoor }, potSlot(0), burner(0),
-    fridgeStock('tomatoSauce'), burner(0), stock('pancetta'), burner(0),
+    rack, basket(0), button(0), { right: fridgeDoor }, fridgeTray('pancetta'), topping(0), potSlot(0), burner(0),
+    fridgeStock('tomatoSauce'), burner(0), topping(0), burner(0),
     plateStack, slot(0), wait(cfg.boilTime + 1),
     basket(0), burner(0), ...mix(), burner(0), slot(0), washer,
     stock('cheese'), slot(0), slot(0), pass, ...returnPot(),
@@ -83,19 +85,20 @@ const SCRIPTS: Record<string, Act[]> = {
     bottle('parsley'), { right: slot(0) }, { free: parsleyBack }, slot(0), pass, ...returnPot(),
   ],
   spinach: [
-    { right: fridgeDoor }, fridgeTray('spinach'), tray('spinach'), potSlot(0), burner(0),
-    tray('spinach'), burner(0), tray('spinach'), burner(0), stock('pancetta'), burner(0), stock('sauteSauce'), burner(0),
+    { right: fridgeDoor }, fridgeTray('spinach'), tray('spinach'), fridgeTray('pancetta'), topping(0), fridgeTray('sauteSauce'), topping(1),
+    potSlot(0), burner(0),
+    tray('spinach'), burner(0), tray('spinach'), burner(0), topping(0), burner(0), topping(1), burner(0),
     smallStack, slot(0), wait(cfg.sauceHeatTime + 1),
     burner(0), slot(0), washer, slot(0), pass, ...returnPot(),
   ],
   shrimpSalad: [
-    { right: fridgeDoor }, fridgeStock('saladBase'), saladSlot(0), stock('shrimp'), saladSlot(0),
+    { right: fridgeDoor }, fridgeTray('shrimp'), topping(0), fridgeStock('saladBase'), saladSlot(0), topping(0), saladSlot(0),
     bottle('dressing'), { right: saladSlot(0) }, { free: saladBack },
     bottle('paprika'), { right: saladSlot(0) }, { free: table(0.3, -0.95, 'salad') },
     saladSlot(0), pass,
   ],
   chickenSalad: [
-    { right: fridgeDoor }, fridgeStock('saladBase'), saladSlot(0), stock('chicken'), saladSlot(0),
+    { right: fridgeDoor }, fridgeTray('chicken'), topping(0), fridgeStock('saladBase'), saladSlot(0), topping(0), saladSlot(0),
     bottle('dressing'), { right: saladSlot(0) }, { free: saladBack },
     bottle('paprika'), { right: saladSlot(0) }, { free: table(0.3, -0.95, 'salad') },
     saladSlot(0), pass,
@@ -378,8 +381,9 @@ describe('チュートリアル：メニューを最後まで作る（矢印は�
     const g = newTutorial('parma');
     // 矢印は「最初の空き」を指すので、別の場所を選ぶ手は free（矢印の提案と違う手）にする。選んだあとは、その場所を指す
     const acts: Act[] = [
-      rack, { free: basket(2) }, button(2), { right: fridgeDoor }, { free: potSlot(3) }, { free: burner(1) },
-      fridgeStock('tomatoSauce'), burner(1), stock('pancetta'), burner(1),
+      rack, { free: basket(2) }, button(2), { right: fridgeDoor }, fridgeTray('pancetta'), { free: topping(2) },
+      { free: potSlot(3) }, { free: burner(1) },
+      fridgeStock('tomatoSauce'), burner(1), topping(2), burner(1),
       plateStack, { free: slot(2) }, wait(cfg.boilTime + 1),
       basket(2), burner(1), burner(1), burner(1), burner(1), burner(1), slot(2), washer,
       stock('cheese'), slot(2), slot(2), pass,
