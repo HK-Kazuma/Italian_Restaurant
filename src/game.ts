@@ -71,6 +71,7 @@ export class Game {
       plateSlots: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => null),
       plateStyles: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => 'plate' as const),
       trays: { spinach: 'fridge', saltOil: 'fridge' },
+      traySpot: { spinach: 0, saltOil: 0 },
       fridgeOpen: false,
       fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...(fridge ?? FRIDGE_HOME)[id] }])) as Record<FridgeItemId, FridgeSpot>,
       moving: null,
@@ -459,15 +460,16 @@ export class Game {
         };
 
       case 'traySlot':
-        // 同じ種類の置き場にだけ置ける
+        // 同じ種類の置き場にだけ置ける（同じ種類の置き場が複数あるときは、どれでもよい）
         if (hand?.kind === 'tray' && hand.id === target.id) {
           return () => {
             s.trays[target.id] = 'table';
+            s.traySpot[target.id] = target.spot ?? 0;
             s.hand = null;
           };
         }
-        // 置いたものから1回分を取る：ほうれん草（トングで1掴み）、塩オイルソース（お玉1杯）
-        if (!hand && s.trays[target.id] === 'table') {
+        // 置いたものから1回分を取る：ほうれん草（トングで1掴み）、塩オイルソース（お玉1杯）。置いた置き場からだけ取れる
+        if (!hand && s.trays[target.id] === 'table' && s.traySpot[target.id] === (target.spot ?? 0)) {
           return () => (s.hand = { kind: 'ingredient', id: TRAY_CONTENT[target.id] });
         }
         return null;

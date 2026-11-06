@@ -128,9 +128,10 @@ function ipadHtml(cfg: GameConfig, settings: Settings): string {
     <section class="ipad-page" data-page="settings" hidden>
       <button class="back" data-go="home">‹ ホーム</button>
       <h2>設定</h2>
-      <p class="ipad-tip">つまみをドラッグして、好きな値に合わせます。変えた値はすぐ反映され、この端末に保存されます。</p>
+      <p class="ipad-tip">つまみをドラッグして、好きな値に合わせます。変えた値はすぐ反映され、このブラウザに保存されます。</p>
       <div class="setting-list">${settingsHtml(settings)}</div>
       <button class="setting-reset" data-act="settingsReset">標準に戻す</button>
+      <p class="setting-caution">※ 設定はこのブラウザに保存されます。ブラウザのサイトデータを消したときや、プライベート（シークレット）ウィンドウを閉じたときは、消えて標準の値に戻ります。別のブラウザや端末には引き継がれません。</p>
     </section>
   </div></div>`;
 }

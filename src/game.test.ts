@@ -1120,6 +1120,39 @@ describe('Game: 混ぜる（Aパターンのパスタだけ）', () => {
   });
 });
 
+describe('Game: ケース置き場（塩オイルソースは3か所のどこにも置ける）', () => {
+  const caseSlotAt = (spot: number): Target => ({ kind: 'traySlot', id: 'saltOil', spot });
+
+  it('どの置き場にも置けて、置いた置き場からだけお玉1杯を取れる', () => {
+    for (const spot of [0, 1, 2]) {
+      const g = gameWithTicket('peperoncino');
+      g.interact(saltOilCase);
+      g.interact(caseSlotAt(spot));
+      expect(g.state.trays.saltOil).toBe('table');
+      expect(g.state.traySpot.saltOil).toBe(spot);
+      for (const other of [0, 1, 2].filter((i) => i !== spot)) expect(g.planInteract(caseSlotAt(other))).toBeNull();
+      g.interact(caseSlotAt(spot));
+      expect(g.state.hand).toEqual({ kind: 'ingredient', id: 'saltOilSauce' });
+    }
+  });
+
+  it('番号を省略した置き場は、最初の置き場（0番）として扱う', () => {
+    const g = gameWithTicket('peperoncino');
+    g.interact(saltOilCase);
+    g.interact(caseSlotAt(2));
+    expect(g.planInteract(caseSlot)).toBeNull();
+    g.interact(caseSlotAt(2));
+    g.discard();
+    expect(g.state.hand).toBeNull();
+  });
+
+  it('ほうれん草のトレーの置き場には、塩オイルソースのケースを置けない', () => {
+    const g = gameWithTicket('peperoncino');
+    g.interact(saltOilCase);
+    expect(g.planInteract({ kind: 'traySlot', id: 'spinach', spot: 0 })).toBeNull();
+  });
+});
+
 describe('Game: ペペロンチーノを1皿出す（Bパターン）', () => {
   it('塩オイルソースのケースをサラダ台に置き、1杯・ガーリック・唐辛子を鍋に入れて加熱し、麺を盛った皿にかけ、パセリを振る', () => {
     const g = gameWithTicket('peperoncino');

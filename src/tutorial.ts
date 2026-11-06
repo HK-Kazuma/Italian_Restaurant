@@ -48,6 +48,10 @@ export function matchesTarget(actual: Target, spec: GuideAt): boolean {
   if (actual.kind === 'plateStack' && spec.kind === 'plateStack') {
     return (actual.style ?? 'plate') === (spec.style ?? 'plate'); // 省略 = ふつうの皿
   }
+  if (actual.kind === 'traySlot' && spec.kind === 'traySlot') {
+    // 同じ種類の置き場が複数ある。番号を省略したものは 0 番（spec が番号を書かなければ、どの置き場でもよい）
+    return actual.id === spec.id && (spec.spot === undefined || (actual.spot ?? 0) === spec.spot);
+  }
   const a = actual as Record<string, unknown>;
   const b = spec as Record<string, unknown>;
   return Object.keys(b).every((k) => a[k] === b[k]);
@@ -248,11 +252,11 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
     });
 
   // ソースの材料を、IHの鍋に入れる（n 回）。そろうと自動で加熱が始まる
-  const sauceToPot = (id: IngredientId, n: number, from: GuideAt, opts: { fridge?: boolean } = {}) => {
+  const sauceToPot = (id: IngredientId, n: number, from: GuideAt | ((s: GameState) => GuideAt), opts: { fridge?: boolean } = {}) => {
     const have = (s: GameState) => Math.max(0, ...allPots(s).map((p) => count(p.contents, id)));
     return carry({
       label: n > 1 ? `${INGREDIENTS[id].name}を${n}回、鍋に入れる` : `${INGREDIENTS[id].name}を鍋に入れる`,
-      from: () => from,
+      from: (s) => (typeof from === 'function' ? from(s) : from),
       fridge: opts.fridge,
       holding: (s) => s.hand?.kind === 'ingredient' && s.hand.id === id,
       to: where.burnerWithPot,
@@ -459,7 +463,7 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.openFridge,
     k.trayToTable('saltOil', '塩オイルソースのケース'),
     k.potToBurner,
-    k.sauceToPot('saltOilSauce', 1, { kind: 'traySlot', id: 'saltOil' }),
+    k.sauceToPot('saltOilSauce', 1, (s) => ({ kind: 'traySlot', id: 'saltOil', spot: s.traySpot.saltOil })), // 置いた置き場を指す
     k.sauceToPot('garlic', 1, stock('garlic')),
     k.sauceToPot('chili', 1, stock('chili')),
     k.plate(),

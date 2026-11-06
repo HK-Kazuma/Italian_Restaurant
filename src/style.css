@@ -619,6 +619,16 @@ body {
   font-size: 14px;
 }
 
+.ipad-page p.setting-caution {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 209, 102, 0.16);
+  color: #ffe3a3;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 /* iPad のチュートリアルアプリ：メニューの一覧（タップで開始） */
 .ipad .icon.purple {
   background: #af52de;
