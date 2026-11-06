@@ -52,11 +52,11 @@ export type NoodleKind = Extract<IngredientId, 'noodle' | 'penne'>;
 export type PlateStyle = 'plate' | 'small' | 'bowl';
 
 // 冷蔵庫から取ってサラダ台に置くトレー・ケース。spinach = ほうれん草のトレー、saltOil = 塩オイルソースのパックが入ったケース、
-// shrimp / chicken / pancetta = 小エビ・サラダチキン・パンチェッタのトレー、sauteSauce = ソテーソースのパックが入ったケース。
+// shrimp / chicken / pancetta = 小エビ・サラダチキン・パンチェッタのトレー、sauteSauce / tomatoSauce = ソテーソース・トマトソースのパックが入ったケース。
 // どれを置けるかは置き場の区画（TrayZone）で決まる（種類と区画の対応は tray.ts）
-export type TrayId = 'spinach' | 'saltOil' | 'shrimp' | 'chicken' | 'pancetta' | 'sauteSauce';
+export type TrayId = 'spinach' | 'saltOil' | 'shrimp' | 'chicken' | 'pancetta' | 'sauteSauce' | 'tomatoSauce';
 
-// トレー置き場の区画。spinach・saltOil はその専用の置き場、topping = 小エビ・チキン・パンチェッタ・ソテーソースのどれでも置ける置き場
+// トレー置き場の区画。spinach・saltOil はその専用の置き場、topping = 小エビ・チキン・パンチェッタ・ソテーソース・トマトソースのどれでも置ける置き場
 export type TrayZone = 'spinach' | 'saltOil' | 'topping';
 
 // 冷蔵庫の中の物（右クリックで持ち上げて、棚の好きな場所に置き直せる）。名前・大きさ・最初の置き場所は fridge.ts
@@ -64,7 +64,7 @@ export type FridgeItemId =
   | 'saladBase'
   | 'spinachTray'
   | 'meatSauce'
-  | 'tomatoSauce'
+  | 'tomatoSauceCase'
   | 'carbonaraSauce'
   | 'penne'
   | 'cornSoup'

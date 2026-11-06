@@ -4,10 +4,10 @@ import type { FridgeItemId, GameState, IngredientId, TrayId, TrayZone } from './
 // トレー・ケース：冷蔵庫から取って、サラダ台の置き場に置くと、中身を1回分ずつ取れる。
 // 置き場は区画（TrayZone）ごとにあり、その区画に置ける種類だけが置ける：
 //   spinach … ほうれん草のトレー専用 / saltOil … 塩オイルソースのケース専用（置き場が3か所）
-//   topping … 小エビ・サラダチキン・パンチェッタのトレーと、ソテーソースのケース。どれをどの置き場に置いてもよい（置き場が5か所）
+//   topping … 小エビ・サラダチキン・パンチェッタのトレーと、ソテーソース・トマトソースのケース。どれをどの置き場に置いてもよい（置き場が5か所）
 // 置き場の位置は scene.ts。ここは種類と区画の対応、名前、置き場の空きなど、位置に関係ない決まりだけ。
 
-export const TRAY_IDS: TrayId[] = ['spinach', 'saltOil', 'shrimp', 'chicken', 'pancetta', 'sauteSauce'];
+export const TRAY_IDS: TrayId[] = ['spinach', 'saltOil', 'shrimp', 'chicken', 'pancetta', 'sauteSauce', 'tomatoSauce'];
 
 // その区画の置き場の数（scene.ts の置き場の定義と合わせる）
 export const TRAY_SPOT_COUNT: Record<TrayZone, number> = { spinach: 1, saltOil: 3, topping: 5 };
@@ -19,6 +19,7 @@ export const TRAY_ZONE: Record<TrayId, TrayZone> = {
   chicken: 'topping',
   pancetta: 'topping',
   sauteSauce: 'topping',
+  tomatoSauce: 'topping',
 };
 
 // 置き場から取れる中身
@@ -29,6 +30,7 @@ export const TRAY_CONTENT: Record<TrayId, IngredientId> = {
   chicken: 'chicken',
   pancetta: 'pancetta',
   sauteSauce: 'sauteSauce',
+  tomatoSauce: 'tomatoSauce',
 };
 
 // 手に持ったときの名前
@@ -39,6 +41,7 @@ export const TRAY_NAME: Record<TrayId, string> = {
   chicken: 'サラダチキンのトレー',
   pancetta: 'パンチェッタのトレー',
   sauteSauce: 'ソテーソースのケース',
+  tomatoSauce: 'トマトソースのケース',
 };
 
 // 置いたあとに置き場に出す名前（中身の名前）
@@ -55,6 +58,7 @@ export const TRAY_FRIDGE_ITEM: Record<TrayId, FridgeItemId> = {
   chicken: 'chickenTray',
   pancetta: 'pancettaTray',
   sauteSauce: 'sauteSauceCase',
+  tomatoSauce: 'tomatoSauceCase',
 };
 
 // 冷蔵庫の中の物が、トレー・ケースならその種類（そうでなければ null）

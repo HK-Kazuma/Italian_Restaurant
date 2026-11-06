@@ -38,15 +38,16 @@ describe('トレー・ケースの決まり', () => {
     expect(trayContentName('chicken')).toBe('サラダチキン');
     expect(trayContentName('pancetta')).toBe('パンチェッタ');
     expect(trayContentName('sauteSauce')).toBe('ソテーソース');
+    expect(trayContentName('tomatoSauce')).toBe('トマトソース');
     expect(trayContentName('spinach')).toBe('ほうれん草');
     expect(trayContentName('saltOil')).toBe('塩オイルソース');
   });
 
-  it('小エビ・チキン・パンチェッタ・ソテーソースは、同じトッピングの置き場（4か所）に置く', () => {
-    for (const id of ['shrimp', 'chicken', 'pancetta', 'sauteSauce'] as const) expect(TRAY_ZONE[id]).toBe('topping');
+  it('小エビ・チキン・パンチェッタ・ソテーソース・トマトソースは、同じトッピングの置き場（5か所）に置く', () => {
+    for (const id of ['shrimp', 'chicken', 'pancetta', 'sauteSauce', 'tomatoSauce'] as const) expect(TRAY_ZONE[id]).toBe('topping');
     expect(TRAY_ZONE.spinach).toBe('spinach');
     expect(TRAY_ZONE.saltOil).toBe('saltOil');
-    expect(TRAY_SPOT_COUNT).toEqual({ spinach: 1, saltOil: 3, topping: 4 });
+    expect(TRAY_SPOT_COUNT).toEqual({ spinach: 1, saltOil: 3, topping: 5 });
   });
 });
 
@@ -61,9 +62,9 @@ describe('置き場の空き', () => {
   });
 
   it('空いている置き場の番号を、若い順に返す', () => {
-    expect(freeTraySpots(placement(), 'topping')).toEqual([0, 1, 2, 3]);
+    expect(freeTraySpots(placement(), 'topping')).toEqual([0, 1, 2, 3, 4]);
     const s = placement({ shrimp: ['table', 0], sauteSauce: ['table', 2] });
-    expect(freeTraySpots(s, 'topping')).toEqual([1, 3]);
+    expect(freeTraySpots(s, 'topping')).toEqual([1, 3, 4]);
     expect(freeTraySpots(placement({ spinach: ['table', 0] }), 'spinach')).toEqual([]);
     expect(freeTraySpots(placement({ saltOil: ['table', 1] }), 'saltOil')).toEqual([0, 2]);
   });

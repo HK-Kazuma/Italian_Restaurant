@@ -14,7 +14,8 @@ export type GameConfig = {
   hotWaterSlotCount: number; // パックを浸けられる数
   carbonaraWarmTime: number; // カルボナーラのパックを余温めする秒数（3秒以上）
   cornSoupWarmTime: number; // コーンスープのパックを温める秒数（5秒以上）
-  cornSoupStackMax: number; // コーンスープのパックを一度に手に持てる数（ほかのパックは1つ）
+  cornSoupStackMax: number; // コーンスープのパックを一度に手に持てる数
+  carbonaraStackMax: number; // カルボナーラのパックを一度に手に持てる数（ほかのパックは1つ）
 
   // 鍋とIH
   ihBurnerCount: number; // IHコンロの口数
@@ -66,6 +67,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   carbonaraWarmTime: 3,
   cornSoupWarmTime: 5,
   cornSoupStackMax: 5,
+  carbonaraStackMax: 3,
 
   ihBurnerCount: 4,
   potCount: 5,

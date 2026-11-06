@@ -43,9 +43,10 @@ describe('コーンスープのパック', () => {
     expect(pack.warm).toBe(true);
   });
 
-  it('コーンスープだけ最大5つまで手に持てる。ほかのパックは1つ', () => {
+  it('コーンスープは最大5つ、カルボナーラは最大3つまで手に持てる。ほかのパックは1つ', () => {
     expect(stackLimit('cornSoup', cfg)).toBe(5);
-    expect(stackLimit('carbonaraSauce', cfg)).toBe(1);
+    expect(stackLimit('carbonaraSauce', cfg)).toBe(3);
+    expect(stackLimit('tomatoSauce', cfg)).toBe(1);
 
     const hand = stockItem('cornSoup', cfg);
     expect(hand.kind).toBe('pack');
@@ -56,7 +57,16 @@ describe('コーンスープのパック', () => {
     }
     expect(hand.packs).toHaveLength(5);
     expect(canStackPack(hand, 'cornSoup', cfg)).toBe(false); // 6つ目は持てない
-    expect(canStackPack(stockItem('carbonaraSauce', cfg), 'carbonaraSauce', cfg)).toBe(false);
+
+    const carbonara = stockItem('carbonaraSauce', cfg);
+    if (carbonara.kind !== 'pack') throw new Error('カルボナーラはパック');
+    for (let i = carbonara.packs.length; i < 3; i++) {
+      expect(canStackPack(carbonara, 'carbonaraSauce', cfg)).toBe(true);
+      carbonara.packs.push(createPack('carbonaraSauce'));
+    }
+    expect(carbonara.packs).toHaveLength(3);
+    expect(canStackPack(carbonara, 'carbonaraSauce', cfg)).toBe(false); // 4つ目は持てない
+    expect(canStackPack(carbonara, 'cornSoup', cfg)).toBe(false); // 違う種類は重ねられない
   });
 
   it('温まったパックを探せる', () => {

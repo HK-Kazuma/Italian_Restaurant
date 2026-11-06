@@ -4,7 +4,7 @@ import type { IngredientId, Item, Pack } from './types';
 // 熱湯で温めてから使うパック（カルボナーラ・コーンスープ）。熱湯に浸けた累計秒数が規定を超えると温まる（余温め）。
 // 熱湯に浸けるパックの種類を増やすときは warmTime に足す。
 
-type PackConfig = Pick<GameConfig, 'carbonaraWarmTime' | 'cornSoupWarmTime' | 'cornSoupStackMax'>;
+type PackConfig = Pick<GameConfig, 'carbonaraWarmTime' | 'cornSoupWarmTime' | 'cornSoupStackMax' | 'carbonaraStackMax'>;
 
 // 温めが必要なパックなら必要秒数、そうでなければ null（普通の具材）
 export function warmTime(id: IngredientId, cfg: PackConfig): number | null {
@@ -13,9 +13,11 @@ export function warmTime(id: IngredientId, cfg: PackConfig): number | null {
   return null;
 }
 
-// 一度に手に持てる数。コーンスープだけ複数（最大5つ）。ほかのパックは1つ
+// 一度に手に持てる数。コーンスープは最大5つ、カルボナーラは最大3つ。ほかのパックは1つ
 export function stackLimit(id: IngredientId, cfg: PackConfig): number {
-  return id === 'cornSoup' ? cfg.cornSoupStackMax : 1;
+  if (id === 'cornSoup') return cfg.cornSoupStackMax;
+  if (id === 'carbonaraSauce') return cfg.carbonaraStackMax;
+  return 1;
 }
 
 export function createPack(id: IngredientId): Pack {

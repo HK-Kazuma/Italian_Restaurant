@@ -632,7 +632,8 @@ function buildTray(id: TrayId): THREE.Group {
     case 'saltOil':
       return buildSaltOilCase();
     case 'sauteSauce':
-      return buildPackContainer(INGREDIENTS.sauteSauce.color); // トマトソースと同じ、パックが並んだ容器
+    case 'tomatoSauce':
+      return buildPackContainer(INGREDIENTS[id].color); // パックが3つ並んだ水色の容器
     default:
       return buildFoodPan(id); // 小エビ・チキン・パンチェッタ：ステンレスのバットに山盛り
   }
@@ -1568,7 +1569,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   addFridgeItem('saladBase', saladBases, fridgeStock('saladBase'));
 
   // トレー・ケース（取ると冷蔵庫から消える）：ほうれん草のトレー、塩オイルソースのケース、
-  // 小エビ・サラダチキン・パンチェッタのトレー、ソテーソースのケース
+  // 小エビ・サラダチキン・パンチェッタのトレー、ソテーソース・トマトソースのケース
   for (const id of TRAY_IDS) addFridgeItem(TRAY_FRIDGE_ITEM[id], buildTray(id), { kind: 'fridgeTray', id });
 
   // ミートソース缶。クリックでお玉1杯すくう
@@ -1578,9 +1579,6 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   can.add(cyl(0.012, 0.012, 0.26, 0x8a8f94, 0.04, 0.3, 0).rotateZ(-0.35)); // お玉の柄
   can.add(cyl(0.045, 0.03, 0.04, 0xc9ced3, 0.09, 0.42, 0)); // お玉の器
   addFridgeItem('meatSauce', can, fridgeStock('meatSauce'));
-
-  // トマトソースのパックが入った食材収納容器。クリックでパック1つ
-  addFridgeItem('tomatoSauce', buildPackContainer(INGREDIENTS.tomatoSauce.color), fridgeStock('tomatoSauce'));
 
   // カルボナーラのパック（熱湯で温めてから鍋に入れる）、ペンネ（茹で麺器に麺と同じようにセットする）、
   // コーンスープのパック（熱湯で温めて、スープ皿に入れる）

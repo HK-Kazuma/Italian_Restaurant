@@ -56,8 +56,8 @@ const SCRIPTS: Record<string, Act[]> = {
     slot(0), pass, ...returnPot(),
   ],
   parma: [
-    rack, basket(0), button(0), { right: fridgeDoor }, fridgeTray('pancetta'), topping(0), potSlot(0), burner(0),
-    fridgeStock('tomatoSauce'), burner(0), topping(0), burner(0),
+    rack, basket(0), button(0), { right: fridgeDoor }, fridgeTray('tomatoSauce'), topping(0), fridgeTray('pancetta'), topping(1),
+    potSlot(0), burner(0), topping(0), burner(0), topping(1), burner(0),
     plateStack, slot(0), wait(cfg.boilTime + 1),
     basket(0), burner(0), ...mix(), burner(0), slot(0), washer,
     stock('cheese'), slot(0), slot(0), pass, ...returnPot(),
@@ -78,8 +78,8 @@ const SCRIPTS: Record<string, Act[]> = {
     slot(0), pass, ...returnPot(),
   ],
   penne: [
-    { right: fridgeDoor }, fridgeStock('penne'), basket(0), button(0), potSlot(0), burner(0),
-    fridgeStock('tomatoSauce'), burner(0), stock('garlic'), burner(0), stock('chili'), burner(0),
+    { right: fridgeDoor }, fridgeTray('tomatoSauce'), topping(0), fridgeStock('penne'), basket(0), button(0), potSlot(0), burner(0),
+    topping(0), burner(0), stock('garlic'), burner(0), stock('chili'), burner(0),
     plateStack, slot(0), wait(cfg.penneBoilTime + 1),
     basket(0), burner(0), ...mix(), burner(0), slot(0), washer,
     bottle('parsley'), { right: slot(0) }, { free: parsleyBack }, slot(0), pass, ...returnPot(),
@@ -381,9 +381,9 @@ describe('チュートリアル：メニューを最後まで作る（矢印は�
     const g = newTutorial('parma');
     // 矢印は「最初の空き」を指すので、別の場所を選ぶ手は free（矢印の提案と違う手）にする。選んだあとは、その場所を指す
     const acts: Act[] = [
-      rack, { free: basket(2) }, button(2), { right: fridgeDoor }, fridgeTray('pancetta'), { free: topping(2) },
-      { free: potSlot(3) }, { free: burner(1) },
-      fridgeStock('tomatoSauce'), burner(1), topping(2), burner(1),
+      rack, { free: basket(2) }, button(2), { right: fridgeDoor }, fridgeTray('tomatoSauce'), topping(0),
+      fridgeTray('pancetta'), { free: topping(2) }, { free: potSlot(3) }, { free: burner(1) },
+      topping(0), burner(1), topping(2), burner(1),
       plateStack, { free: slot(2) }, wait(cfg.boilTime + 1),
       basket(2), burner(1), burner(1), burner(1), burner(1), burner(1), slot(2), washer,
       stock('cheese'), slot(2), slot(2), pass,
