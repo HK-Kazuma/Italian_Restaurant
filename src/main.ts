@@ -7,6 +7,7 @@ import { Hud } from './hud';
 import { Input } from './input';
 import { Interactor } from './interaction';
 import { Player } from './player';
+import { loadTutorialCleared, saveTutorialCleared } from './mission';
 import { createKitchen } from './scene';
 import { loadSettings, lookScale, saveSettings } from './settings';
 import { TRAY_ZONE, trayContentName } from './tray';
@@ -117,6 +118,13 @@ const hud = new Hud(
   },
   settings,
 );
+
+// 練習キッチンの左上の「チュートリアルを受けよう」ミッション：どれかのチュートリアルを最後までやり遂げたら達成（そのブラウザでは、もう出さない）
+hud.setMissionCleared(loadTutorialCleared());
+game.onTutorialComplete = () => {
+  saveTutorialCleared();
+  hud.setMissionCleared(true);
+};
 
 // カーソルが出たまま取り残されたとき（再ロックが拒否された直後など）は、画面クリックで視点操作に戻る
 canvas.addEventListener('click', () => {

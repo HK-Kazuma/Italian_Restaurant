@@ -2,6 +2,7 @@ import type { GameConfig } from './config';
 import { DEFAULT_DIFFICULTY, DIFFICULTIES, getDifficulty, isDifficulty, type Difficulty } from './difficulty';
 import { describeItem } from './game';
 import { INGREDIENTS } from './ingredients';
+import { showMission } from './mission';
 import { MENU, getMenu } from './recipe';
 import { NAME_MAX, ranking } from './ranking';
 import { DEFAULT_SETTINGS, SETTING_SPECS, clampSetting, formatSetting, type SettingKey, type Settings } from './settings';
@@ -184,6 +185,8 @@ export class Hud {
   private overlay = el('div', 'overlay');
   private crosshair = el('div', 'crosshair');
   private note = el('div', 'practice-note');
+  private mission = el('div', 'mission hidden');
+  private missionCleared = false; // チュートリアルを受けたことがあるか（受けたら、ミッションは出さない）
   private startPopup = el('div', 'start-popup hidden');
   private startPopupTimer = 0;
   private ipad = el('div', 'ipad hidden');
@@ -213,8 +216,11 @@ export class Hud {
     this.guideArrow.textContent = '▲';
     this.note.textContent = '練習モード（時間制限なし）：後ろの壁の iPad を左クリックで取り、右クリックで開くと、チュートリアルやゲーム開始ができます';
     this.startPopup.textContent = 'まずは後ろのタブレットから操作方法とレシピを確認しよう！';
+    this.mission.innerHTML = `<span class="mission-icon" aria-hidden="true">🍴</span>
+      <div class="mission-text"><b>ミッション：チュートリアルを受けよう！</b>
+      <span>後ろの壁の iPad を取って右クリック →「チュートリアル」</span></div>`;
     this.ipad.innerHTML = ipadHtml(cfg, settings);
-    root.append(top, this.note, this.tutorial, this.rail, this.crosshair, this.hint, this.guide, this.hand, this.toast, this.startPopup, this.ipad, this.overlay);
+    root.append(top, this.mission, this.note, this.tutorial, this.rail, this.crosshair, this.hint, this.guide, this.hand, this.toast, this.startPopup, this.ipad, this.overlay);
     // 結果画面の名前入力は、押しても練習キッチンへ進まない
     this.overlay.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).closest('.rank-form')) return;
@@ -361,12 +367,20 @@ export class Hud {
     this.rail.classList.toggle('zoom', on);
   }
 
+  // チュートリアルを受けたことがあるか（受けていれば、ミッションは出さない）
+  setMissionCleared(cleared: boolean): void {
+    this.missionCleared = cleared;
+  }
+
   // hint: いま視点が合っている物に対する操作の案内（なければ空）
   // tutorial: チュートリアル中の工程の一覧（中でなければ null）
   update(state: GameState, best: number, hint = '', tutorial: TutorialView | null = null): void {
     const practice = state.mode === 'practice';
     this.root.classList.toggle('practice', practice); // 練習中は、タイマーの代わりに「練習」を出して、スコアは隠す
     this.root.classList.toggle('tutorial-on', tutorial !== null);
+    const mission = showMission(state, this.missionCleared);
+    this.mission.classList.toggle('hidden', !mission);
+    this.root.classList.toggle('mission-on', mission);
     this.renderTutorial(tutorial);
     this.timer.textContent = practice ? '練習' : formatTime(this.cfg.gameDuration - state.time);
     this.timer.classList.toggle('low', !practice && this.cfg.gameDuration - state.time <= 30);

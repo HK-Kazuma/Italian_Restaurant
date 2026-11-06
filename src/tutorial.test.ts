@@ -117,8 +117,9 @@ function newTutorial(menuId: string) {
 }
 
 // 台本どおりに操作する。手を打つ前に、矢印がその場所を指していることを確かめる
-function play(menuId: string, acts: Act[]) {
+function play(menuId: string, acts: Act[], onComplete: ((id: string) => void) | null = null) {
   const g = newTutorial(menuId);
+  g.onTutorialComplete = onComplete;
   let lastStep = 0;
   const label = () => `${menuId} 工程${(g.state.tutorial?.step ?? -1) + 1}`;
   const expectArrowAt = (target: Target) => {
@@ -206,6 +207,21 @@ describe('チュートリアル：始め方', () => {
     expect(g.tutorialView()).toBeNull();
     g.update(cfg.practiceTicketInterval);
     expect(g.state.tickets.length).toBeGreaterThan(1);
+  });
+
+  it('最後まで終わったときだけ、完了が通知される（ミッション達成の記録に使う）', () => {
+    const done: string[] = [];
+    const g = play('tarako', SCRIPTS.tarako, (id) => done.push(id));
+    expect(g.state.tutorial).toBeNull();
+    expect(done).toEqual(['tarako']);
+    g.update(cfg.practiceTicketInterval * 3);
+    expect(done).toEqual(['tarako']); // 1回だけ
+
+    const h = newTutorial('tarako');
+    const stopped: string[] = [];
+    h.onTutorialComplete = (id) => stopped.push(id);
+    h.stopTutorial();
+    expect(stopped).toEqual([]); // やめたときは通知しない
   });
 
   it('完了して終わったあとは、練習キッチンに戻る（伝票もまた届く）。もう一度始めることもできる', () => {

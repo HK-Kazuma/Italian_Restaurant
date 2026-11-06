@@ -277,6 +277,63 @@ body {
   display: block;
 }
 
+/* ミッション（練習キッチンの左上、「練習」の真下）：チュートリアルを受けるまで出す。出ている間は、練習の案内文を下へずらす */
+.mission {
+  top: 66px;
+  left: 16px;
+  box-sizing: border-box;
+  width: 400px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 12px;
+  border: 2px solid #ffd54a;
+  background: rgba(20, 16, 12, 0.78);
+  box-shadow: 0 0 0 0 rgba(255, 213, 74, 0.5);
+  text-shadow: 0 1px 4px #000;
+  animation: mission-glow 2.4s ease-in-out infinite;
+}
+.mission.hidden {
+  display: none;
+}
+.mission-icon {
+  flex: none;
+  font-size: 30px;
+  line-height: 1;
+}
+.mission-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+}
+.mission-text b {
+  font-size: 16px;
+  color: #ffd54a;
+}
+.mission-text span {
+  font-size: 12px;
+  color: #e8e0d0;
+}
+.mission-on .practice-note {
+  top: 142px;
+}
+@keyframes mission-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 213, 74, 0);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgba(255, 213, 74, 0.45);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mission {
+    animation: none;
+  }
+}
+
 /* 練習キッチンに入った直後のポップアップ（画面中央の少し上。数秒で消える） */
 .start-popup {
   top: 22%;

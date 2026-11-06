@@ -128,6 +128,9 @@ export class Game {
 
   // --- チュートリアル（練習キッチンで、選んだメニューを案内つきで作る）---
 
+  // チュートリアルを最後までやり遂げたときに呼ばれる（途中でやめたときは呼ばれない）。ミッションの達成の記録に使う
+  onTutorialComplete: ((menuId: string) => void) | null = null;
+
   private tutorialCache = new Map<string, TutorialStep[] | null>();
 
   private stepsOf(menuId: string): TutorialStep[] | null {
@@ -166,6 +169,7 @@ export class Game {
     if (t.step < steps.length) return;
     this.say(`${getMenu(t.menuId).name}のチュートリアル完了！`, 'good');
     this.stopTutorial();
+    this.onTutorialComplete?.(t.menuId);
   }
 
   // 3D の矢印が指す先と、その一言（なければ null）。iPad を持っているときは、まず壁に戻すよう案内する
