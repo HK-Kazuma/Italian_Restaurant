@@ -4,7 +4,7 @@ import { INGREDIENTS } from './ingredients';
 import { BOTTLE_IDS } from './bottle';
 import { LAYOUT, LEFT_COUNTER, SURFACES, type Layout } from './layout';
 import { SAUCE_FILL_PER_UNIT, isNoodle } from './pot';
-import { plateLabel, potLabel } from './labels';
+import { plateLabel, potMonitor, potPopup } from './labels';
 import { Steam, type SteamOptions } from './steam';
 import { matchesTarget, type GuideAt } from './tutorial';
 import { type Rect, type World, rectAt } from './world';
@@ -1080,7 +1080,8 @@ type HotWaterView = {
 type BurnerView = {
   disc: THREE.Mesh;
   label: Label; // モニターの画面に映す文字（絵は label のテクスチャ）
-  monitor: THREE.Object3D; // 口の手前にはめ込まれたモニターの画面（文字）。表示する物がないときは消える
+  monitor: THREE.Object3D; // 口の手前にはめ込まれたモニターの画面（文字）。加熱の状態だけ。表示する物がないときは消える
+  popup: Label; // 鍋の上に浮かべる中身の名前。視点を合わせたときだけ
   steam: Steam;
   pot: ItemView;
 };
@@ -1250,7 +1251,12 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
 
     // 鍋の口の上から。加熱が進むほど、完成が近いほど多くなる
     const steam = addSteam(scene, x, 0.82 + POT_H, -1.8, { count: 16, rise: 0.55, spread: 0.07, size: 0.28 });
-    burnerViews.push({ disc, label, monitor, pot: new ItemView(burner), steam });
+    // 鍋の中身の名前：具材コーナーの名前と同じように、鍋の上に浮かべる（視点を合わせたときだけ）
+    const popup = makeLabel('', 0.8);
+    popup.sprite.position.set(x, 1.15, -1.8);
+    popup.sprite.visible = false;
+    scene.add(popup.sprite);
+    burnerViews.push({ disc, label, monitor, popup, pot: new ItemView(burner), steam });
   }
 
   // 鍋洗浄機（左）：ステンレスの箱に洗い槽。洗い槽が鍋を入れる場所
@@ -2031,10 +2037,14 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
       else if (pot?.heat === 'ready') steamLevel = 1;
       v.steam.update(steamDt, steamLevel);
 
-      // 材料を入れている間は、視点を合わせたときだけ中身の名前。加熱中は「加熱中」だけ。完成したらソースの名前
-      const spec = pot ? potLabel(pot, hover?.kind === 'ihBurner' && hover.index === i) : null;
-      v.monitor.visible = spec !== null;
-      if (spec) v.label.setText(spec.text, spec.color);
+      // モニターには加熱の状態だけ。中身の名前は、視点を合わせたときだけ鍋の上に浮かべる
+      const status = pot ? potMonitor(pot) : null;
+      v.monitor.visible = status !== null;
+      if (status) v.label.setText(status.text, status.color);
+
+      const popup = pot ? potPopup(pot, hover?.kind === 'ihBurner' && hover.index === i) : null;
+      v.popup.sprite.visible = popup !== null;
+      if (popup) v.popup.setText(popup.text, popup.color);
     });
 
     // 皿の名前：盛り付け中は視点を合わせたときだけ中身の名前。料理が出来上がったら、常に料理名だけ

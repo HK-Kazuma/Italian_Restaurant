@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dishName, groupNames, plateLabel, potLabel } from './labels';
+import { dishName, groupNames, plateLabel, potMonitor, potPopup } from './labels';
 import { createPot } from './pot';
 import type { IngredientId, Pot } from './types';
 
@@ -14,40 +14,55 @@ describe('groupNames', () => {
   });
 });
 
-describe('鍋の名前', () => {
-  it('空の鍋には何も出さない', () => {
-    expect(potLabel(pot([]), true)).toBeNull();
+describe('鍋のモニター（加熱の状態だけ）', () => {
+  it('空の鍋・加熱前は何も映さない', () => {
+    expect(potMonitor(pot([]))).toBeNull();
+    expect(potMonitor(pot(['meatSauce']))).toBeNull();
   });
 
-  it('材料を入れている間は、視点を合わせたときだけ中身の名前', () => {
-    const p = pot(['meatSauce']);
-    expect(potLabel(p, false)).toBeNull();
-    expect(potLabel(p, true)?.text).toBe('ミートソース');
+  it('加熱中は「加熱中」と残り秒数だけ（中身の名前は出ない）', () => {
+    const p = pot(['meatSauce', 'meatSauce'], 'heating', { heatTimer: 12.2 });
+    expect(potMonitor(p)?.text).toBe('加熱中 13');
+  });
+
+  it('完成したら「完成！」、麺を入れたあとは混ぜる進み具合', () => {
+    expect(potMonitor(pot(['meatSauce', 'meatSauce'], 'ready'))?.text).toBe('完成！');
+    const p = pot(['meatSauce', 'meatSauce', 'noodle'], 'ready', { mixCount: 1 });
+    expect(potMonitor(p)?.text).toBe('混ぜる 1/3');
+    p.mixCount = 3;
+    expect(potMonitor(p)?.text).toBe('混ざった！');
+  });
+});
+
+describe('鍋の中身の名前（視点を合わせたときだけ）', () => {
+  it('空の鍋には何も出さない', () => {
+    expect(potPopup(pot([]), true)).toBeNull();
+  });
+
+  it('視点を合わせていなければ出さない', () => {
+    expect(potPopup(pot(['meatSauce']), false)).toBeNull();
+    expect(potPopup(pot(['meatSauce'], 'heating'), false)).toBeNull();
+    expect(potPopup(pot(['meatSauce'], 'ready'), false)).toBeNull();
+  });
+
+  it('加熱前は、視点を合わせると中身の名前', () => {
+    expect(potPopup(pot(['meatSauce']), true)?.text).toBe('ミートソース');
   });
 
   it('作れない組み合わせは、視点を合わせると赤で出る', () => {
     const p = pot(['meatSauce', 'nori']);
-    expect(potLabel(p, true)?.text).toBe('ミートソース、刻みのり');
-    expect(potLabel(p, true)?.color).toBe('#ff8a80');
+    expect(potPopup(p, true)?.text).toBe('ミートソース、刻みのり');
+    expect(potPopup(p, true)?.color).toBe('#ff8a80');
   });
 
-  it('加熱中は「加熱中」だけ（視点を合わせても中身の名前は出ない）', () => {
+  it('加熱中も、視点を合わせると中身の名前', () => {
     const p = pot(['meatSauce', 'meatSauce'], 'heating', { heatTimer: 12.2 });
-    expect(potLabel(p, false)?.text).toBe('加熱中 13');
-    expect(potLabel(p, true)?.text).toBe('加熱中 13');
+    expect(potPopup(p, true)?.text).toBe('ミートソース×2');
   });
 
-  it('完成したら、視点に関係なくソースの名前', () => {
-    const p = pot(['meatSauce', 'meatSauce'], 'ready');
-    expect(potLabel(p, false)?.text).toBe('ミートパスタのソース 完成！');
-    expect(potLabel(p, true)?.text).toBe('ミートパスタのソース 完成！');
-  });
-
-  it('麺を入れたあとも、ソースの名前を出す（混ぜる進み具合つき）', () => {
-    const p = pot(['meatSauce', 'meatSauce', 'noodle'], 'ready', { mixCount: 1 });
-    expect(potLabel(p, false)?.text).toBe('ミートパスタのソース 混ぜる 1/3');
-    p.mixCount = 3;
-    expect(potLabel(p, false)?.text).toBe('ミートパスタのソース 混ざった！');
+  it('完成したら、ソースの名前（麺を入れたあとも同じ）', () => {
+    expect(potPopup(pot(['meatSauce', 'meatSauce'], 'ready'), true)?.text).toBe('ミートパスタのソース');
+    expect(potPopup(pot(['meatSauce', 'meatSauce', 'noodle'], 'ready'), true)?.text).toBe('ミートパスタのソース');
   });
 });
 

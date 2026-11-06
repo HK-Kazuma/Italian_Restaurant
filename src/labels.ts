@@ -4,7 +4,7 @@ import { MENU, findSauceRecipe, isSaucePartial, judge } from './recipe';
 import type { IngredientId, Pot } from './types';
 
 // 鍋・皿の上に浮かべる名前の出し方。
-//  - 鍋：材料を入れている間は、視点を合わせたときだけ中身の名前。加熱中は「加熱中」だけ。完成したらソースの名前
+//  - 鍋：中身の名前は、視点を合わせたときだけ鍋の上に浮かべる（potPopup）。モニターには加熱の状態だけ（potMonitor）
 //  - 皿：盛り付けている間は、視点を合わせたときだけ中身の名前。料理が出来上がったら、常に料理名だけ
 
 export type LabelSpec = { text: string; color: string };
@@ -35,23 +35,31 @@ export function plateLabel(contents: readonly IngredientId[], hovered: boolean):
   return hovered ? { text: groupNames(contents), color: WHITE } : null;
 }
 
-// IHに載っている鍋の名前。null = 何も出さない
-export function potLabel(pot: Pot, hovered: boolean): LabelSpec | null {
+// IHに載っている鍋の、モニター（コンロの手前）に映す文字。加熱の状態だけで、中身の名前は出さない。null = 消す
+export function potMonitor(pot: Pot): LabelSpec | null {
   if (pot.contents.length === 0) return null;
   if (pot.heat === 'heating') return { text: `加熱中 ${Math.ceil(pot.heatTimer)}`, color: WHITE };
+  if (pot.heat === 'cold') return null;
+
+  // 加熱完了：麺を入れたあとは、混ぜる進み具合
+  if (needsMix(pot)) {
+    return isMixed(pot)
+      ? { text: '混ざった！', color: GREEN }
+      : { text: `混ぜる ${pot.mixCount}/${pot.mixNeed}`, color: YELLOW };
+  }
+  return { text: '完成！', color: GREEN };
+}
+
+// IHに載っている鍋の中身の名前（鍋の上に浮かべる）。視点を合わせたときだけ。null = 何も出さない
+export function potPopup(pot: Pot, hovered: boolean): LabelSpec | null {
+  if (!hovered || pot.contents.length === 0) return null;
   if (pot.heat === 'cold') {
-    if (!hovered) return null;
     // 作れない組み合わせは赤で知らせる
     return { text: groupNames(pot.contents), color: isSaucePartial(pot.contents) ? WHITE : RED };
   }
+  if (pot.heat === 'heating') return { text: groupNames(pot.contents), color: WHITE };
 
   // 加熱完了：ソースの名前（麺が入っていれば、そのぶんを除いて数える）
   const recipe = findSauceRecipe(pot.contents.filter((id) => !isNoodle(id)));
-  const name = recipe ? `${recipe.name}のソース` : groupNames(pot.contents);
-  if (needsMix(pot)) {
-    return isMixed(pot)
-      ? { text: `${name} 混ざった！`, color: GREEN }
-      : { text: `${name} 混ぜる ${pot.mixCount}/${pot.mixNeed}`, color: YELLOW };
-  }
-  return { text: `${name} 完成！`, color: GREEN };
+  return { text: recipe ? `${recipe.name}のソース` : groupNames(pot.contents), color: WHITE };
 }
