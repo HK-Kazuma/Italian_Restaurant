@@ -4,7 +4,7 @@ import { describeItem } from './game';
 import { INGREDIENTS } from './ingredients';
 import { showMission } from './mission';
 import { MENU, getMenu } from './recipe';
-import { NAME_MAX, ranking } from './ranking';
+import { NAME_MAX, describeSubmitError, ranking } from './ranking';
 import { DEFAULT_SETTINGS, SETTING_SPECS, clampSetting, formatSetting, type SettingKey, type Settings } from './settings';
 import { hasTutorial, tutorialSteps, type TutorialView } from './tutorial';
 import type { GameState, Phase } from './types';
@@ -346,8 +346,9 @@ export class Hud {
       this.rankDifficulty = offer.difficulty;
       status.textContent = '登録しました！ iPad の「ランキング」で見られます';
       button.hidden = true;
-    } catch {
-      status.textContent = '登録できませんでした。通信を確認して、もう一度押してください';
+    } catch (e) {
+      console.error('[ranking] 登録に失敗', e);
+      status.textContent = `登録できませんでした。${describeSubmitError(e)}`;
       button.disabled = false;
       input.disabled = false;
     }

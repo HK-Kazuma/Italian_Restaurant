@@ -7,6 +7,23 @@ import type { Difficulty } from './difficulty';
 export const NAME_MAX = 12; // 名前の最大文字数
 export const SCORE_MAX = 100000; // 登録できるスコアの上限（firestore.rules も同じ値にする）
 export const TOP_LIMIT = 10; // 一覧に出す件数
+const SUBMIT_TIMEOUT_MS = 10000; // 登録がこの時間で終わらなければ失敗とみなす
+
+// 登録に失敗した理由を、利用者（と開発者）に分かる言葉にする
+export function describeSubmitError(e: unknown): string {
+  const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code: unknown }).code) : '';
+  switch (code) {
+    case 'timeout':
+    case 'unavailable':
+      return 'サーバーにつながりませんでした（Firestore が未作成、または通信がブロックされている可能性）';
+    case 'permission-denied':
+      return 'サーバーに拒否されました（firestore.rules が未反映、または内容が合っていない可能性）';
+    case 'not-found':
+      return '保存先が見つかりません（Firestore データベースが未作成の可能性）';
+    default:
+      return code ? `エラー: ${code}` : e instanceof Error ? e.message : '原因不明のエラー';
+  }
+}
 
 export type RankingEntry = { name: string; score: number };
 
@@ -72,7 +89,16 @@ export const ranking = {
   async submit(difficulty: Difficulty, rawName: string, score: number): Promise<void> {
     if (!backend) throw new Error('ランキングは準備中です');
     if (!validScore(score)) throw new Error('このスコアは登録できません');
-    await backend.submit(difficulty, { name: cleanName(rawName), score });
+    // Firestore は、サーバーに届かないとエラーにならず待ち続ける。一定時間で見切って、原因が分かる形で失敗させる
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'timeout' })), SUBMIT_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([backend.submit(difficulty, { name: cleanName(rawName), score }), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
   },
 
   async top(difficulty: Difficulty): Promise<RankingEntry[]> {
