@@ -1,0 +1,24 @@
+rules_version = '2';
+
+// ランキング用の Firestore のルール（Firebase コンソールの「ルール」に貼り付ける）。
+// 誰でも読める・追加できるが、書き換え・削除はできない。追加できる内容も、形・文字数・点数の範囲を決めておく。
+// 点数の上限は src/ranking.ts の SCORE_MAX、名前の長さは NAME_MAX と同じにする。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rankings/{difficulty}/scores/{id} {
+      allow read: if difficulty in ['trial', 'leading', 'associate'];
+
+      allow create: if difficulty in ['trial', 'leading', 'associate']
+        && request.resource.data.keys().hasOnly(['name', 'score', 'createdAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 12 * 2
+        && request.resource.data.score is int
+        && request.resource.data.score > 0
+        && request.resource.data.score <= 100000
+        && request.resource.data.createdAt == request.time;
+
+      allow update, delete: if false;
+    }
+  }
+}

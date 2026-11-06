@@ -375,8 +375,9 @@ body {
 }
 .ipad-apps {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 4%;
+  gap: 20px 4%;
   margin-top: 8%;
 }
 .ipad .app {
@@ -410,6 +411,10 @@ body {
 }
 .ipad .icon.orange {
   background: #ff9f0a;
+}
+.ipad .icon.yellow {
+  background: #ffcc00;
+  color: #fff;
 }
 .ipad .icon.blue {
   background: #0a84ff;
@@ -772,4 +777,111 @@ button.tut-card:hover {
   text-align: center;
   color: #a9a294;
   font-size: 12px;
+}
+
+/* iPad のランキングアプリ */
+.rank-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.rank-tab {
+  flex: 1;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  cursor: pointer;
+}
+.rank-tab:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+.rank-tab.active {
+  background: #ffcc00;
+  color: #3a2a00;
+}
+.rank-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rank-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 17px;
+}
+.rank-list li:nth-child(-n + 3) {
+  background: rgba(255, 204, 0, 0.26);
+}
+.rank-no {
+  flex: none;
+  width: 1.6em;
+  font-weight: bold;
+  text-align: center;
+}
+.rank-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rank-score {
+  flex: none;
+}
+.ipad-page p.rank-note {
+  text-align: center;
+  opacity: 0.85;
+}
+
+/* 結果画面の、ランキングへの名前入力 */
+.rank-form {
+  margin-top: 16px;
+  padding: 14px 20px;
+  border-radius: 14px;
+  background: rgba(255, 204, 0, 0.14);
+  cursor: default;
+}
+.rank-form label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 15px;
+  color: #ffe08a;
+}
+.rank-form input {
+  width: 200px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 16px;
+}
+.rank-form button {
+  margin-left: 8px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #ffcc00;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: bold;
+  color: #3a2a00;
+  cursor: pointer;
+}
+.rank-form button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.rank-form .rank-status {
+  min-height: 1.2em;
+  margin: 8px 0 0;
+  font-size: 14px;
 }

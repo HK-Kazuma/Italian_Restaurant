@@ -1,8 +1,9 @@
 import type { GameConfig } from './config';
-import { DIFFICULTIES, getDifficulty, isDifficulty, type Difficulty } from './difficulty';
+import { DEFAULT_DIFFICULTY, DIFFICULTIES, getDifficulty, isDifficulty, type Difficulty } from './difficulty';
 import { describeItem } from './game';
 import { INGREDIENTS } from './ingredients';
 import { MENU, getMenu } from './recipe';
+import { NAME_MAX, ranking } from './ranking';
 import { DEFAULT_SETTINGS, SETTING_SPECS, clampSetting, formatSetting, type SettingKey, type Settings } from './settings';
 import { hasTutorial, tutorialSteps, type TutorialView } from './tutorial';
 import type { GameState, Phase } from './types';
@@ -96,6 +97,7 @@ function ipadHtml(cfg: GameConfig, settings: Settings): string {
         <button class="app" data-go="start"><span class="icon green">▶</span>ゲーム開始</button>
         <button class="app" data-go="recipe"><span class="icon orange">☰</span>レシピ</button>
         <button class="app" data-go="controls"><span class="icon blue">？</span>操作説明</button>
+        <button class="app" data-go="ranking"><span class="icon yellow">★</span>ランキング</button>
         <button class="app" data-go="settings"><span class="icon gray">⚙</span>設定</button>
       </div>
       <p class="ipad-tip">ここでは時間制限なし。気がすむまで練習できます（右クリックでも閉じられます）</p>
@@ -124,6 +126,14 @@ function ipadHtml(cfg: GameConfig, settings: Settings): string {
       <button class="back" data-go="home">‹ ホーム</button>
       <h2>操作説明</h2>
       ${CONTROLS_HTML}
+    </section>
+    <section class="ipad-page" data-page="ranking" hidden>
+      <button class="back" data-go="home">‹ ホーム</button>
+      <h2>ランキング</h2>
+      <p class="ipad-tip">このゲームを開いているみんなのハイスコアです。自己ベストを出すと、ゲーム終了後に名前をつけて登録できます。</p>
+      <div class="rank-tabs">${DIFFICULTIES.map((d) => `<button class="rank-tab" data-rank-diff="${d.id}">${d.name}</button>`).join('')}</div>
+      <ol class="rank-list"></ol>
+      <p class="rank-note"></p>
     </section>
     <section class="ipad-page" data-page="settings" hidden>
       <button class="back" data-go="home">‹ ホーム</button>
@@ -180,6 +190,9 @@ export class Hud {
   private ipadWasOpen = false;
   private ipadTutorialNow = '';
   private ipadNow: HTMLElement | null = null;
+  private rankDifficulty: Difficulty = DEFAULT_DIFFICULTY; // ランキングアプリで開いている難易度
+  private rankLoadId = 0; // 読み込みの順番（古い読み込みの結果で、新しい表示を上書きしない）
+  private rankOffer: { difficulty: Difficulty; score: number } | null = null; // ゲーム終了後に出す、ランキングへの登録
   private tutorial = el('div', 'tutorial hidden');
   private lastTutorial = '';
   private root: HTMLElement;
@@ -202,13 +215,22 @@ export class Hud {
     this.startPopup.textContent = 'まずは後ろのタブレットから操作方法とレシピを確認しよう！';
     this.ipad.innerHTML = ipadHtml(cfg, settings);
     root.append(top, this.note, this.tutorial, this.rail, this.crosshair, this.hint, this.guide, this.hand, this.toast, this.startPopup, this.ipad, this.overlay);
-    this.overlay.addEventListener('click', onOverlayClick);
+    // 結果画面の名前入力は、押しても練習キッチンへ進まない
+    this.overlay.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.rank-form')) return;
+      onOverlayClick();
+    });
+    this.overlay.addEventListener('submit', (e) => {
+      e.preventDefault();
+      void this.submitRanking(e.target as HTMLFormElement);
+    });
 
     // iPad の画面：アプリを開く・戻る・ゲーム開始・閉じる。右クリックでも閉じる
     this.ipad.addEventListener('click', (e) => {
-      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-go], [data-act], [data-tutorial], [data-difficulty]');
+      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-go], [data-act], [data-tutorial], [data-difficulty], [data-rank-diff]');
       if (!t) return;
       if (t.dataset.go) this.showIpadPage(t.dataset.go);
+      else if (isDifficulty(t.dataset.rankDiff)) void this.loadRanking(t.dataset.rankDiff);
       else if (t.dataset.tutorial) onIpad({ type: 'tutorial', menuId: t.dataset.tutorial });
       else if (isDifficulty(t.dataset.difficulty)) onIpad({ type: 'start', difficulty: t.dataset.difficulty });
       else if (t.dataset.act === 'close' || t.dataset.act === 'tutorialStop') onIpad({ type: t.dataset.act });
@@ -258,6 +280,71 @@ export class Hud {
 
   private showIpadPage(page: string): void {
     for (const p of this.ipad.querySelectorAll<HTMLElement>('.ipad-page')) p.hidden = p.dataset.page !== page;
+    if (page === 'ranking') void this.loadRanking(this.rankDifficulty);
+  }
+
+  // ランキングアプリ：その難易度の上位を読み込んで並べる。名前は利用者が入力した文字なので、必ず textContent で入れる
+  private async loadRanking(difficulty: Difficulty): Promise<void> {
+    this.rankDifficulty = difficulty;
+    const id = ++this.rankLoadId;
+    for (const tab of this.ipad.querySelectorAll<HTMLElement>('.rank-tab')) tab.classList.toggle('active', tab.dataset.rankDiff === difficulty);
+    const list = this.ipad.querySelector<HTMLElement>('.rank-list')!;
+    const note = this.ipad.querySelector<HTMLElement>('.rank-note')!;
+    list.replaceChildren();
+    if (!ranking.enabled) {
+      note.textContent = 'ランキングは準備中です（まだ保存先につながっていません）';
+      return;
+    }
+    note.textContent = '読み込み中…';
+    try {
+      const entries = await ranking.top(difficulty);
+      if (id !== this.rankLoadId) return;
+      note.textContent = entries.length === 0 ? 'まだ誰も登録していません。一番乗りを目指そう！' : '';
+      entries.forEach((e, i) => {
+        const li = document.createElement('li');
+        const no = document.createElement('span');
+        no.className = 'rank-no';
+        no.textContent = String(i + 1);
+        const name = document.createElement('span');
+        name.className = 'rank-name';
+        name.textContent = e.name;
+        const score = document.createElement('b');
+        score.className = 'rank-score';
+        score.textContent = `${e.score} 点`;
+        li.append(no, name, score);
+        list.append(li);
+      });
+    } catch {
+      if (id === this.rankLoadId) note.textContent = 'ランキングを読み込めませんでした。通信を確認して、もう一度開いてください';
+    }
+  }
+
+  // ゲームが終わって自己ベストだったとき、結果画面に名前入力を出す（結果画面が出る前に呼ぶ）。なければ null
+  offerRanking(offer: { difficulty: Difficulty; score: number } | null): void {
+    this.rankOffer = offer;
+  }
+
+  private async submitRanking(form: HTMLFormElement): Promise<void> {
+    const offer = this.rankOffer;
+    const input = form.elements.namedItem('name') as HTMLInputElement;
+    const button = form.querySelector<HTMLButtonElement>('button')!;
+    const status = form.querySelector<HTMLElement>('.rank-status')!;
+    if (!offer || button.disabled) return;
+    button.disabled = true;
+    input.disabled = true;
+    status.textContent = '登録中…';
+    try {
+      await ranking.submit(offer.difficulty, input.value, offer.score);
+      saveName(input.value);
+      this.rankOffer = null;
+      this.rankDifficulty = offer.difficulty;
+      status.textContent = '登録しました！ iPad の「ランキング」で見られます';
+      button.hidden = true;
+    } catch {
+      status.textContent = '登録できませんでした。通信を確認して、もう一度押してください';
+      button.disabled = false;
+      input.disabled = false;
+    }
   }
 
   // 置き場が画面の外にあるときの案内。left / top は画面内の位置（%）、angle は上を0にした時計回りの角度。null で消す
@@ -348,6 +435,17 @@ export class Hud {
     this.rail.innerHTML = html;
   }
 
+  // 結果画面の名前入力（自己ベストで、ランキングにつながっているときだけ）
+  private rankFormHtml(): string {
+    const offer = this.rankOffer;
+    if (!offer || !ranking.enabled) return '';
+    return `<form class="rank-form">
+      <label>自己ベスト！ ランキング（${getDifficulty(offer.difficulty).name}）に名前をつけて登録できます</label>
+      <div><input name="name" maxlength="${NAME_MAX}" value="${escapeAttr(loadName())}" placeholder="名前（${NAME_MAX}文字まで）" autocomplete="off" /><button type="submit">登録する</button></div>
+      <p class="rank-status"></p>
+    </form>`;
+  }
+
   private renderOverlay(state: GameState, best: number): void {
     if (state.phase === this.lastPhase) return;
     const from = this.lastPhase;
@@ -378,6 +476,7 @@ export class Hud {
           <p class="big">${state.score} 点</p>
           <p>${best <= state.score && state.score > 0 ? '🎉 ハイスコア更新！' : `ハイスコア ${best} 点`}</p>
           <p>提供 ${state.served} 皿 ／ 最大コンボ ${state.maxCombo} ／ 注文ミス ${state.mistakes}</p>
+          ${this.rankFormHtml()}
           <p class="cta">クリックで練習キッチンへ（ゲームは iPad から）</p>`;
         break;
       case 'playing':
@@ -385,6 +484,27 @@ export class Hud {
         break;
     }
   }
+}
+
+const NAME_KEY = 'kitchen-time-attack:name';
+
+function loadName(): string {
+  try {
+    return localStorage.getItem(NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+function saveName(name: string): void {
+  try {
+    localStorage.setItem(NAME_KEY, name.trim().slice(0, NAME_MAX));
+  } catch {
+    // 保存できなくても遊べる
+  }
+}
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function el(tag: string, className: string): HTMLElement {

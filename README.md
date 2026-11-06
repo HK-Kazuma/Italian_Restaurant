@@ -12,6 +12,21 @@ npm test      # ロジックの単体テスト
 npm run build # 型チェック + 本番ビルド
 ```
 
+## ランキング（Firebase Firestore）
+
+ゲーム終了後、その難易度の自己ベストなら、結果画面から名前をつけて登録できる。みんなのランキングは、iPad の「ランキング」アプリで見られる（難易度ごと、上位10件）。
+保存先につながる設定が空のあいだは「準備中」になり、ゲームはふつうに遊べる。保存先は [src/ranking.ts](src/ranking.ts) の中だけに置いてあるので、Supabase などへ替えるときは、そのファイルの `RankingBackend` の中身を入れ替える。
+
+セットアップ（初回のみ）：
+
+1. [Firebase コンソール](https://console.firebase.google.com/) でプロジェクトを作り、「Firestore Database」を作成する（本番モード）
+2. 「ルール」に [firestore.rules](firestore.rules) の中身を貼って公開する（書き換え・削除は不可、追加できる内容は形・文字数・点数の範囲で制限）
+3. プロジェクトの設定 → マイアプリ → ウェブアプリを追加し、`firebaseConfig` の `apiKey` / `projectId` / `appId` を控える
+4. 手元で試す：`.env.example` を `.env.local` にコピーして値を埋め、`npm run dev`
+5. 公開サイトで使う：GitHub のリポジトリ → Settings → Secrets and variables → Actions → **Variables** に `VITE_FIREBASE_API_KEY` / `VITE_FIREBASE_PROJECT_ID` / `VITE_FIREBASE_APP_ID` を登録し、Pages を再デプロイする
+
+注意：これらの設定値はブラウザに入るので公開される前提で、守っているのは `firestore.rules`。改造すれば偽のスコアを送れるため、ルールの範囲内の不正までは防げない（友達内で遊ぶ規模を想定）。
+
 ## 現在の範囲
 
 要件定義書の開発ステップ1〜5まで。

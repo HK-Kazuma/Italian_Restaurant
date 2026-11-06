@@ -22,6 +22,21 @@ function loadBest(): number {
     return 0;
   }
 }
+// 難易度ごとの自己ベスト（ランキングに登録できるか、の判断に使う。全体のハイスコアとは別）
+function loadBestOf(difficulty: string): number {
+  try {
+    return Number(localStorage.getItem(`${BEST_KEY}:${difficulty}`)) || 0;
+  } catch {
+    return 0;
+  }
+}
+function saveBestOf(difficulty: string, score: number): void {
+  try {
+    localStorage.setItem(`${BEST_KEY}:${difficulty}`, String(score));
+  } catch {
+    // 保存できなくても遊べる
+  }
+}
 function saveBest(score: number): void {
   try {
     localStorage.setItem(BEST_KEY, String(score));
@@ -202,6 +217,14 @@ function frame(): void {
     if (game.state.score > best) {
       best = game.state.score;
       saveBest(best);
+    }
+    // その難易度の自己ベストなら、結果画面から名前をつけてランキングに登録できる
+    const { difficulty, score } = game.state;
+    if (difficulty && score > 0 && score > loadBestOf(difficulty)) {
+      saveBestOf(difficulty, score);
+      hud.offerRanking({ difficulty, score });
+    } else {
+      hud.offerRanking(null);
     }
     interactor.clear();
     input.exitLock();
