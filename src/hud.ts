@@ -106,7 +106,7 @@ function ipadHtml(cfg: GameConfig, settings: Settings): string {
     <section class="ipad-page" data-page="tutorial" hidden>
       <button class="back" data-go="home">‹ ホーム</button>
       <h2>チュートリアル</h2>
-      <p class="ipad-tip">練習したいメニューをタップすると、厨房が最初の状態に戻り、作り方を矢印で順番に案内します。</p>
+      <p class="ipad-tip">練習したいメニューをタップすると、鍋や皿などが最初の状態に戻り（置いた食材やボトルの配置はそのまま）、作り方を矢印で順番に案内します。</p>
       <div class="tut-now" hidden></div>
       <div class="tut-list">${tutorialMenuHtml(cfg)}</div>
     </section>
@@ -115,7 +115,7 @@ function ipadHtml(cfg: GameConfig, settings: Settings): string {
       <h2>ゲーム開始</h2>
       <p>${Math.round(gameSeconds / 60)}分間のタイムアタックです。伝票は時間とともに届く間隔が短くなっていきます。難易度を選ぶと、伝票の量と出てくる料理が変わります。</p>
       <div class="diff-list">${difficultyHtml()}</div>
-      <p class="ipad-tip">選ぶと、最初に立っていた場所に戻り、操作説明が出ます。クリックするとゲームが始まります。冷蔵庫の中の物を置き直していれば、その配置のままです（鍋・皿・伝票などは最初の状態に戻ります）。</p>
+      <p class="ipad-tip">選ぶと、最初に立っていた場所に戻り、操作説明が出ます。クリックするとゲームが始まります。練習で置いた食材のトレー・ケース、ドレッシングなどのボトル、冷蔵庫の中の物は、その配置のままです（鍋・皿・伝票などは最初の状態に戻ります）。</p>
     </section>
     <section class="ipad-page" data-page="recipe" hidden>
       <button class="back" data-go="home">‹ ホーム</button>

@@ -85,28 +85,12 @@ body {
   font-size: 12px;
 }
 /* 6枚を超えた分：6枚目の裏に伝票が重なっているように見せ、「+x枚」で枚数を示す */
+/* box-shadow は必ず要素本体の背面に描かれるので、下に重なって見える（疑似要素の z-index:-1 だと本体の背景の上に出てしまう） */
 .ticket.stacked {
-  position: relative;
-  isolation: isolate;
-}
-.ticket.stacked::before,
-.ticket.stacked::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: #e8e3cf;
-  border-top: 5px solid #b9b49c;
-  border-radius: 3px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-}
-.ticket.stacked::before {
-  transform: translate(5px, 4px);
-}
-.ticket.stacked::after {
-  z-index: -2;
-  background: #d6d1bb;
-  transform: translate(10px, 8px);
+  box-shadow:
+    5px 4px 0 #e8e3cf,
+    10px 8px 0 #d6d1bb,
+    10px 10px 6px rgba(0, 0, 0, 0.5);
 }
 .ticket .more {
   display: inline-block;

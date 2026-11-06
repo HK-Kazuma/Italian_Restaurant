@@ -35,6 +35,14 @@ import type { BottleId, BottlePreview, BottleSpot, FridgeItemId, FridgePreview, 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
 type Action = () => void;
 
+// 次の状態（練習 ⇄ ゲーム・チュートリアル）に引き継ぐ配置
+type CarriedLayout = {
+  fridge: GameState['fridgeItems']; // 冷蔵庫の中の物の置き場所
+  trays: GameState['trays']; // トレー・ケースの場所（冷蔵庫 / サラダ台）。手に持っていたものは冷蔵庫に戻してある
+  traySpot: GameState['traySpot']; // サラダ台に置いたトレー・ケースの置き場の番号
+  bottles: GameState['bottles']; // ボトルの置き場所
+};
+
 const TOAST_SECONDS = 2.5;
 
 // ボトルをサラダ台の上に置くときの決まり
@@ -54,8 +62,9 @@ export class Game {
     this.state = this.initialState('title', 'practice');
   }
 
-  // fridge: 引き継ぐ冷蔵庫の中の物の置き場所（練習で置き直した配置を、ゲームにも反映する）。省略 = 最初の配置
-  private initialState(phase: Phase, mode: Mode, fridge?: Record<FridgeItemId, FridgeSpot>, difficulty: Difficulty | null = null): GameState {
+  // layout: 引き継ぐ食材・ボトルなどの配置（練習で置き直した配置を、ゲームにも反映する）。省略 = 最初の配置
+  private initialState(phase: Phase, mode: Mode, layout?: CarriedLayout, difficulty: Difficulty | null = null): GameState {
+    const fridge = layout?.fridge;
     return {
       phase,
       mode,
@@ -67,12 +76,12 @@ export class Game {
       boilers: Array.from({ length: this.cfg.boilerCount }, createBoiler),
       plateSlots: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => null),
       plateStyles: Array.from({ length: this.cfg.plateSlotCount + this.cfg.saladSlotCount }, () => 'plate' as const),
-      trays: Object.fromEntries(TRAY_IDS.map((id) => [id, 'fridge'])) as GameState['trays'],
-      traySpot: Object.fromEntries(TRAY_IDS.map((id) => [id, 0])) as GameState['traySpot'],
+      trays: Object.fromEntries(TRAY_IDS.map((id) => [id, layout?.trays[id] ?? 'fridge'])) as GameState['trays'],
+      traySpot: Object.fromEntries(TRAY_IDS.map((id) => [id, layout?.traySpot[id] ?? 0])) as GameState['traySpot'],
       fridgeOpen: [false, false],
       fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...(fridge ?? FRIDGE_HOME)[id] }])) as Record<FridgeItemId, FridgeSpot>,
       moving: null,
-      bottles: Object.fromEntries(BOTTLE_IDS.map((id) => [id, { ...BOTTLE_HOME[id] }])) as Record<BottleId, BottleSpot>,
+      bottles: Object.fromEntries(BOTTLE_IDS.map((id) => [id, { ...(layout?.bottles[id] ?? BOTTLE_HOME[id]) }])) as Record<BottleId, BottleSpot>,
       bottleShakeAt: null,
       hotWater: Array.from({ length: this.cfg.hotWaterSlotCount }, () => null),
       potSlots: Array.from({ length: this.cfg.potCount }, () => createPot(this.cfg.mixClicks)),
@@ -91,29 +100,37 @@ export class Game {
     };
   }
 
-  // 次の状態に引き継ぐ冷蔵庫の配置。練習で置き直した配置を残す。外に出ていたトレー・ケースは冷蔵庫に戻るので、
-  // もとの場所にほかの物が置かれていたら、冷蔵庫の中の空いている場所に置く。最初（引き継ぐ物がない）は undefined
-  private carriedFridge(): Record<FridgeItemId, FridgeSpot> | undefined {
+  // 次の状態に引き継ぐ配置。練習で置き直した、冷蔵庫の中の物・サラダ台に置いたトレー・ケース・ボトルの位置を残す
+  // （鍋・皿・熱湯のパック・伝票などは、毎回最初に戻る。冷蔵庫の扉も閉まる）。
+  //  - 手に持っていたトレー・ケースは冷蔵庫に戻る。もとの場所にほかの物が置かれていたら、冷蔵庫の中の空いている場所に置く
+  //  - 手に持っていたボトルは、もとの場所（layout.ts）に戻る
+  // 最初（引き継ぐ物がない）は undefined
+  private carriedLayout(): CarriedLayout | undefined {
     const prev = this.state;
     if (!prev) return undefined;
-    const out = TRAY_IDS.filter((id) => prev.trays[id] !== 'fridge').map((id) => TRAY_FRIDGE_ITEM[id]);
-    return returnToFridge(prev.fridgeItems, out);
+    const inHand = TRAY_IDS.filter((id) => prev.trays[id] === 'hand');
+    return {
+      fridge: returnToFridge(prev.fridgeItems, inHand.map((id) => TRAY_FRIDGE_ITEM[id])),
+      trays: Object.fromEntries(TRAY_IDS.map((id) => [id, prev.trays[id] === 'hand' ? 'fridge' : prev.trays[id]])) as GameState['trays'],
+      traySpot: { ...prev.traySpot },
+      bottles: Object.fromEntries(BOTTLE_IDS.map((id) => [id, { ...(prev.bottles[id] ?? BOTTLE_HOME[id]) }])) as Record<BottleId, BottleSpot>,
+    };
   }
 
-  // 練習キッチンを始める（時間制限なし）。冷蔵庫の置き直しは引き継ぐ
+  // 練習キッチンを始める（時間制限なし）。練習で置いた食材・ボトル・冷蔵庫の中の配置は引き継ぐ
   startPractice(): void {
-    this.state = this.initialState('playing', 'practice', this.carriedFridge());
+    this.state = this.initialState('playing', 'practice', this.carriedLayout());
   }
 
-  // ゲーム（5分間のタイムアタック）を始める。練習で置き直した冷蔵庫の配置は、そのまま引き継ぐ。それ以外は最初から
+  // ゲーム（5分間のタイムアタック）を始める。練習で置いた食材・ボトル・冷蔵庫の中の配置は、そのまま引き継ぐ。それ以外は最初から
   start(difficulty: Difficulty = DEFAULT_DIFFICULTY): void {
-    this.state = this.initialState('playing', 'game', this.carriedFridge(), difficulty);
+    this.state = this.initialState('playing', 'game', this.carriedLayout(), difficulty);
   }
 
   // ゲームの準備（iPad から）：状態を最初に戻して、操作説明を出す。時間は進まず、begin() で始まる。
   // difficulty で伝票の量と出てくる料理が決まる
   getReady(difficulty: Difficulty = DEFAULT_DIFFICULTY): void {
-    this.state = this.initialState('ready', 'game', this.carriedFridge(), difficulty);
+    this.state = this.initialState('ready', 'game', this.carriedLayout(), difficulty);
   }
 
   // 操作説明を読み終えて、ゲームを始める
@@ -138,12 +155,12 @@ export class Game {
     return this.tutorialCache.get(menuId) ?? null;
   }
 
-  // チュートリアルを始める。厨房は最初の状態に戻り（冷蔵庫の配置は引き継ぐ）、伝票はこのメニューの1枚だけ届いている。
+  // チュートリアルを始める。鍋・皿などは最初の状態に戻り（置いた食材・ボトル・冷蔵庫の配置は引き継ぐ）、伝票はこのメニューの1枚だけ届いている。
   // 手に持っていた iPad も壁に戻る。チュートリアルがないメニューなら何もせず false
   startTutorial(menuId: string): boolean {
     const steps = this.stepsOf(menuId);
     if (!steps) return false;
-    this.state = this.initialState('playing', 'practice', this.carriedFridge());
+    this.state = this.initialState('playing', 'practice', this.carriedLayout());
     const s = this.state;
     s.tickets = [createTicket(s.nextTicketId++, getMenu(menuId), s.time)];
     s.nextTicketAt = Infinity; // ほかの伝票は届かない
