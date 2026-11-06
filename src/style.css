@@ -405,6 +405,9 @@ body {
 .ipad .icon.green {
   background: #34c759;
 }
+.ipad .icon.gray {
+  background: #8e8e93;
+}
 .ipad .icon.orange {
   background: #ff9f0a;
 }
@@ -523,6 +526,97 @@ body {
 .ipad .recipe {
   color: #e6e0d4;
   font-size: 13px;
+}
+
+/* iPad の設定アプリ：横に伸びたバーのつまみを動かして値を選ぶ */
+.setting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 10px;
+}
+.setting-row {
+  padding: 12px 16px 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.setting-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.setting-label {
+  font-size: 18px;
+  font-weight: bold;
+}
+.setting-value {
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffd166;
+  font-variant-numeric: tabular-nums;
+}
+.setting-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 2px;
+  font-size: 12px;
+  opacity: 0.95;
+}
+.setting-bar .slider {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.35);
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -9px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #34c759;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #34c759;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+.slider:hover::-webkit-slider-thumb {
+  filter: brightness(1.15);
+}
+.setting-note {
+  margin: 0 0 6px;
+  font-size: 12px !important;
+  opacity: 0.8;
+}
+.ipad .setting-reset {
+  align-self: flex-end;
+  margin-top: 12px;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 14px;
 }
 
 /* iPad のチュートリアルアプリ：メニューの一覧（タップで開始） */

@@ -3,6 +3,7 @@ import { DIFFICULTIES, getDifficulty, isDifficulty, type Difficulty } from './di
 import { describeItem } from './game';
 import { INGREDIENTS } from './ingredients';
 import { MENU, getMenu } from './recipe';
+import { DEFAULT_SETTINGS, SETTING_SPECS, clampSetting, formatSetting, type SettingKey, type Settings } from './settings';
 import { hasTutorial, tutorialSteps, type TutorialView } from './tutorial';
 import type { GameState, Phase } from './types';
 
@@ -19,12 +20,13 @@ const CONTROLS_HTML = `
 `;
 
 // iPad の画面から選べる操作。start = 選んだ難易度でゲーム開始（操作説明を出して、クリックで始まる）、close = 画面を閉じて練習キッチンに戻る、
-// tutorial = そのメニューのチュートリアルを始める、tutorialStop = チュートリアルをやめる
+// tutorial = そのメニューのチュートリアルを始める、tutorialStop = チュートリアルをやめる、setting = 設定の値を変える
 export type IpadAction =
   | { type: 'start'; difficulty: Difficulty }
   | { type: 'close' }
   | { type: 'tutorial'; menuId: string }
-  | { type: 'tutorialStop' };
+  | { type: 'tutorialStop' }
+  | { type: 'setting'; key: SettingKey; value: number }; // 設定アプリのバーを動かした
 
 // レシピ：メニュー表（recipe.ts）から作る。完成品の中身と、鍋で加熱する分
 function countedNames(ids: readonly string[]): string {
@@ -71,7 +73,20 @@ function difficultyHtml(): string {
   ).join('');
 }
 
-function ipadHtml(cfg: GameConfig): string {
+// 設定アプリ：横に伸びたバーのつまみを動かして、好きな値を選ぶ
+function settingsHtml(settings: Settings): string {
+  return SETTING_SPECS.map(
+    (spec) => `<div class="setting-row">
+      <div class="setting-head"><span class="setting-label">${spec.label}</span><output class="setting-value" data-value-of="${spec.key}">${formatSetting(settings[spec.key])}</output></div>
+      <div class="setting-bar"><span>${formatSetting(spec.min)}</span>
+        <input type="range" class="slider" data-setting="${spec.key}" min="${spec.min}" max="${spec.max}" step="${spec.step}" value="${settings[spec.key]}" aria-label="${spec.label}" />
+        <span>${formatSetting(spec.max)}</span></div>
+      <p class="setting-note">${spec.note}</p>
+    </div>`,
+  ).join('');
+}
+
+function ipadHtml(cfg: GameConfig, settings: Settings): string {
   const gameSeconds = cfg.gameDuration;
   return `<div class="ipad-body"><div class="ipad-screen">
     <div class="ipad-status"><span>厨房 iPad</span><button data-act="close">✕ とじる</button></div>
@@ -81,6 +96,7 @@ function ipadHtml(cfg: GameConfig): string {
         <button class="app" data-go="start"><span class="icon green">▶</span>ゲーム開始</button>
         <button class="app" data-go="recipe"><span class="icon orange">☰</span>レシピ</button>
         <button class="app" data-go="controls"><span class="icon blue">？</span>操作説明</button>
+        <button class="app" data-go="settings"><span class="icon gray">⚙</span>設定</button>
       </div>
       <p class="ipad-tip">ここでは時間制限なし。気がすむまで練習できます（右クリックでも閉じられます）</p>
     </section>
@@ -108,6 +124,13 @@ function ipadHtml(cfg: GameConfig): string {
       <button class="back" data-go="home">‹ ホーム</button>
       <h2>操作説明</h2>
       ${CONTROLS_HTML}
+    </section>
+    <section class="ipad-page" data-page="settings" hidden>
+      <button class="back" data-go="home">‹ ホーム</button>
+      <h2>設定</h2>
+      <p class="ipad-tip">つまみをドラッグして、好きな値に合わせます。変えた値はすぐ反映され、この端末に保存されます。</p>
+      <div class="setting-list">${settingsHtml(settings)}</div>
+      <button class="setting-reset" data-act="settingsReset">標準に戻す</button>
     </section>
   </div></div>`;
 }
@@ -167,6 +190,7 @@ export class Hud {
     private cfg: GameConfig,
     onOverlayClick: () => void,
     onIpad: (action: IpadAction) => void,
+    settings: Settings,
   ) {
     this.root = root;
     const top = el('div', 'top');
@@ -175,7 +199,7 @@ export class Hud {
     this.guideArrow.textContent = '▲';
     this.note.textContent = '練習モード（時間制限なし）：後ろの壁の iPad を左クリックで取り、右クリックで開くと、チュートリアルやゲーム開始ができます';
     this.startPopup.textContent = 'まずは後ろのタブレットから操作方法とレシピを確認しよう！';
-    this.ipad.innerHTML = ipadHtml(cfg);
+    this.ipad.innerHTML = ipadHtml(cfg, settings);
     root.append(top, this.note, this.tutorial, this.rail, this.crosshair, this.hint, this.guide, this.hand, this.toast, this.startPopup, this.ipad, this.overlay);
     this.overlay.addEventListener('click', onOverlayClick);
 
@@ -187,6 +211,22 @@ export class Hud {
       else if (t.dataset.tutorial) onIpad({ type: 'tutorial', menuId: t.dataset.tutorial });
       else if (isDifficulty(t.dataset.difficulty)) onIpad({ type: 'start', difficulty: t.dataset.difficulty });
       else if (t.dataset.act === 'close' || t.dataset.act === 'tutorialStop') onIpad({ type: t.dataset.act });
+      else if (t.dataset.act === 'settingsReset') {
+        for (const spec of SETTING_SPECS) {
+          const value = DEFAULT_SETTINGS[spec.key];
+          this.showSetting(spec.key, value);
+          onIpad({ type: 'setting', key: spec.key, value });
+        }
+      }
+    });
+    // 設定のバー：つまみを動かすたびに、値の表示とゲームの設定を更新する
+    this.ipad.addEventListener('input', (e) => {
+      const input = e.target as HTMLInputElement;
+      const key = input.dataset.setting as SettingKey | undefined;
+      if (!key) return;
+      const value = clampSetting(key, Number(input.value));
+      this.showSetting(key, value);
+      onIpad({ type: 'setting', key, value });
     });
     this.ipad.addEventListener('mousedown', (e) => {
       if (e.button !== 2) return;
@@ -205,6 +245,14 @@ export class Hud {
   private hideStartPopup(): void {
     window.clearTimeout(this.startPopupTimer);
     this.startPopup.classList.add('hidden');
+  }
+
+  // バーのつまみと数字の表示を、その値に合わせる
+  private showSetting(key: SettingKey, value: number): void {
+    const slider = this.ipad.querySelector<HTMLInputElement>(`[data-setting="${key}"]`);
+    if (slider) slider.value = String(value);
+    const out = this.ipad.querySelector<HTMLElement>(`[data-value-of="${key}"]`);
+    if (out) out.textContent = formatSetting(value);
   }
 
   private showIpadPage(page: string): void {

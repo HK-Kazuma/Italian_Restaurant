@@ -8,6 +8,7 @@ import { Input } from './input';
 import { Interactor } from './interaction';
 import { Player } from './player';
 import { createKitchen } from './scene';
+import { loadSettings, lookScale, saveSettings } from './settings';
 import type { Target } from './types';
 import './style.css';
 
@@ -41,6 +42,8 @@ camera.add(kitchen.handAnchor);
 const game = new Game(cfg);
 game.world = kitchen.world; // 投げた鍋が、床・台・壁に当たるように
 const player = new Player(cfg, kitchen.world);
+const settings = loadSettings();
+player.lookScale = lookScale(settings);
 const interactor = new Interactor(camera, kitchen.interactables, cfg.reach);
 let best = loadBest();
 
@@ -76,7 +79,12 @@ const hud = new Hud(
   (action) => {
     // iPad の画面から：ゲーム開始（最初の場所に戻り、操作説明を出す。クリックで始まる。冷蔵庫の配置は引き継ぐ）、
     // チュートリアルの開始（最初の場所で、厨房を作り直す）・中止、または閉じて練習に戻る
-    if (action.type === 'start') {
+    if (action.type === 'setting') {
+      // 設定アプリのバー：すぐ視点の動きに反映して、保存する
+      settings[action.key] = action.value;
+      player.lookScale = lookScale(settings);
+      saveSettings(settings);
+    } else if (action.type === 'start') {
       game.getReady(action.difficulty);
       player.reset();
       interactor.clear();
@@ -91,6 +99,7 @@ const hud = new Hud(
       input.requestLock();
     }
   },
+  settings,
 );
 
 // カーソルが出たまま取り残されたとき（再ロックが拒否された直後など）は、画面クリックで視点操作に戻る

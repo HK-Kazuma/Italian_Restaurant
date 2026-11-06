@@ -10,6 +10,7 @@ export class Player {
   yaw = 0;
   pitch = 0;
   readonly position = new THREE.Vector3(0, EYE_HEIGHT, 0);
+  lookScale = 1; // 設定（iPad の設定アプリ）による視点の回りやすさの倍率
 
   constructor(
     private cfg: GameConfig,
@@ -24,8 +25,9 @@ export class Player {
   }
 
   look(dx: number, dy: number): void {
-    this.yaw -= dx * this.cfg.mouseSensitivity;
-    this.pitch -= dy * this.cfg.mouseSensitivity;
+    const k = this.cfg.mouseSensitivity * this.lookScale;
+    this.yaw -= dx * k;
+    this.pitch -= dy * k;
     this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.pitch));
   }
 
