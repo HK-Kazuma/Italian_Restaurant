@@ -20,5 +20,55 @@ service cloud.firestore {
 
       allow update, delete: if false;
     }
+
+    // ---- 開発ボード（src/devboard.ts）----
+    // 開発者コードは、devBoard の書き込みと同じバッチで devAuth/{同じID} に書かれる。devAuth は誰も読めないので、コードは漏れない。
+    // 下の DEV_CODE_HERE を、本物の開発者コードに置き換えて、Firebase コンソールのルールにだけ貼る（リポジトリには本物のコードを書かない）。
+    function devAuthed(id) {
+      return getAfter(/databases/$(database)/documents/devAuth/$(id)).data.code == 'DEV_CODE_HERE';
+    }
+
+    // 予定の一覧：誰でも読める。追加・移動・削除は、開発者コードを知っている人だけ
+    match /devBoard/{id} {
+      allow read: if true;
+
+      allow create: if devAuthed(id)
+        && request.resource.data.keys().hasOnly(['title', 'note', 'status', 'createdAt'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1
+        && request.resource.data.title.size() <= 40 * 2
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 200 * 2
+        && request.resource.data.status in ['doing', 'planned']
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if devAuthed(id)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['doing', 'planned'];
+
+      allow delete: if devAuthed(id);
+    }
+
+    // コードの置き場：書き込み専用（読めない・消せない）
+    match /devAuth/{id} {
+      allow create, update: if request.resource.data.keys().hasOnly(['code'])
+        && request.resource.data.code is string
+        && request.resource.data.code.size() <= 64;
+      allow read, delete: if false;
+    }
+
+    // 要望・改善案：誰でも送れるが、読めるのは Firebase コンソールだけ（開発者用）
+    match /feedback/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['kind', 'text', 'name', 'createdAt'])
+        && request.resource.data.kind in ['feature', 'improve']
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 500 * 2
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 12 * 2
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if false;
+    }
   }
 }

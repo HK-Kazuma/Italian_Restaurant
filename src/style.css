@@ -926,3 +926,104 @@ button.tut-card:hover {
   margin: 8px 0 0;
   font-size: 14px;
 }
+
+/* iPad の開発ボードアプリ */
+.ipad .icon.red {
+  background: #ff453a;
+}
+.ipad-page [hidden] {
+  display: none !important;
+}
+.dev-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dev-item {
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.dev-title {
+  font-size: 17px;
+  font-weight: bold;
+}
+.dev-text {
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 1.6;
+  opacity: 0.9;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dev-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.dev-actions button {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.24);
+  font-size: 13px;
+}
+.dev-admin {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+.ipad .dev-admin-toggle {
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  opacity: 0.8;
+}
+.dev-admin-panel,
+.dev-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.dev-admin-panel label,
+.dev-feedback label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+.dev-admin-panel input,
+.dev-admin-panel textarea,
+.dev-feedback input,
+.dev-feedback textarea,
+.dev-feedback select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.ipad .dev-submit {
+  padding: 8px 20px;
+  border: 0;
+  border-radius: 20px;
+  background: #34c759;
+  font-size: 16px;
+  font-weight: bold;
+}
+.ipad .dev-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ipad-page p.dev-admin-status,
+.ipad-page p.dev-feedback-status {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 14px;
+}
