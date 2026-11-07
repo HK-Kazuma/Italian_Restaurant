@@ -69,6 +69,25 @@ describe('既定のソース（鍋で加熱する分）', () => {
     // ペンネ（トマトソース・ガーリック・唐辛子）とは別のソース
     expect(findSauceRecipe(['tomatoSauce', 'garlic', 'chili'])?.id).toBe('penne');
   });
+  it('イカスミのパスタ：イカ墨ソースとイカがそろう', () => {
+    expect(findSauceRecipe(['squid', 'squidInkSauce'])?.id).toBe('squidInk');
+    expect(findSauceRecipe(['squidInkSauce'])).toBeNull();
+    expect(isSaucePartial(['squidInkSauce'])).toBe(true);
+  });
+  it('きのこのクリームパスタ：ホワイトソース・ほうれん草・パンチェッタ・きのこ・塩オイルソースが、順不同でそろう', () => {
+    const mushroomCream = ['saltOilSauce', 'mushroom', 'whiteSauce', 'pancetta', 'spinach'] as const;
+    expect(findSauceRecipe(mushroomCream)?.id).toBe('mushroomCream');
+    expect(findSauceRecipe(mushroomCream.slice(1))).toBeNull();
+    expect(isSaucePartial(mushroomCream.slice(1))).toBe(true);
+    // ほうれん草のソテー（ほうれん草2掴み）とは別のソース
+    expect(findSauceRecipe(['spinach', 'spinach', 'pancetta', 'sauteSauce'])?.id).toBe('spinach');
+  });
+  it('2つの新しいパスタの完成品の中身', () => {
+    expect([...getMenu('squidInk').ingredients].sort()).toEqual(['noodle', 'parsley', 'squid', 'squidInkSauce']);
+    expect([...getMenu('mushroomCream').ingredients].sort()).toEqual(
+      ['blackPepper', 'cheese', 'mushroom', 'noodle', 'pancetta', 'saltOilSauce', 'spinach', 'whiteSauce'],
+    );
+  });
   it('無効にしたメニューのソースは対象外', () => {
     const off = MENU.map((m) => (m.id === 'penne' ? { ...m, enabled: false } : m));
     expect(findSauceRecipe(['tomatoSauce', 'garlic', 'chili'], off)).toBeNull();

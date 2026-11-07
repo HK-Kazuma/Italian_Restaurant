@@ -1485,10 +1485,11 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
     const door2: Target = { kind: 'fridgeDoor', unit: 1 };
     const shelf2 = (shelf: 0 | 1 | 2 | 3, x: number, z: number): Target => ({ kind: 'fridgeShelf', unit: 1, shelf, x, z });
 
-    it('最初は空で、扉は1台目と別々に開け閉めできる', () => {
+    it('最初は、イカ・きのこ・ホワイトソース缶・イカ墨ソースだけが入っていて、扉は1台目と別々に開け閉めできる', () => {
       const g = newGame(); // 1台目は開けてある
       expect(g.state.fridgeOpen).toEqual([true, false]);
-      expect(Object.values(g.state.fridgeItems).every((s) => s.unit === 0)).toBe(true);
+      const inSecond = Object.entries(g.state.fridgeItems).filter(([, s]) => s.unit === 1).map(([id]) => id).sort();
+      expect(inSecond).toEqual(['mushroomTray', 'squidInkSauce', 'squidTray', 'whiteSauce']);
       g.rightClick(door2);
       expect(g.state.fridgeOpen).toEqual([true, true]);
       g.rightClick(fridgeShelf(1, 0, 0)); // 棚板の unit 省略 = 1台目

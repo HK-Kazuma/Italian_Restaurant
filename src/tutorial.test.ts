@@ -20,12 +20,13 @@ const plateStack: Target = { kind: 'plateStack' };
 const smallStack: Target = { kind: 'plateStack', style: 'small' };
 const bowlStack: Target = { kind: 'plateStack', style: 'bowl' };
 const fridgeDoor: Target = { kind: 'fridgeDoor' };
+const fridgeDoor2: Target = { kind: 'fridgeDoor', unit: 1 }; // 右側の冷蔵庫
 const stock = (id: Extract<Target, { kind: 'stock' }>['id']): Target => ({ kind: 'stock', id });
 const fridgeStock = (id: Extract<Target, { kind: 'stock' }>['id']): Target => ({ kind: 'stock', id, inFridge: true });
 const bottle = (id: Extract<Target, { kind: 'bottle' }>['id']): Target => ({ kind: 'bottle', id });
 const tray = (id: 'spinach' | 'saltOil'): Target => ({ kind: 'traySlot', id });
 const fridgeTray = (id: TrayId): Target => ({ kind: 'fridgeTray', id });
-// 小エビ・チキン・パンチェッタのトレーとソテーソースのケースを置く、トッピングの置き場（spot 番目）
+// 小エビ・チキン・パンチェッタ・イカ・きのこのトレーとソテーソースのケースを置く、トッピングの置き場（spot 番目）
 const topping = (spot: number): Target => ({ kind: 'traySlot', id: 'topping', spot });
 const table = (x: number, z: number, surface: 'salad' | 'left'): Target => ({ kind: 'tableTop', surface, x, z });
 
@@ -91,6 +92,24 @@ const SCRIPTS: Record<string, Act[]> = {
     plateStack, slot(0), wait(cfg.penneBoilTime + 1),
     basket(0), burner(0), ...mix(), burner(0), slot(0), washer,
     bottle('parsley'), { right: slot(0) }, { free: parsleyBack }, slot(0), pass, ...returnPot(),
+  ],
+  squidInk: [
+    rack, basket(0), button(0), { right: fridgeDoor2 }, fridgeTray('squid'), topping(0),
+    potSlot(0), burner(0), fridgeStock('squidInkSauce'), burner(0), topping(0), burner(0),
+    plateStack, slot(0), wait(cfg.boilTime + 1),
+    basket(0), burner(0), ...mix(), burner(0), slot(0), washer,
+    bottle('parsley'), { right: slot(0) }, { free: parsleyBack }, slot(0), pass, ...returnPot(),
+  ],
+  mushroomCream: [
+    rack, basket(0), button(0), { right: fridgeDoor2 }, fridgeTray('mushroom'), topping(0),
+    { right: fridgeDoor }, fridgeTray('spinach'), tray('spinach'), fridgeTray('pancetta'), topping(1),
+    fridgeTray('saltOil'), tray('saltOil'),
+    potSlot(0), burner(0), fridgeStock('whiteSauce'), burner(0),
+    tray('spinach'), burner(0), topping(1), burner(0), topping(0), burner(0), tray('saltOil'), burner(0),
+    plateStack, slot(0), wait(cfg.boilTime + 1),
+    basket(0), slot(0), burner(0), slot(0), washer,
+    stock('cheese'), slot(0), bottle('blackPepper'), { right: slot(0) }, { free: pepperBack },
+    slot(0), pass, ...returnPot(),
   ],
   spinach: [
     { right: fridgeDoor }, fridgeTray('spinach'), tray('spinach'), fridgeTray('pancetta'), topping(0), fridgeTray('sauteSauce'), topping(1),
@@ -299,7 +318,7 @@ describe('チュートリアル：矢印と工程の進み方', () => {
     g.update(0.01);
     expect(g.tutorialGuide()?.at).toEqual({ kind: 'stock', id: 'meatSauce' });
     g.rightClick(fridgeDoor); // 閉めてしまった
-    expect(g.tutorialGuide()?.at).toEqual({ kind: 'fridgeDoor' });
+    expect(g.tutorialGuide()?.at).toEqual({ kind: 'fridgeDoor', unit: 0 });
     expect(g.tutorialGuide()?.text).toContain('冷蔵庫');
   });
 

@@ -74,7 +74,7 @@ describe('Game: 難易度', () => {
     expect(trial.state.tickets.length).toBe(getDifficulty('trial').tickets.maxOpenTickets);
   });
 
-  it('トライアルでは、手順の多い3品は出ない', () => {
+  it('トライアルでは、手順の多い4品は出ない', () => {
     const seen = new Set<string>();
     const g = game('trial', seeded());
     for (let i = 0; i < 2000; i++) {
@@ -83,8 +83,8 @@ describe('Game: 難易度', () => {
       g.update(0.001);
       for (const t of g.state.tickets) seen.add(t.menuId);
     }
-    expect(seen.size).toBe(MENU.length - 3);
-    for (const id of ['peperoncino', 'carbonara', 'penne']) expect(seen.has(id)).toBe(false);
+    expect(seen.size).toBe(MENU.length - 4);
+    for (const id of ['peperoncino', 'carbonara', 'penne', 'mushroomCream']) expect(seen.has(id)).toBe(false);
   });
 
   it('アソシエイトでは、全部の品が出る（手順の多い品が多め）', () => {

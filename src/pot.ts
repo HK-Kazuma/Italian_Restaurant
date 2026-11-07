@@ -149,6 +149,8 @@ export const SAUCE_FILL_PER_UNIT: Partial<Record<IngredientId, number>> = {
   tomatoSauce: 0.5,
   carbonaraSauce: 0.5,
   sauteSauce: 0.5,
+  whiteSauce: 0.5,
+  squidInkSauce: 0.5,
 };
 
 // 鍋に入っているソースの量（0〜1）。入れた順序には依存しない

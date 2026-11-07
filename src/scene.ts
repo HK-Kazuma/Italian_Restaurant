@@ -245,6 +245,47 @@ function addChiliFlakes(g: THREE.Group, count: number, seed: number, radius: num
   }
 }
 
+// イカ：白い輪切り（皮のピンク紫がところどころ混ざる）
+function addSquidPieces(g: THREE.Group, count: number, seed: number, radius: number, yAt: (r: number) => number, scale = 1): void {
+  const rnd = seeded(seed);
+  const ring = new THREE.TorusGeometry(0.014, 0.0045, 6, 14);
+  const colors = [mat(0xf6efe6), mat(0xeadccf), mat(0xdcc2c2), mat(0xf1e6dc)];
+  for (let i = 0; i < count; i++) {
+    const r = Math.sqrt(rnd()) * radius;
+    const a = rnd() * Math.PI * 2;
+    const s = new THREE.Mesh(ring, colors[i % colors.length]);
+    s.position.set(Math.cos(a) * r, yAt(r) + 0.005 + rnd() * 0.012 * scale, Math.sin(a) * r);
+    s.rotation.set(-Math.PI / 2 + (rnd() - 0.5) * 0.9, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.6, 'YXZ');
+    s.scale.setScalar((0.8 + rnd() * 0.5) * scale);
+    g.add(s);
+  }
+}
+
+// きのこ：茶色のかさと、白っぽい軸のスライス
+function addMushroomSlices(g: THREE.Group, count: number, seed: number, radius: number, yAt: (r: number) => number, scale = 1): void {
+  const rnd = seeded(seed);
+  const cap = new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  const stem = new THREE.CylinderGeometry(0.0045, 0.0055, 0.022, 6);
+  const caps = [mat(0xa87a4d), mat(0xc09a6b), mat(0x8f6540)];
+  const stemMat = mat(0xefe3cd);
+  for (let i = 0; i < count; i++) {
+    const r = Math.sqrt(rnd()) * radius;
+    const a = rnd() * Math.PI * 2;
+    const piece = new THREE.Group();
+    const c = new THREE.Mesh(cap, caps[i % caps.length]);
+    c.scale.set(0.02 * scale, 0.011 * scale, 0.017 * scale);
+    c.position.y = 0.01 * scale;
+    piece.add(c);
+    const s = new THREE.Mesh(stem, stemMat);
+    s.scale.setScalar(scale);
+    s.position.y = 0.006 * scale;
+    piece.add(s);
+    piece.position.set(Math.cos(a) * r, yAt(r) + 0.002 + rnd() * 0.012 * scale, Math.sin(a) * r);
+    piece.rotation.set((rnd() - 0.5) * 0.8, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.8, 'YXZ');
+    g.add(piece);
+  }
+}
+
 // ステンレスの丸い容器（ガーリック・唐辛子）。冷蔵庫から取って、台の上の好きな場所に置く。中身は山盛りで見える
 const STEEL_BIN = { r: 0.17, h: 0.1 };
 function buildSteelBin(id: 'garlic' | 'chili'): THREE.Group {
@@ -420,8 +461,8 @@ function addSaladDish(g: THREE.Group, contents: readonly IngredientId[], seed: n
   });
 }
 
-// 小エビ・チキン・パンチェッタのトレー（ステンレスの浅いバット）。中身が山盛りで見える
-function buildFoodPan(id: 'shrimp' | 'chicken' | 'pancetta'): THREE.Group {
+// 小エビ・チキン・パンチェッタ・イカ・きのこのトレー（ステンレスの浅いバット）。中身が山盛りで見える
+function buildFoodPan(id: 'shrimp' | 'chicken' | 'pancetta' | 'squid' | 'mushroom'): THREE.Group {
   const g = new THREE.Group();
   const steel = 0xc9ced3;
   g.add(box(0.4, 0.02, 0.4, 0x9aa0a6, 0, 0.01, 0));
@@ -429,10 +470,13 @@ function buildFoodPan(id: 'shrimp' | 'chicken' | 'pancetta'): THREE.Group {
   g.add(box(0.4, 0.08, 0.012, steel, 0, 0.04, -0.194));
   g.add(box(0.012, 0.08, 0.376, steel, 0.194, 0.04, 0));
   g.add(box(0.012, 0.08, 0.376, steel, -0.194, 0.04, 0));
-  g.add(box(0.376, 0.045, 0.376, id === 'shrimp' ? 0xe9a98e : id === 'pancetta' ? 0xe08e88 : 0xe0cba8, 0, 0.0425, 0)); // 下地
+  const base = { shrimp: 0xe9a98e, pancetta: 0xe08e88, chicken: 0xe0cba8, squid: 0xe9ddd0, mushroom: 0x9a7048 }[id];
+  g.add(box(0.376, 0.045, 0.376, base, 0, 0.0425, 0)); // 下地
   const heap = (r: number) => 0.065 + 0.035 * Math.max(0, 1 - (r / 0.21) ** 2);
   if (id === 'shrimp') addShrimp(g, 90, hashId('shrimp-pan'), 0.2, heap);
   else if (id === 'pancetta') addPancettaStrips(g, 34, hashId('pancetta-pan'), 0.18, heap);
+  else if (id === 'squid') addSquidPieces(g, 85, hashId('squid-pan'), 0.19, heap);
+  else if (id === 'mushroom') addMushroomSlices(g, 70, hashId('mushroom-pan'), 0.18, heap);
   else addChickenSlices(g, 22, hashId('chicken-pan'), 0.19, heap);
   return g;
 }
@@ -516,6 +560,12 @@ function buildPotMesh(pot: Pot): THREE.Group {
   const others = new Set(pot.contents);
   for (const id of others) {
     if (id === 'pancetta' || id === 'meatSauce' || isNoodle(id) || SAUCE_FILL_PER_UNIT[id] !== undefined) continue;
+    if (id === 'squid' || id === 'mushroom') {
+      const y = hasNoodle ? moundTop : surfaceY;
+      if (id === 'squid') addSquidPieces(g, 9 * units(id), hashId(id), 0.09, () => y, 0.9);
+      else addMushroomSlices(g, 9 * units(id), hashId(id), 0.09, () => y, 0.9);
+      continue;
+    }
     if (id === 'spinach') {
       const y = hasNoodle ? moundTop : surfaceY;
       addSpinachLeaves(g, 22 * units(id), hashId(id), 0.1, (rad) => y + 0.02 * (1 - rad / 0.1));
@@ -702,9 +752,9 @@ function buildIpad(): THREE.Group {
   return g;
 }
 
-const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce', 'shrimp', 'garlic', 'chili', 'saltOilSauce']);
+const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce', 'whiteSauce', 'shrimp', 'garlic', 'chili', 'saltOilSauce']);
 // トングでつかむ具材（手に持つとトングで表示する）
-const TONGED: ReadonlySet<IngredientId> = new Set(['pancetta', 'chicken', 'spinach']);
+const TONGED: ReadonlySet<IngredientId> = new Set(['pancetta', 'chicken', 'spinach', 'squid', 'mushroom']);
 
 // --- パスタ皿：木の深皿に、少し山なりに盛った麺＋ソース＋粉状のトッピング ---
 const WOOD_BOWL_FLOOR = 0.034; // 木の皿の内側の底の高さ
@@ -805,6 +855,8 @@ const PASTA_SAUCE_COLOR: Partial<Record<IngredientId, number>> = {
   carbonaraSauce: 0xf6e6aa,
   tarakoSauce: 0xf3a09a,
   saltOilSauce: 0xeedc8a,
+  whiteSauce: 0xf8f1df,
+  squidInkSauce: 0x3a3a46,
 };
 const PASTA_TOPPINGS: ReadonlySet<IngredientId> = new Set(['cheese', 'parsley', 'blackPepper', 'nori', 'chili', 'garlic']);
 
@@ -913,6 +965,12 @@ function addPastaDish(g: THREE.Group, contents: readonly IngredientId[], seedBas
       addChiliFlakes(g, 90, hashId(id) + i, rx * 0.85, top);
     } else if (id === 'garlic') {
       addGarlicSlices(g, 14, hashId(id) + i, rx * 0.85, top);
+    } else if (id === 'spinach') {
+      addSpinachLeaves(g, 20, hashId(id) + i, rx * 0.7, (r) => top(r) + 0.004);
+    } else if (id === 'squid') {
+      addSquidPieces(g, 9, hashId(id) + i, rx * 0.7, (r) => top(r) + 0.002);
+    } else if (id === 'mushroom') {
+      addMushroomSlices(g, 9, hashId(id) + i, rx * 0.7, (r) => top(r) + 0.002);
     } else if (!PASTA_TOPPINGS.has(id)) {
       g.add(cyl(0.05, 0.05, 0.012, INGREDIENTS[id].color, 0, top(0) + 0.006, 0)); // 想定外の物は、上に平たく載せる
     }
@@ -948,6 +1006,8 @@ function buildItemMesh(item: Item): THREE.Group {
         if (item.id === 'chicken') addChickenSlices(g, 3, 14, 0.012, () => 0.008); // つかんだチキン
         else if (item.id === 'pancetta') addPancettaStrips(g, 3, 16, 0.012, () => 0.005); // つかんだパンチェッタ
         else if (item.id === 'spinach') addSpinachLeaves(g, 9, 15, 0.025, () => 0.012, true); // つかんだほうれん草
+        else if (item.id === 'squid') addSquidPieces(g, 4, 17, 0.014, () => 0.004, 0.9); // つかんだイカ
+        else if (item.id === 'mushroom') addMushroomSlices(g, 3, 18, 0.014, () => 0.004, 0.9); // つかんだきのこ
         else g.add(box(0.08, 0.04, 0.05, color, 0, 0.02, 0)); // つかんだ具材
       } else {
         g.add(box(0.14, 0.05, 0.18, color, 0, 0.025, 0)); // パック
@@ -1583,6 +1643,14 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   can.add(cyl(0.045, 0.03, 0.04, 0xc9ced3, 0.09, 0.42, 0)); // お玉の器
   addFridgeItem('meatSauce', can, fridgeStock('meatSauce'));
 
+  // ホワイトソース缶（右側の冷蔵庫）。ミートソース缶と同じく、クリックでお玉1杯すくう
+  const whiteCan = new THREE.Group();
+  whiteCan.add(cyl(0.1, 0.1, 0.18, INGREDIENTS.whiteSauce.color, 0, 0.09, 0)); // 缶
+  whiteCan.add(cyl(0.101, 0.101, 0.012, 0xcfd3d6, 0, 0.186, 0)); // ふた
+  whiteCan.add(cyl(0.012, 0.012, 0.26, 0x8a8f94, 0.04, 0.3, 0).rotateZ(-0.35)); // お玉の柄
+  whiteCan.add(cyl(0.045, 0.03, 0.04, 0xc9ced3, 0.09, 0.42, 0)); // お玉の器
+  addFridgeItem('whiteSauce', whiteCan, fridgeStock('whiteSauce'));
+
   // カルボナーラのパック（熱湯で温めてから鍋に入れる）、ペンネ（茹で麺器に麺と同じようにセットする）、
   // コーンスープのパック（熱湯で温めて、スープ皿に入れる）
   const packStack = (color: number, count: number) => {
@@ -1598,6 +1666,9 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   addFridgeItem('penne', penne, fridgeStock('penne'));
 
   addFridgeItem('cornSoup', packStack(INGREDIENTS.cornSoup.color, 4), fridgeStock('cornSoup'));
+
+  // イカ墨ソースのパック（右側の冷蔵庫）。温めずに、そのまま鍋に入れる
+  addFridgeItem('squidInkSauce', packStack(INGREDIENTS.squidInkSauce.color, 3), fridgeStock('squidInkSauce'));
 
   // 最初は冷蔵庫にしまってあるボトル（ドレッシング・パプリカパウダー）。取り出すと、台の上に置ける（台の上と同じ大きさ）
   for (const id of Object.keys(BOTTLE_FRIDGE_ITEM) as FridgeBottleId[]) {
@@ -1677,7 +1748,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   // ほうれん草のトレー（トングで1掴み）、塩オイルソースのケース（お玉で1杯）、小エビ（お玉）、チキン・パンチェッタ（トング）、ソテーソース（パック）
   // 置き場は区画（TrayZone）ごとにあり、その区画に置ける種類だけ置ける（種類と区画の対応は tray.ts）。
   //   spinach … ほうれん草のトレー専用 / saltOil … 塩オイルソースのケース専用（具材コーナーの奥に3か所）
-  //   topping … 小エビ・チキン・パンチェッタのトレーとソテーソースのケース。4か所のどこに、どれを置いてもよい
+  //   topping … 小エビ・チキン・パンチェッタ・イカ・きのこのトレーとソテーソース・トマトソースのケース。7か所のどこに、どれを置いてもよい
   // key = `${区画}:${番号}`（番号は state.traySpot と同じ）
   const trayViews = new Map<string, ItemView>();
   // 手に持っているトレー・ケースを置ける（空いている）置き場を、緑の印（置く範囲）と、上下に揺れる矢印で案内する
@@ -1703,6 +1774,8 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     ['topping', 2, SX_STOCK, 0.3],
     ['topping', 3, SX_STOCK2, 1.2],
     ['topping', 4, SX_STOCK2, 0.75],
+    ['topping', 5, SX_STOCK, -1.05], // イカ・きのこのトレーが増えた分（具材の列の奥）
+    ['topping', 6, SX_STOCK2, -1.2],
   ];
   for (const zone of Object.keys(TRAY_SPOT_COUNT) as TrayZone[]) {
     // 置き場の数が tray.ts と合っていないと、空きの判定とずれる

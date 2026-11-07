@@ -17,6 +17,10 @@ export type IngredientId =
   | 'spinach'
   | 'sauteSauce'
   | 'saltOilSauce' // 塩オイルソース（ペペロンチーノ）
+  | 'whiteSauce' // ホワイトソース（きのこのクリームパスタ）
+  | 'squidInkSauce' // イカ墨ソース（イカスミのパスタ）
+  | 'squid'
+  | 'mushroom'
   | 'saladBase'
   | 'shrimp'
   | 'chicken'
@@ -58,15 +62,26 @@ export type NoodleKind = Extract<IngredientId, 'noodle' | 'penne'>;
 export type PlateStyle = 'plate' | 'small' | 'bowl';
 
 // 冷蔵庫から取ってサラダ台に置くトレー・ケース。spinach = ほうれん草のトレー、saltOil = 塩オイルソースのパックが入ったケース、
-// shrimp / chicken / pancetta = 小エビ・サラダチキン・パンチェッタのトレー、sauteSauce / tomatoSauce = ソテーソース・トマトソースのパックが入ったケース。
+// shrimp / chicken / pancetta / squid / mushroom = 小エビ・サラダチキン・パンチェッタ・イカ・きのこのトレー、sauteSauce / tomatoSauce = ソテーソース・トマトソースのパックが入ったケース。
 // どれを置けるかは置き場の区画（TrayZone）で決まる（種類と区画の対応は tray.ts）
 // garlic / chili = ガーリック・唐辛子のステンレスの容器。置き場（区画）はなく、ボトルと同じように台の上のどこにでも置ける（FreeTrayId）
-export type TrayId = 'spinach' | 'saltOil' | 'shrimp' | 'chicken' | 'pancetta' | 'sauteSauce' | 'tomatoSauce' | 'garlic' | 'chili';
+export type TrayId =
+  | 'spinach'
+  | 'saltOil'
+  | 'shrimp'
+  | 'chicken'
+  | 'pancetta'
+  | 'squid'
+  | 'mushroom'
+  | 'sauteSauce'
+  | 'tomatoSauce'
+  | 'garlic'
+  | 'chili';
 
 // 台の上のどこにでも置ける容器（置き場の区画を持たないトレー・ケース）。置き場所は state.freeTraySpot
 export type FreeTrayId = Extract<TrayId, 'garlic' | 'chili'>;
 
-// トレー置き場の区画。spinach・saltOil はその専用の置き場、topping = 小エビ・チキン・パンチェッタ・ソテーソース・トマトソースのどれでも置ける置き場
+// トレー置き場の区画。spinach・saltOil はその専用の置き場、topping = 小エビ・チキン・パンチェッタ・イカ・きのこ・ソテーソース・トマトソースのどれでも置ける置き場
 export type TrayZone = 'spinach' | 'saltOil' | 'topping';
 
 // 冷蔵庫の中の物（右クリックで持ち上げて、棚の好きな場所に置き直せる）。名前・大きさ・最初の置き場所は fridge.ts
@@ -82,6 +97,10 @@ export type FridgeItemId =
   | 'shrimpTray'
   | 'chickenTray'
   | 'pancettaTray'
+  | 'squidTray'
+  | 'mushroomTray'
+  | 'whiteSauce'
+  | 'squidInkSauce'
   | 'sauteSauceCase'
   | 'garlicBin'
   | 'chiliBin'
@@ -163,7 +182,7 @@ export type Item =
   | { kind: 'ingredient'; id: IngredientId }
   | { kind: 'plate'; contents: IngredientId[]; style?: PlateStyle } // style 省略 = plate
   | { kind: 'pack'; packs: Pack[] } // 熱湯で温めてから使うパック。同じ種類を重ねて持てる（コーンスープは最大5つ）
-  | { kind: 'tray'; id: TrayId } // 冷蔵庫から取ったトレー・ケース（ほうれん草・塩オイルソース・小エビ・チキン・パンチェッタ・ソテーソース）
+  | { kind: 'tray'; id: TrayId } // 冷蔵庫から取ったトレー・ケース（ほうれん草・塩オイルソース・小エビ・チキン・パンチェッタ・イカ・きのこ・ソテーソース）
   | { kind: 'bottle'; id: BottleId } // ドレッシング・パプリカパウダー・パセリ。右クリックで皿にかける・振る（なくならない）
   | { kind: 'pot'; pot: Pot }
   | { kind: 'ipad' }; // 練習キッチンの壁にかかっている iPad。右クリックで画面を開く（ゲーム開始・レシピ）

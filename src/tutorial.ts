@@ -1,12 +1,13 @@
-import { BOTTLE_ACTION, BOTTLE_PLATE, isFridgeBottle } from './bottle';
+import { BOTTLE_ACTION, BOTTLE_FRIDGE_ITEM, BOTTLE_PLATE, isFridgeBottle } from './bottle';
 import type { GameConfig } from './config';
+import { FRIDGE_ITEM_IDS } from './fridge';
 import { INGREDIENTS } from './ingredients';
 import { BOTTLE_HOME, FREE_TRAY_HOME } from './layout';
 import { warmTime } from './pack';
 import { isNoodle } from './pot';
 import { getMenu, type MenuItem } from './recipe';
-import { TRAY_NAME, TRAY_ZONE, freeTraySpots, isFreeTray } from './tray';
-import type { BottleId, GameState, IngredientId, NoodleKind, Pot, SurfaceId, Target, TrayId } from './types';
+import { TRAY_FRIDGE_ITEM, TRAY_NAME, TRAY_ZONE, freeTraySpots, isFreeTray } from './tray';
+import type { BottleId, FridgeItemId, FridgeUnit, GameState, IngredientId, NoodleKind, Pot, SurfaceId, Target, TrayId } from './types';
 
 // チュートリアル：練習キッチンで、選んだメニューを「次はここ」と案内されながら作る。
 //
@@ -53,6 +54,10 @@ export function matchesTarget(actual: Target, spec: GuideAt): boolean {
     // 同じ種類の置き場が複数ある。番号を省略したものは 0 番（spec が番号を書かなければ、どの置き場でもよい）
     return actual.id === spec.id && (spec.spot === undefined || (actual.spot ?? 0) === spec.spot);
   }
+  if (actual.kind === 'fridgeDoor' && spec.kind === 'fridgeDoor') {
+    // 冷蔵庫は2台ある。unit を省略した設備は 0 番（spec が unit を書かなければ、どちらの冷蔵庫でもよい）
+    return spec.unit === undefined || (actual.unit ?? 0) === spec.unit;
+  }
   const a = actual as Record<string, unknown>;
   const b = spec as Record<string, unknown>;
   return Object.keys(b).every((k) => a[k] === b[k]);
@@ -87,7 +92,17 @@ const burnerWithPot = (s: GameState) => s.ihBurners.findIndex((p) => p !== null)
 
 // --- 矢印の指す先 ---
 
-const FRIDGE_DOOR: Target = { kind: 'fridgeDoor' };
+// 冷蔵庫は2台ある。矢印が冷蔵庫の中の物を指すとき、その物がいま入っている冷蔵庫（どちらでもなければ 0）
+function fridgeUnitFor(s: GameState, at: GuideAt | null): FridgeUnit {
+  if (!at || at.kind === 'surfaceSpot') return 0;
+  let item: FridgeItemId | null = null;
+  if (at.kind === 'fridgeTray') item = TRAY_FRIDGE_ITEM[at.id];
+  else if (at.kind === 'fridgeBottle') item = BOTTLE_FRIDGE_ITEM[at.id];
+  else if (at.kind === 'stock' && (FRIDGE_ITEM_IDS as string[]).includes(at.id)) item = at.id as FridgeItemId;
+  return item ? s.fridgeItems[item].unit : 0;
+}
+const fridgeDoorOf = (unit: FridgeUnit): Target => ({ kind: 'fridgeDoor', unit });
+const fridgeName = (unit: FridgeUnit) => (unit === 1 ? '右側の冷蔵庫' : '冷蔵庫');
 const where = {
   burnerWithPot: (s: GameState): Target | null => {
     const i = burnerWithPot(s);
@@ -109,7 +124,7 @@ type Range = { from: number; to: number }; // 皿の置き場の番号の範囲 
 type CarrySpec = {
   label: string;
   from: (s: GameState) => GuideAt | null; // 手が空のとき、取りに行く先
-  fridge?: boolean; // from が冷蔵庫の中（扉が閉まっていれば、先に扉を指す）
+  fridge?: boolean; // from が冷蔵庫の中（その冷蔵庫の扉が閉まっていれば、先に扉を指す）
   holding: (s: GameState) => boolean; // 手に持っているのが、この工程の物か
   to: (s: GameState) => GuideAt | null; // 持っているとき、運ぶ先
   done: (s: GameState) => boolean;
@@ -125,13 +140,20 @@ function carry(c: CarrySpec): TutorialStep {
     progress: c.progress,
     at: (s) => {
       if (c.holding(s)) return c.to(s);
-      if (c.fridge && !s.fridgeOpen[0]) return FRIDGE_DOOR;
-      return c.from(s);
+      const from = c.from(s);
+      if (c.fridge) {
+        const unit = fridgeUnitFor(s, from);
+        if (!s.fridgeOpen[unit]) return fridgeDoorOf(unit);
+      }
+      return from;
     },
     hint: (s) => {
       const holding = c.holding(s);
       if (holding) return c.hint?.(s, true) ?? null;
-      if (c.fridge && !s.fridgeOpen[0]) return '冷蔵庫の扉を右クリックで開ける';
+      if (c.fridge) {
+        const unit = fridgeUnitFor(s, c.from(s));
+        if (!s.fridgeOpen[unit]) return `${fridgeName(unit)}の扉を右クリックで開ける`;
+      }
       if (s.hand) return '手がふさがっています（置くか、右クリックで捨てる）';
       return c.hint?.(s, false) ?? null;
     },
@@ -165,12 +187,13 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
     plateHasAny(s, [id]) ||
     served(s);
 
-  const openFridge: TutorialStep = {
-    label: '冷蔵庫の扉を右クリックで開ける',
-    at: () => FRIDGE_DOOR,
-    done: (s) => s.fridgeOpen[0],
-    hint: () => '冷蔵庫に視点を合わせて、右クリック',
-  };
+  // 冷蔵庫の扉を開ける（unit: 0 = 最初の冷蔵庫、1 = 右側の冷蔵庫）
+  const openFridge = (unit: FridgeUnit = 0): TutorialStep => ({
+    label: `${fridgeName(unit)}の扉を右クリックで開ける`,
+    at: () => fridgeDoorOf(unit),
+    done: (s) => s.fridgeOpen[unit],
+    hint: () => `${fridgeName(unit)}に視点を合わせて、右クリック`,
+  });
 
   // 茹で麺器：生麺（またはペンネ）を取って、かごにセットする
   const noodleToBasket = (kind: NoodleKind = 'noodle') =>
@@ -354,7 +377,10 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
     return {
       label: BOTTLE_ACTION[id],
       at: (s) => {
-        if (inFridge(s)) return s.fridgeOpen[0] ? { kind: 'fridgeBottle', id: id as 'dressing' | 'paprika' } : FRIDGE_DOOR;
+        if (inFridge(s)) {
+          const unit = s.fridgeItems[BOTTLE_FRIDGE_ITEM[id as 'dressing' | 'paprika']].unit;
+          return s.fridgeOpen[unit] ? { kind: 'fridgeBottle', id: id as 'dressing' | 'paprika' } : fridgeDoorOf(unit);
+        }
         if (!holding(s)) return { kind: 'bottle', id };
         return onPlate(s) ? { kind: 'surfaceSpot', surface: spot.surface, x: spot.x, z: spot.z } : plateTarget(s);
       },
@@ -362,7 +388,10 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
       hint: (s) => {
         if (!holding(s)) {
           if (s.hand) return '手がふさがっています（置くか、右クリックで捨てる）';
-          if (inFridge(s) && !s.fridgeOpen[0]) return '冷蔵庫の扉を右クリックで開ける';
+          if (inFridge(s)) {
+            const unit = s.fridgeItems[BOTTLE_FRIDGE_ITEM[id as 'dressing' | 'paprika']].unit;
+            if (!s.fridgeOpen[unit]) return `${fridgeName(unit)}の扉を右クリックで開ける`;
+          }
           return 'ボトルを左クリックで取る';
         }
         return onPlate(s) ? '元の場所に置く（台の上を左クリック）' : `皿に視点を合わせて、右クリック（${BOTTLE_ACTION[id]}）`;
@@ -446,7 +475,7 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
   meat: (k) => [
     k.noodleToBasket(),
     k.press,
-    k.openFridge,
+    k.openFridge(),
     k.potToBurner,
     k.sauceToPot('meatSauce', 2, stock('meatSauce'), { fridge: true }),
     k.plate(),
@@ -463,7 +492,7 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
   parma: (k) => [
     k.noodleToBasket(),
     k.press,
-    k.openFridge,
+    k.openFridge(),
     k.trayToTable('tomatoSauce'),
     k.trayToTable('pancetta'),
     k.potToBurner,
@@ -482,7 +511,7 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
   peperoncino: (k) => [
     k.noodleToBasket(),
     k.press,
-    k.openFridge,
+    k.openFridge(),
     k.trayToTable('saltOil'),
     k.trayToTable('garlic'),
     k.trayToTable('chili'),
@@ -502,7 +531,7 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
   carbonara: (k) => [
     k.noodleToBasket(),
     k.press,
-    k.openFridge,
+    k.openFridge(),
     k.packToHotWater('carbonaraSauce'),
     k.potToBurner,
     k.warmUp('carbonaraSauce'),
@@ -518,7 +547,7 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.returnPot,
   ],
   penne: (k) => [
-    k.openFridge,
+    k.openFridge(),
     k.trayToTable('tomatoSauce'),
     k.trayToTable('garlic'),
     k.trayToTable('chili'),
@@ -538,8 +567,50 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.serve,
     k.returnPot,
   ],
+  squidInk: (k) => [
+    k.noodleToBasket(),
+    k.press,
+    k.openFridge(1), // イカ墨ソースとイカは、右側の冷蔵庫
+    k.trayToTable('squid'),
+    k.potToBurner,
+    k.sauceToPot('squidInkSauce', 1, stock('squidInkSauce'), { fridge: true }),
+    k.sauceToPot('squid', 1, k.trayPlaced('squid')),
+    k.plate(),
+    k.waitHeat,
+    k.noodleOut('pot'),
+    k.mix,
+    k.pour,
+    k.wash,
+    k.bottle('parsley'),
+    k.serve,
+    k.returnPot,
+  ],
+  mushroomCream: (k) => [
+    k.noodleToBasket(),
+    k.press,
+    k.openFridge(1), // ホワイトソース缶ときのこは、右側の冷蔵庫
+    k.trayToTable('mushroom'),
+    k.trayToTable('spinach'),
+    k.trayToTable('pancetta'),
+    k.trayToTable('saltOil'),
+    k.potToBurner,
+    k.sauceToPot('whiteSauce', 1, stock('whiteSauce'), { fridge: true }),
+    k.sauceToPot('spinach', 1, k.trayPlaced('spinach')),
+    k.sauceToPot('pancetta', 1, k.trayPlaced('pancetta')),
+    k.sauceToPot('mushroom', 1, k.trayPlaced('mushroom')),
+    k.sauceToPot('saltOilSauce', 1, k.trayPlaced('saltOil')),
+    k.plate(),
+    k.waitHeat,
+    k.noodleOut('plate'),
+    k.pour,
+    k.wash,
+    k.top('cheese'),
+    k.bottle('blackPepper'),
+    k.serve,
+    k.returnPot,
+  ],
   spinach: (k) => [
-    k.openFridge,
+    k.openFridge(),
     k.trayToTable('spinach'),
     k.trayToTable('pancetta'),
     k.trayToTable('sauteSauce'),
@@ -555,7 +626,7 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.returnPot,
   ],
   shrimpSalad: (k) => [
-    k.openFridge,
+    k.openFridge(),
     k.trayToTable('shrimp'),
     k.plate('saladBase'),
     k.top('shrimp', k.trayPlaced('shrimp')),
@@ -564,7 +635,7 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.serve,
   ],
   chickenSalad: (k) => [
-    k.openFridge,
+    k.openFridge(),
     k.trayToTable('chicken'),
     k.plate('saladBase'),
     k.top('chicken', k.trayPlaced('chicken')),
@@ -573,7 +644,7 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.serve,
   ],
   cornSoup: (k) => [
-    k.openFridge,
+    k.openFridge(),
     k.packToHotWater('cornSoup'),
     k.plate('bowl'),
     k.warmUp('cornSoup'),

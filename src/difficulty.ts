@@ -25,9 +25,9 @@ export const DIFFICULTIES: readonly DifficultyDef[] = [
     id: 'trial',
     name: 'トライアルクルー',
     tagline: '入りたてのバイトクルー',
-    summary: '伝票はゆっくり届き、並ぶのは最大3枚。手順の多いペペロンチーノ・カルボナーラ・ペンネは出ません。',
+    summary: '伝票はゆっくり届き、並ぶのは最大3枚。手順の多いペペロンチーノ・カルボナーラ・ペンネ・きのこのクリームパスタは出ません。',
     tickets: { firstTicketAt: 5, ticketIntervalStart: 40, ticketIntervalEnd: 25, ticketIntervalJitter: 0.15, maxOpenTickets: 3 },
-    menuWeights: { tarako: 3, meat: 2, parma: 2, spinach: 1, shrimpSalad: 2, chickenSalad: 2, cornSoup: 2, peperoncino: 0, carbonara: 0, penne: 0 },
+    menuWeights: { tarako: 3, meat: 2, parma: 2, spinach: 1, shrimpSalad: 2, chickenSalad: 2, cornSoup: 2, peperoncino: 0, carbonara: 0, penne: 0, squidInk: 1, mushroomCream: 0 },
   },
   {
     id: 'leading',
@@ -41,9 +41,9 @@ export const DIFFICULTIES: readonly DifficultyDef[] = [
     id: 'associate',
     name: 'アソシエイトクルー',
     tagline: 'キッチンのプロ。かなりの腕前',
-    summary: '伝票は18秒おきから8秒おきへ、最大10枚。ペペロンチーノ・カルボナーラ・ペンネなど、手順の多いパスタが多めに届きます。',
+    summary: '伝票は18秒おきから8秒おきへ、最大10枚。ペペロンチーノ・カルボナーラ・ペンネ・きのこのクリームパスタなど、手順の多いパスタが多めに届きます。',
     tickets: { firstTicketAt: 2, ticketIntervalStart: 18, ticketIntervalEnd: 8, ticketIntervalJitter: 0.3, maxOpenTickets: 10 },
-    menuWeights: { tarako: 1, meat: 2, parma: 2, peperoncino: 3, carbonara: 3, penne: 3, spinach: 2, shrimpSalad: 1, chickenSalad: 1, cornSoup: 1 },
+    menuWeights: { tarako: 1, meat: 2, parma: 2, peperoncino: 3, carbonara: 3, penne: 3, squidInk: 2, mushroomCream: 3, spinach: 2, shrimpSalad: 1, chickenSalad: 1, cornSoup: 1 },
   },
 ];
 
