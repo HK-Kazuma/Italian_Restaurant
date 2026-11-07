@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import type { GameConfig } from './config';
 import { INGREDIENTS } from './ingredients';
 import { BOTTLE_FRIDGE_ITEM, BOTTLE_IDS, bottleOfFridgeItem } from './bottle';
-import { BAKE_DISH, FREE_TRAY_HOME, HOT_WATER_COUNTER, LAYOUT, LEFT_COUNTER, OVEN, OVEN_BELT, OVEN_COUNTER, OVEN_LANE_X, OVEN_Z, SURFACES, type Layout } from './layout';
-import { OVEN_DECKS, OVEN_DECK_NAME, bakeTime, beltSpeed, emergedCount, isEmerged, remainingTime } from './oven';
+import { BAKE_DISHES, FREE_TRAY_HOME, HOT_WATER_COUNTER, LAYOUT, LEFT_COUNTER, OVEN, OVEN_BELT, OVEN_COUNTER, OVEN_LANE_X, OVEN_Z, SURFACES, type Layout } from './layout';
+import { BAKE_STYLES, OVEN_DECKS, OVEN_DECK_NAME, bakeTime, beltSpeed, emergedCount, isEmerged, laneOfOffset, remainingTime } from './oven';
 import { SAUCE_FILL_PER_UNIT, isNoodle } from './pot';
 import { plateLabel, potMonitor, potPopup } from './labels';
 import { Steam, type SteamOptions } from './steam';
@@ -11,7 +11,7 @@ import { matchesTarget, type GuideAt } from './tutorial';
 import { type Rect, type World, rectAt } from './world';
 import { FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, FRIDGE_ITEM_SIZE, FRIDGE_SHELF_Y } from './fridge';
 import { FREE_TRAY_IDS, TRAY_FRIDGE_ITEM, TRAY_IDS, TRAY_SPOT_COUNT, TRAY_ZONE, TRAY_ZONE_NAME, freeTraySpots, isFreeTray, trayAt, trayContentName, trayOfFridgeItem } from './tray';
-import type { Boiler, BottleId, FreeTrayId, FridgeBottleId, FridgeItemId, FridgePreview, FridgeShelf, FridgeUnit, NoodleKind, OvenDeck, TrayId, TrayZone, BottlePreview, GameState, IngredientId, Item, Pot, SurfaceId, Target } from './types';
+import type { BakeStyle, Boiler, BottleId, FreeTrayId, FridgeBottleId, FridgeItemId, FridgePreview, FridgeShelf, FridgeUnit, NoodleKind, OvenDeck, TrayId, TrayZone, BottlePreview, GameState, IngredientId, Item, Pot, SurfaceId, Target } from './types';
 
 // 厨房の3Dシーン。見た目はすべてプリミティブ（箱・円柱）で作るローポリのプレースホルダー。
 // ゲームの状態は読むだけ（sync）で、ここからは state を書き換えない。
@@ -1132,11 +1132,26 @@ function buildItemMesh(item: Item): THREE.Group {
       g.add(pad);
       break;
     }
-    case 'bakeDish':
-      // 焼き皿（テスト用の長方形）：鉄の皿の上に、料理の板。焼き上がると、こんがりした色になる
-      g.add(box(BAKE_DISH.w, 0.025, BAKE_DISH.d, 0x5b6066, 0, 0.0125, 0));
-      g.add(box(BAKE_DISH.w - 0.05, BAKE_DISH.h - 0.025, BAKE_DISH.d - 0.05, item.baked ? 0xc98a2e : 0xf0e6c8, 0, 0.025 + (BAKE_DISH.h - 0.025) / 2, 0));
+    case 'bakeDish': {
+      // 焼き皿（テスト用）。焼き上がると、こんがりした色になる。
+      // 並べたとき皿どうしが見分けられるよう、置き場の大きさより 0.02 だけ小さくしてある
+      const size = BAKE_DISHES[item.style];
+      if (item.style === 'pizza') {
+        // ピザ系：丸い鉄板の上に、生地・ソース（焼くとチーズの色）・ペパロニ。高さは size.h
+        const r = size.d / 2 - 0.01;
+        g.add(cyl(r, r, 0.012, 0x5b6066, 0, 0.006, 0)); // 鉄板
+        g.add(cyl(r - 0.02, r - 0.02, 0.014, item.baked ? 0xc98a3a : 0xe9d3a0, 0, 0.012 + 0.007, 0)); // 生地（ふちが焼ける）
+        g.add(cyl(r - 0.06, r - 0.06, 0.006, item.baked ? 0xe8b84a : 0xd8523b, 0, 0.026 + 0.003, 0)); // ソース / チーズ
+        for (const [px, pz] of [[0.06, 0.04], [-0.07, 0.05], [0.0, -0.08], [-0.05, -0.04], [0.09, -0.06]]) {
+          g.add(cyl(0.025, 0.025, 0.006, item.baked ? 0x8a2a1c : 0x9b2d20, px, 0.032 + 0.003, pz)); // ペパロニ
+        }
+      } else {
+        // ドリア系：鉄の皿の上に、料理の板
+        g.add(box(size.w - 0.02, 0.025, size.d - 0.02, 0x5b6066, 0, 0.0125, 0));
+        g.add(box(size.w - 0.07, size.h - 0.025, size.d - 0.07, item.baked ? 0xc98a2e : 0xf0e6c8, 0, 0.025 + (size.h - 0.025) / 2, 0));
+      }
       break;
+    }
     case 'plate': {
       // 皿の種類：普通の皿 / 小皿（ほうれん草のソテー）/ スープ皿（コーンスープ）/ リム小皿（小エビのカクテル・蒸し鶏の香味ソース）
       const style = item.style ?? 'plate';
@@ -1231,7 +1246,7 @@ function itemSignature(item: Item | null): string {
     case 'ipad':
       return 'ipad';
     case 'bakeDish':
-      return `bake:${item.baked ? 1 : 0}`;
+      return `bake:${item.style}:${item.baked ? 1 : 0}`;
   }
 }
 
@@ -1664,7 +1679,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   // --- 左の台の手前（壁側）：ジェットオーブン（ベルトコンベア式。ドリア・鉄板焼き用）と、具材台 ---
   // 提供台を正面に見て左側。IHコンロを前方に見たときは、提供台の後ろ側（+z 方向）に、z 軸に沿って並べる。
   // 料理は壁側（+z）の入口から、提供台側（-z）の出口へ流れる。上段・下段の2段で、段ごとに流れる速さが違う（出てくるまでの秒数は config.ts）。
-  // 位置・大きさは layout.ts（OVEN_Z / OVEN_BELT / OVEN / OVEN_COUNTER）。入口・出口は、皿が縦向きで3つ（流れの向き）× 2つ（横）並ぶ広さ + 皿 0.5個分
+  // 位置・大きさは layout.ts（OVEN_Z / OVEN_BELT / OVEN / OVEN_COUNTER）。入口・出口は、皿（長い辺が流れの向き）が 流れの向きに2つ × 横に3つ並ぶ広さ + 皿 0.5個分（外側の端）
   const OV_STEEL = 0xc9ced3;
   const OV_DARK = 0x3b4046;
   const OV_BELT_COLOR = 0x474c52;
@@ -1704,7 +1719,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   scene.add(box(bodyD, 0.02, bodyLen, 0x8a9096, OVEN.x, (OVEN.beltY.lower + OVEN.beltY.upper) / 2, bodyCz)); // 上段と下段のあいだの枠
 
   // 入口・出口のベルト（段ごと・レーンごとに、クリックできるベルトの面）。ベルトの面が動いて見えるよう、横縞（スラット）を流す。
-  // 入口のベルトに皿を置くと、出口まで流れる（置く場所は入口の端）。出口のベルトの皿を取る
+  // 入口のベルトに皿を置くと、出口まで流れる（置く場所は入口の最初の置き場）。出口のベルトの皿を取る
   const SLAT_COUNT = 10;
   const SLAT_PITCH = OVEN_BELT.length / SLAT_COUNT;
   type BeltPad = { deck: OvenDeck; len: number; slats: THREE.Mesh[] };
@@ -1756,19 +1771,23 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   // 具材台（オーブンの入口の先、壁側）：ドリア・鉄板焼きの具材を置くコーナー。いまは、テスト用の焼き皿の山だけ
   const ovenCounter = box(OVEN_COUNTER.width, 0.9, OVEN_COUNTER.depth, 0xb89f7a, OVEN_COUNTER.x, 0.45, OVEN_COUNTER.z);
   scene.add(ovenCounter);
-  const dishPile = new THREE.Group();
-  for (let i = 0; i < 4; i++) {
-    const dish = buildItemMesh({ kind: 'bakeDish', baked: false });
-    dish.position.y = i * BAKE_DISH.h;
-    dishPile.add(dish);
+  // 焼き皿の山：ドリア系（長方形）と、ピザ系（丸）。台の幅に、左右に並べる
+  const PILE_X: Record<BakeStyle, number> = { doria: -0.35, pizza: 0.35 };
+  for (const style of BAKE_STYLES) {
+    const dishPile = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const dish = buildItemMesh({ kind: 'bakeDish', style, baked: false });
+      dish.position.y = i * BAKE_DISHES[style].h;
+      dishPile.add(dish);
+    }
+    dishPile.rotation.y = Math.PI / 2; // オーブンの皿と同じ向き（長い辺が流れの向き）
+    dishPile.position.set(OVEN_COUNTER.x + PILE_X[style], 0.9, OVEN_COUNTER.z);
+    setTarget(dishPile, { kind: 'ovenStock', style });
+    scene.add(dishPile);
+    interactables.push(dishPile);
+    decor(`焼き皿（${BAKE_DISHES[style].name}・テスト）`, OVEN_COUNTER.x + PILE_X[style], 1.3, OVEN_COUNTER.z, 0.7);
   }
-  dishPile.rotation.y = Math.PI / 2; // オーブンの皿と同じ向き（流れの向きに皿の短い辺）
-  dishPile.position.set(OVEN_COUNTER.x, 0.9, OVEN_COUNTER.z);
-  setTarget(dishPile, { kind: 'ovenStock' });
-  scene.add(dishPile);
-  interactables.push(dishPile);
-  decor('焼き皿（テスト）', OVEN_COUNTER.x, 1.3, OVEN_COUNTER.z, 0.7);
-  decor('具材台（仮）', OVEN_COUNTER.x + 0.5, 1.1, OVEN_COUNTER.z, 0.5);
+  decor('具材台（仮）', OVEN_COUNTER.x, 1.1, OVEN_COUNTER.z + 0.5, 0.5);
 
   // 位置は layout.ts で決める。以下の座標は、それぞれの基準点からの相対位置。
   const decorIn = (parent: THREE.Object3D, text: string, x: number, y: number, z: number, width = 1.4) => {
@@ -1816,15 +1835,29 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
       interactables.push(board);
     });
 
-    // 観音開きの扉：左右の端（z=±1.0）を蝶番にして、プレイヤー側へ90度ずつ開く
-    const left = new THREE.Group(); // 手前側（z=+1.0）の扉
-    left.add(box(0.05, 1.9, 1, 0xe9eef1, 0, 0.95, -0.5));
-    left.add(box(0.04, 0.5, 0.05, 0x8a9096, -0.04, 1.0, -0.9)); // 取っ手
+    // 観音開きの扉：左右の端（z=±1.0）を蝶番にして、プレイヤー側へ90度ずつ開く。
+    // 扉はガラス張り（ステンレスの枠 + 薄く透けるガラス）で、閉まっていても中の物が少し見える
+    // sign: 扉が蝶番から伸びる向き（手前側の扉 = -1、奥側の扉 = +1）
+    const buildGlassDoor = (sign: -1 | 1): THREE.Group => {
+      const door = new THREE.Group();
+      const FRAME = 0.07;
+      door.add(box(0.05, 1.9, FRAME, 0xe9eef1, 0, 0.95, sign * (FRAME / 2))); // 蝶番側の枠
+      door.add(box(0.05, 1.9, FRAME, 0xe9eef1, 0, 0.95, sign * (1 - FRAME / 2))); // 中央側の枠
+      door.add(box(0.05, FRAME, 1 - FRAME * 2, 0xe9eef1, 0, FRAME / 2, sign * 0.5)); // 下の枠
+      door.add(box(0.05, FRAME, 1 - FRAME * 2, 0xe9eef1, 0, 1.9 - FRAME / 2, sign * 0.5)); // 上の枠
+      const glass = new THREE.Mesh(
+        new THREE.BoxGeometry(0.012, 1.9 - FRAME * 2, 1 - FRAME * 2),
+        new THREE.MeshLambertMaterial({ color: 0xcfe6f0, transparent: true, opacity: 0.3, depthWrite: false }),
+      );
+      glass.position.set(0, 0.95, sign * 0.5);
+      door.add(glass);
+      door.add(box(0.04, 0.5, 0.05, 0x8a9096, -0.04, 1.0, sign * 0.9)); // 取っ手
+      return door;
+    };
+    const left = buildGlassDoor(-1); // 手前側（z=+1.0）の扉
     left.position.set(0, 0, 1.0);
     fridge.add(left); // 回転は sync で state.fridgeOpen に合わせる
-    const right = new THREE.Group(); // 奥側（z=-1.0）の扉
-    right.add(box(0.05, 1.9, 1, 0xe9eef1, 0, 0.95, 0.5));
-    right.add(box(0.04, 0.5, 0.05, 0x8a9096, -0.04, 1.0, 0.9));
+    const right = buildGlassDoor(1); // 奥側（z=-1.0）の扉
     right.position.set(0, 0, -1.0);
     fridge.add(right);
     fridgeDoors.push({ left, right });
@@ -2538,7 +2571,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     // ジェットオーブン：ベルトの縞を流し、ベルトの上の皿を state.oven の位置に置く。本体の中に完全に入っている皿は見せない
     beltTime += steamDt;
     for (const pad of beltPads) {
-      const offset = (beltTime * beltSpeed(pad.deck, cfg)) % SLAT_PITCH;
+      const offset = (beltTime * beltSpeed(pad.deck, 'doria', cfg)) % SLAT_PITCH;
       pad.slats.forEach((slat, i) => (slat.position.z = pad.len / 2 - ((i * SLAT_PITCH + offset) % pad.len))); // 縞は -z（出口の向き）へ流れる
     }
     const liveDishes = new Set<number>();
@@ -2554,14 +2587,15 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
           ovenDishViews.set(d.id, v);
         }
         const baked = d.s >= OVEN_BELT.length + OVEN_BELT.body; // 本体の出口を通り過ぎたら焼き上がり
-        v.view.show({ kind: 'bakeDish', baked });
-        // 流れは +z（壁側の入口の端）から -z（出口）へ。皿は流れの向きに短い辺を向ける
-        v.root.position.set(OVEN_LANE_X[d.lane], OVEN.beltY[deck] + 0.002, OVEN_Z.inlet.maxZ - d.s);
+        v.view.show({ kind: 'bakeDish', style: d.style, baked });
+        // 流れは +z（壁側の入口の端）から -z（出口）へ。ドリア系は長い辺を流れの向きにして、横向きに置く
+        const half = BAKE_DISHES[d.style].w / 2;
+        v.root.position.set(OVEN.x + d.x, OVEN.beltY[deck] + 0.002, OVEN_Z.inlet.maxZ - d.s);
         v.root.rotation.y = Math.PI / 2;
-        v.root.visible = !(d.s - BAKE_DISH.w / 2 >= OVEN_BELT.length && d.s + BAKE_DISH.w / 2 <= OVEN_BELT.length + OVEN_BELT.body);
-        // 出てきた皿は出口の皿（取れる）、それまでは入口側の皿
-        const kind = isEmerged(d.s) ? 'ovenOutlet' : 'ovenInlet';
-        if ((v.root.userData[TARGET_KEY] as Target | undefined)?.kind !== kind) setTarget(v.root, { kind, deck, lane: d.lane });
+        v.root.visible = !(d.s - half >= OVEN_BELT.length && d.s + half <= OVEN_BELT.length + OVEN_BELT.body);
+        // 出てきた皿は出口の皿（取れる）、それまでは入口側の皿。狙ったときの対象は、皿の位置にいちばん近いレーン
+        const kind = isEmerged(d) ? 'ovenOutlet' : 'ovenInlet';
+        if ((v.root.userData[TARGET_KEY] as Target | undefined)?.kind !== kind) setTarget(v.root, { kind, deck, lane: laneOfOffset(d.x) });
       }
     }
     for (const [id, v] of ovenDishViews) {

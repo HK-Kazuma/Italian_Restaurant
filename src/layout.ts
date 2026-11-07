@@ -1,4 +1,4 @@
-import type { BottleId, FreeTrayId, SurfaceId } from './types';
+import type { BakeStyle, BottleId, FreeTrayId, SurfaceId } from './types';
 
 // 設備の置き場所。ここの数値を直すと、その設備が動く（保存すると開発サーバーが自動で読み込み直す）。
 //
@@ -103,17 +103,25 @@ export const FREE_TRAY_HOME: Record<FreeTrayId, { surface: SurfaceId; x: number;
 //   壁 | [具材台] → [入口] [オーブン本体] [出口] → [左の台（皿・提供台）]      （左から右へ、+z → -z）
 // 上段と下段の2段。段ごとに、入口から出口まで出てくる時間が違う（config.ts の ovenUpperTime / ovenLowerTime）。
 
-// 焼き皿（鉄板・ドリア系）の大きさ。縦長の長方形（流れの向きに 0.30、流れと直角に 0.42）
-export const BAKE_DISH = { w: 0.3, d: 0.42, h: 0.05 };
+// 焼き皿の大きさ（w = 流れの向き、d = 流れと直角、h = 高さ。m）。
+//   doria（ドリア・鉄板系）：長方形で、長い辺を流れの向きにして横向きに置く。入口・出口には 流れの向きに2つ × 横に3つ並ぶ
+//   pizza（ピザ系）：丸い（直径 0.5）。入口・出口には 流れの向きに2つ × 横に2つ並ぶ
+export const BAKE_DISHES: Record<BakeStyle, { name: string; w: number; d: number; h: number }> = {
+  doria: { name: 'ドリア系', w: 0.42, d: 0.3, h: 0.05 },
+  pizza: { name: 'ピザ系', w: 0.5, d: 0.5, h: 0.03 },
+};
+// ベルトや入口・出口の大きさの基準にする皿（ドリア系）
+export const BAKE_DISH = BAKE_DISHES.doria;
 
 export const OVEN_BELT = {
-  lanes: 2, // 流れと直角（x 方向）に並べられる数。ベルトは2レーン
+  lanes: 3, // 流れと直角（x 方向）に並べられる数。ベルトは3レーン
   laneW: BAKE_DISH.d + 0.04, // 1レーンの幅（皿の幅に少し余裕）
   laneGap: 0.02, // レーンの間のすき間
-  // 入口・出口の長さ（流れの向き z）。皿が縦向きで3つ並ぶ長さ + 皿 0.5個分
-  length: (3 + 0.5) * BAKE_DISH.w,
+  // 入口・出口の長さ（流れの向き z）。皿が流れの向きに2つ並ぶ長さ + 皿 0.5個分（余白は、入口も出口も、外側の端）
+  length: (2 + 0.5) * BAKE_DISH.w,
+  margin: 0.5 * BAKE_DISH.w, // 外側の端の余白（皿 0.5個分）
   body: 1.1, // オーブン本体の長さ（z）
-  bodyDepth: 1.2, // オーブン本体の幅（x）
+  bodyDepth: 1.3, // オーブン本体の幅（x）
 };
 
 export const OVEN = {
@@ -133,8 +141,8 @@ export const OVEN_Z = {
   },
 };
 
-// レーンの中心の x（レーン 0 = 左の台の反対側（-x）、1 = 部屋の中央側（+x））
-export const OVEN_LANE_X = [0, 1].map((i) => OVEN.x + (i - 0.5) * (OVEN_BELT.laneW + OVEN_BELT.laneGap));
+// レーンの中心の x（レーン 0 = 左の台の反対側（-x）、最後のレーン = 部屋の中央側（+x））
+export const OVEN_LANE_X = Array.from({ length: OVEN_BELT.lanes }, (_, i) => OVEN.x + (i - (OVEN_BELT.lanes - 1) / 2) * (OVEN_BELT.laneW + OVEN_BELT.laneGap));
 
 // オーブンの入口の先（壁側）の台。ドリア・鉄板焼きの具材を置く具材コーナー（いまは、テスト用の焼き皿だけ）
 const OVEN_COUNTER_D = 1.2;

@@ -177,8 +177,11 @@ export type Washer = {
 // ジェットオーブン（ベルトコンベア式）の段。upper = 上段（短い時間で出てくる）、lower = 下段
 export type OvenDeck = 'upper' | 'lower';
 
-// ベルトに乗っている皿。lane = レーン（0 = 奥、1 = 手前）、s = 入口の端から皿の中心までの距離（m）
-export type OvenDish = { id: number; lane: number; s: number };
+// 焼き皿の種類（いまはテスト用）。doria = ドリア系（長方形。ベルトに 流れの向きに2つ × 横に3つ）、pizza = ピザ系（丸い。流れの向きに2つ × 横に2つ）
+export type BakeStyle = 'doria' | 'pizza';
+
+// ベルトに乗っている皿。x = ベルトの中心から皿の中心までの横のずれ（m）、s = 入口の端から皿の中心までの距離（m）
+export type OvenDish = { id: number; style: BakeStyle; x: number; s: number };
 
 export type Oven = {
   decks: Record<OvenDeck, OvenDish[]>;
@@ -204,7 +207,7 @@ export type Item =
   | { kind: 'bottle'; id: BottleId } // ドレッシング・パプリカパウダー・パセリ。右クリックで皿にかける・振る（なくならない）
   | { kind: 'pot'; pot: Pot }
   | { kind: 'ipad' } // 練習キッチンの壁にかかっている iPad。右クリックで画面を開く（ゲーム開始・レシピ）
-  | { kind: 'bakeDish'; baked: boolean }; // ジェットオーブンで焼く皿（鉄板・ドリア系。いまは長方形のテスト用）。baked = 焼き上がり
+  | { kind: 'bakeDish'; style: BakeStyle; baked: boolean }; // ジェットオーブンで焼く皿（いまはテスト用。ドリア系 = 長方形、ピザ系 = 丸）。baked = 焼き上がり
 
 // 視点の先にあるクリック可能な設備
 export type Target =
@@ -225,7 +228,7 @@ export type Target =
   | { kind: 'thrownPot'; id: number } // 投げて床・台に落ちている鍋（左クリックで拾う）
   | { kind: 'ihBurner'; index: number }
   | { kind: 'hotWaterSlot'; index: number } // 熱湯に浸けるパックの置き場所
-  | { kind: 'ovenStock' } // 具材台のテスト用の焼き皿（クリックで手に取る）
+  | { kind: 'ovenStock'; style: BakeStyle } // 具材台のテスト用の焼き皿の山（クリックで手に取る）
   | { kind: 'ovenInlet'; deck: OvenDeck; lane: number } // ジェットオーブンの入口（段・レーン）。皿を置くと流れていく
   | { kind: 'ovenOutlet'; deck: OvenDeck; lane: number } // ジェットオーブンの出口。出てきた皿を取る
   | { kind: 'bottle'; id: BottleId } // 台の上のボトル
