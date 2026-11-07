@@ -1,4 +1,5 @@
 import type { Difficulty } from './difficulty';
+import { loadFirestore, readFirebaseConfig, withTimeout, type FirebaseConfig } from './firebase';
 
 // みんなで共有するランキング。保存先（いまは Firebase Firestore）はこのファイルの中だけに置く。
 // ゲーム側は「登録する」「上位を取る」だけを呼ぶので、保存先を替えるとき（Supabase など）は、RankingBackend の中身を入れ替えるだけでよい。
@@ -42,23 +43,9 @@ export function validScore(score: number): boolean {
   return Number.isInteger(score) && score > 0 && score <= SCORE_MAX;
 }
 
-type FirebaseConfig = { apiKey: string; projectId: string; appId: string };
-
-function readConfig(): FirebaseConfig | null {
-  const env = import.meta.env;
-  const apiKey = env.VITE_FIREBASE_API_KEY;
-  const projectId = env.VITE_FIREBASE_PROJECT_ID;
-  const appId = env.VITE_FIREBASE_APP_ID;
-  return apiKey && projectId && appId ? { apiKey, projectId, appId } : null;
-}
-
-// Firestore：rankings/{難易度}/scores/{自動ID} に { name, score, createdAt } を1件ずつ足す。
-// SDK は、使うときまで読み込まない（設定がなければ、まったく読み込まない）
+// Firestore：rankings/{難易度}/scores/{自動ID} に { name, score, createdAt } を1件ずつ足す
 function createFirebaseBackend(config: FirebaseConfig): RankingBackend {
-  const db = (async () => {
-    const [{ initializeApp }, fs] = await Promise.all([import('firebase/app'), import('firebase/firestore')]);
-    return { fs, db: fs.getFirestore(initializeApp(config)) };
-  })();
+  const db = loadFirestore(config);
 
   return {
     async submit(difficulty, entry) {
@@ -79,7 +66,7 @@ function createFirebaseBackend(config: FirebaseConfig): RankingBackend {
   };
 }
 
-const config = readConfig();
+const config = readFirebaseConfig();
 const backend: RankingBackend | null = config ? createFirebaseBackend(config) : null;
 
 export const ranking = {
@@ -89,16 +76,7 @@ export const ranking = {
   async submit(difficulty: Difficulty, rawName: string, score: number): Promise<void> {
     if (!backend) throw new Error('ランキングは準備中です');
     if (!validScore(score)) throw new Error('このスコアは登録できません');
-    // Firestore は、サーバーに届かないとエラーにならず待ち続ける。一定時間で見切って、原因が分かる形で失敗させる
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'timeout' })), SUBMIT_TIMEOUT_MS);
-    });
-    try {
-      await Promise.race([backend.submit(difficulty, { name: cleanName(rawName), score }), timeout]);
-    } finally {
-      clearTimeout(timer);
-    }
+    await withTimeout(backend.submit(difficulty, { name: cleanName(rawName), score }), SUBMIT_TIMEOUT_MS);
   },
 
   async top(difficulty: Difficulty): Promise<RankingEntry[]> {

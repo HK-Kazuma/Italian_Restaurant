@@ -1,5 +1,6 @@
 import type { GameConfig } from './config';
 import { DEFAULT_DIFFICULTY, DIFFICULTIES, getDifficulty, isDifficulty, type Difficulty } from './difficulty';
+import { DevBoardView, devBoardHtml } from './devboardView';
 import { describeItem } from './game';
 import { INGREDIENTS } from './ingredients';
 import { showMission } from './mission';
@@ -100,6 +101,7 @@ function ipadHtml(cfg: GameConfig, settings: Settings): string {
         <button class="app" data-go="controls"><span class="icon blue">？</span>操作説明</button>
         <button class="app" data-go="ranking"><span class="icon yellow">★</span>ランキング</button>
         <button class="app" data-go="settings"><span class="icon gray">⚙</span>設定</button>
+        <button class="app" data-go="devboard"><span class="icon red">🛠</span>開発ボード</button>
       </div>
       <p class="ipad-tip">ここでは時間制限なし。気がすむまで練習できます（右クリックでも閉じられます）</p>
     </section>
@@ -144,6 +146,7 @@ function ipadHtml(cfg: GameConfig, settings: Settings): string {
       <button class="setting-reset" data-act="settingsReset">標準に戻す</button>
       <p class="setting-caution">※ 設定はこのブラウザに保存されます。ブラウザのサイトデータを消したときや、プライベート（シークレット）ウィンドウを閉じたときは、消えて標準の値に戻ります。別のブラウザや端末には引き継がれません。</p>
     </section>
+    <section class="ipad-page" data-page="devboard" hidden>${devBoardHtml()}</section>
   </div></div>`;
 }
 
@@ -193,6 +196,7 @@ export class Hud {
   private ipadWasOpen = false;
   private ipadTutorialNow = '';
   private ipadNow: HTMLElement | null = null;
+  private devBoardView: DevBoardView;
   private rankDifficulty: Difficulty = DEFAULT_DIFFICULTY; // ランキングアプリで開いている難易度
   private rankLoadId = 0; // 読み込みの順番（古い読み込みの結果で、新しい表示を上書きしない）
   private rankOffer: { difficulty: Difficulty; score: number } | null = null; // ゲーム終了後に出す、ランキングへの登録
@@ -220,6 +224,7 @@ export class Hud {
       <div class="mission-text"><b>ミッション：チュートリアルを受けよう！</b>
       <span>後ろの壁の iPad を取って右クリック →「チュートリアル」</span></div>`;
     this.ipad.innerHTML = ipadHtml(cfg, settings);
+    this.devBoardView = new DevBoardView(this.ipad.querySelector<HTMLElement>('[data-page="devboard"]')!);
     root.append(top, this.mission, this.note, this.tutorial, this.rail, this.crosshair, this.hint, this.guide, this.hand, this.toast, this.startPopup, this.ipad, this.overlay);
     // 結果画面の名前入力は、押しても練習キッチンへ進まない
     this.overlay.addEventListener('click', (e) => {
@@ -287,6 +292,7 @@ export class Hud {
   private showIpadPage(page: string): void {
     for (const p of this.ipad.querySelectorAll<HTMLElement>('.ipad-page')) p.hidden = p.dataset.page !== page;
     if (page === 'ranking') void this.loadRanking(this.rankDifficulty);
+    if (page === 'devboard') this.devBoardView.open();
   }
 
   // ランキングアプリ：その難易度の上位を読み込んで並べる。名前は利用者が入力した文字なので、必ず textContent で入れる
