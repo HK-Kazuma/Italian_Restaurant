@@ -286,6 +286,39 @@ function addMushroomSlices(g: THREE.Group, count: number, seed: number, radius: 
   }
 }
 
+// わかめ：黒に近い深緑の、ツヤのあるぬるっとした葉（細長く、うねっている）。画像のように、ところどころ濃淡がある
+function addWakame(g: THREE.Group, count: number, seed: number, radius: number, yAt: (r: number) => number, scale = 1): void {
+  const rnd = seeded(seed);
+  const geo = new THREE.SphereGeometry(1, 8, 5);
+  const colors = [mat(0x1c4a28), mat(0x143a20), mat(0x2a5e30), mat(0x0f2e18), mat(0x24562c)];
+  for (let i = 0; i < count; i++) {
+    const r = Math.sqrt(rnd()) * radius;
+    const a = rnd() * Math.PI * 2;
+    const m = new THREE.Mesh(geo, colors[i % colors.length]);
+    m.scale.set((0.026 + rnd() * 0.03) * scale, 0.004 * scale, (0.011 + rnd() * 0.014) * scale);
+    m.position.set(Math.cos(a) * r, yAt(r) + 0.003 + rnd() * 0.02 * scale, Math.sin(a) * r);
+    m.rotation.set((rnd() - 0.5) * 1.3, rnd() * Math.PI * 2, (rnd() - 0.5) * 1.3, 'YXZ');
+    g.add(m);
+  }
+}
+
+// 野菜ペースト：薄い黄色のペーストのかたまりに、緑のかけら（パセリ）が混ざる
+function addPasteChunks(g: THREE.Group, count: number, seed: number, radius: number, yAt: (r: number) => number): void {
+  const rnd = seeded(seed);
+  const blob = new THREE.SphereGeometry(1, 8, 5);
+  const colors = [mat(0xe8dc8c), mat(0xf1e6a0), mat(0xd9cf7c)];
+  for (let i = 0; i < count; i++) {
+    const r = Math.sqrt(rnd()) * radius;
+    const a = rnd() * Math.PI * 2;
+    const m = new THREE.Mesh(blob, colors[i % colors.length]);
+    m.scale.set(0.012 + rnd() * 0.012, 0.007 + rnd() * 0.004, 0.012 + rnd() * 0.01);
+    m.position.set(Math.cos(a) * r, yAt(r) + 0.006 + rnd() * 0.012, Math.sin(a) * r);
+    m.rotation.y = rnd() * Math.PI;
+    g.add(m);
+    if (i % 3 === 0) g.add(box(0.006, 0.003, 0.005, 0x4f9a3a, m.position.x + 0.005, m.position.y + 0.007, m.position.z));
+  }
+}
+
 // ステンレスの丸い容器（ガーリック・唐辛子）。冷蔵庫から取って、台の上の好きな場所に置く。中身は山盛りで見える
 const STEEL_BIN = { r: 0.17, h: 0.1 };
 function buildSteelBin(id: 'garlic' | 'chili'): THREE.Group {
@@ -352,10 +385,10 @@ function addChickenSlices(g: THREE.Group, count: number, seed: number, radius: n
 }
 
 // ドレッシング（オーロラ色）：とろっとした塊と、かけた筋
-function addDressing(g: THREE.Group, seed: number, radius: number, yAt: (r: number) => number): void {
+function addDressing(g: THREE.Group, seed: number, radius: number, yAt: (r: number) => number, color = 0xf2bd93): void {
   const rnd = seeded(seed);
   const blob = new THREE.SphereGeometry(1, 10, 6);
-  const m = mat(0xf2bd93);
+  const m = mat(color);
   for (let i = 0; i < 20; i++) {
     const r = Math.sqrt(rnd()) * radius;
     const a = rnd() * Math.PI * 2;
@@ -452,6 +485,9 @@ function addSaladDish(g: THREE.Group, contents: readonly IngredientId[], seed: n
     } else if (id === 'chicken') {
       addChickenSlices(g, 9, s, R * 0.6, at);
       lift += 0.016;
+    } else if (id === 'wakame') {
+      addWakame(g, 30, s, R * 0.55, at); // 中央に、こんもり黒緑のわかめの山
+      lift += 0.02;
     } else if (id === 'dressing') {
       addDressing(g, s, R * 0.8, at);
       lift += 0.004;
@@ -461,8 +497,47 @@ function addSaladDish(g: THREE.Group, contents: readonly IngredientId[], seed: n
   });
 }
 
+// リム小皿の料理（レタスのないサラダ）：わかめを敷いて、その上に小エビ・蒸し鶏が山盛り。
+// 小エビのカクテルは、ピンク色のクリーミーなドレッシングが絡み、蒸し鶏はガルムソースと野菜ペーストがかかる。
+// y0＝皿の底の高さ、R＝わかめを敷く範囲の半径
+function addRimDish(g: THREE.Group, contents: readonly IngredientId[], seed: number, y0: number, R: number): void {
+  const nWakame = Math.max(1, contents.filter((id) => id === 'wakame').length);
+  const H = 0.03 + 0.012 * nWakame;
+  const bedAt = (r: number) => y0 + H * Math.sqrt(Math.max(0, 1 - (r / R) ** 2));
+  const under = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x10301a));
+  under.scale.set(R * 0.98, H, R * 0.98);
+  under.position.y = y0;
+  g.add(under);
+  let lift = 0;
+  const at = (r: number) => bedAt(r) + lift;
+  const pink = contents.includes('shrimp');
+  contents.forEach((id, i) => {
+    const s = seed + i * 101;
+    if (id === 'wakame') {
+      addWakame(g, 70, s, R * 0.95, bedAt);
+    } else if (id === 'shrimp') {
+      addShrimp(g, 28, s, R * 0.6, at);
+      lift += 0.014;
+    } else if (id === 'chicken') {
+      addChickenSlices(g, 7, s, R * 0.5, at);
+      lift += 0.022;
+    } else if (id === 'dressing') {
+      addDressing(g, s, R * 0.7, at, pink ? 0xf6b3a2 : 0xf2bd93); // 小エビには、ピンク色のドレッシング
+      lift += 0.004;
+    } else if (id === 'paprika') {
+      addPaprika(g, s, R * 0.35, at);
+    } else if (id === 'garum') {
+      addDressing(g, s, R * 0.55, at, INGREDIENTS.garum.color);
+      lift += 0.004;
+    } else if (id === 'vegetablePaste') {
+      addPasteChunks(g, 18, s, R * 0.4, at);
+      lift += 0.01;
+    }
+  });
+}
+
 // 小エビ・チキン・パンチェッタ・イカ・きのこのトレー（ステンレスの浅いバット）。中身が山盛りで見える
-function buildFoodPan(id: 'shrimp' | 'chicken' | 'pancetta' | 'squid' | 'mushroom'): THREE.Group {
+function buildFoodPan(id: 'shrimp' | 'chicken' | 'pancetta' | 'squid' | 'mushroom' | 'wakame'): THREE.Group {
   const g = new THREE.Group();
   const steel = 0xc9ced3;
   g.add(box(0.4, 0.02, 0.4, 0x9aa0a6, 0, 0.01, 0));
@@ -470,13 +545,14 @@ function buildFoodPan(id: 'shrimp' | 'chicken' | 'pancetta' | 'squid' | 'mushroo
   g.add(box(0.4, 0.08, 0.012, steel, 0, 0.04, -0.194));
   g.add(box(0.012, 0.08, 0.376, steel, 0.194, 0.04, 0));
   g.add(box(0.012, 0.08, 0.376, steel, -0.194, 0.04, 0));
-  const base = { shrimp: 0xe9a98e, pancetta: 0xe08e88, chicken: 0xe0cba8, squid: 0xe9ddd0, mushroom: 0x9a7048 }[id];
+  const base = { shrimp: 0xe9a98e, pancetta: 0xe08e88, chicken: 0xe0cba8, squid: 0xe9ddd0, mushroom: 0x9a7048, wakame: 0x163a22 }[id];
   g.add(box(0.376, 0.045, 0.376, base, 0, 0.0425, 0)); // 下地
   const heap = (r: number) => 0.065 + 0.035 * Math.max(0, 1 - (r / 0.21) ** 2);
   if (id === 'shrimp') addShrimp(g, 90, hashId('shrimp-pan'), 0.2, heap);
   else if (id === 'pancetta') addPancettaStrips(g, 34, hashId('pancetta-pan'), 0.18, heap);
   else if (id === 'squid') addSquidPieces(g, 85, hashId('squid-pan'), 0.19, heap);
   else if (id === 'mushroom') addMushroomSlices(g, 70, hashId('mushroom-pan'), 0.18, heap);
+  else if (id === 'wakame') addWakame(g, 130, hashId('wakame-pan'), 0.19, heap);
   else addChickenSlices(g, 22, hashId('chicken-pan'), 0.19, heap);
   return g;
 }
@@ -675,8 +751,24 @@ function buildMilkCrate(w = 0.56, d = 0.4, h = 0.26): THREE.Group {
   return g;
 }
 
+// 野菜ペーストのケース：白い浅い箱に、薄い黄色のペーストが山盛り
+function buildPasteCase(): THREE.Group {
+  const g = new THREE.Group();
+  const white = 0xdfe5e8;
+  g.add(box(0.3, 0.02, 0.3, white, 0, 0.01, 0));
+  g.add(box(0.3, 0.07, 0.012, white, 0, 0.035, 0.144));
+  g.add(box(0.3, 0.07, 0.012, white, 0, 0.035, -0.144));
+  g.add(box(0.012, 0.07, 0.276, white, 0.144, 0.035, 0));
+  g.add(box(0.012, 0.07, 0.276, white, -0.144, 0.035, 0));
+  g.add(box(0.276, 0.04, 0.276, 0xcfd078, 0, 0.04, 0)); // 下地
+  addPasteChunks(g, 70, hashId('paste-case'), 0.125, (r) => 0.06 + 0.03 * Math.max(0, 1 - (r / 0.14) ** 2));
+  return g;
+}
+
 function buildTray(id: TrayId): THREE.Group {
   switch (id) {
+    case 'vegPaste':
+      return buildPasteCase();
     case 'spinach':
       return buildSpinachTray();
     case 'saltOil':
@@ -752,9 +844,9 @@ function buildIpad(): THREE.Group {
   return g;
 }
 
-const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce', 'whiteSauce', 'shrimp', 'garlic', 'chili', 'saltOilSauce']);
+const LADLED: ReadonlySet<IngredientId> = new Set(['meatSauce', 'whiteSauce', 'shrimp', 'garlic', 'chili', 'saltOilSauce', 'vegetablePaste']);
 // トングでつかむ具材（手に持つとトングで表示する）
-const TONGED: ReadonlySet<IngredientId> = new Set(['pancetta', 'chicken', 'spinach', 'squid', 'mushroom']);
+const TONGED: ReadonlySet<IngredientId> = new Set(['pancetta', 'chicken', 'spinach', 'squid', 'mushroom', 'wakame']);
 
 // --- パスタ皿：木の深皿に、少し山なりに盛った麺＋ソース＋粉状のトッピング ---
 const WOOD_BOWL_FLOOR = 0.034; // 木の皿の内側の底の高さ
@@ -999,6 +1091,7 @@ function buildItemMesh(item: Item): THREE.Group {
         if (item.id === 'garlic') addGarlicSlices(g, 12, 11, 0.045, () => 0.052);
         else if (item.id === 'chili') addChiliFlakes(g, 60, 12, 0.045, () => 0.052);
         else if (item.id === 'shrimp') addShrimp(g, 6, 13, 0.03, () => 0.052, 0.8);
+        else if (item.id === 'vegetablePaste') addPasteChunks(g, 6, 20, 0.03, () => 0.048);
         else g.add(cyl(0.05, 0.05, 0.01, color, 0, 0.05, 0)); // すくったソース
       } else if (TONGED.has(item.id)) {
         g.add(box(0.015, 0.3, 0.015, 0x8a8f94, -0.03, 0.17, 0).rotateZ(-0.1)); // トング
@@ -1008,6 +1101,7 @@ function buildItemMesh(item: Item): THREE.Group {
         else if (item.id === 'spinach') addSpinachLeaves(g, 9, 15, 0.025, () => 0.012, true); // つかんだほうれん草
         else if (item.id === 'squid') addSquidPieces(g, 4, 17, 0.014, () => 0.004, 0.9); // つかんだイカ
         else if (item.id === 'mushroom') addMushroomSlices(g, 3, 18, 0.014, () => 0.004, 0.9); // つかんだきのこ
+        else if (item.id === 'wakame') addWakame(g, 5, 19, 0.014, () => 0.004, 0.9); // つかんだわかめ
         else g.add(box(0.08, 0.04, 0.05, color, 0, 0.02, 0)); // つかんだ具材
       } else {
         g.add(box(0.14, 0.05, 0.18, color, 0, 0.025, 0)); // パック
@@ -1038,13 +1132,21 @@ function buildItemMesh(item: Item): THREE.Group {
       break;
     }
     case 'plate': {
-      // 皿の種類：普通の皿 / 小皿（ほうれん草のソテー）/ スープ皿（コーンスープ）
+      // 皿の種類：普通の皿 / 小皿（ほうれん草のソテー）/ スープ皿（コーンスープ）/ リム小皿（小エビのカクテル・蒸し鶏の香味ソース）
       const style = item.style ?? 'plate';
       const body = new THREE.Group();
       let y = 0.03;
       if (style === 'bowl') {
         body.add(cyl(0.21, 0.11, 0.09, 0xf5f5f5, 0, 0.045, 0)); // 深い器
         y = 0.075;
+      } else if (style === 'rim') {
+        // リム小皿：白い浅い皿に、茶色のふちの線が1周入っている
+        body.add(cyl(0.3, 0.22, 0.04, 0xf7f5f0, 0, 0.02, 0));
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.285, 0.008, 6, 48), mat(0xa9715a));
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.04;
+        body.add(ring);
+        y = 0.045;
       } else if (style === 'small') {
         body.add(cyl(0.23, 0.18, 0.03, 0xf5f5f5, 0, 0.015, 0));
         const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.007, 6, 40), mat(0xe3c7ba)); // 薄い茶色のふち
@@ -1063,6 +1165,12 @@ function buildItemMesh(item: Item): THREE.Group {
       }
       if (item.contents.includes('saladBase')) {
         addSaladDish(g, item.contents, hashId(item.contents.join(',')), y, 0.185, 0.085);
+        root.add(body);
+        break;
+      }
+      if (style === 'rim' && item.contents.includes('wakame')) {
+        addRimDish(g, item.contents, hashId(item.contents.join(',')), y, 0.24);
+        body.scale.setScalar(0.85);
         root.add(body);
         break;
       }
@@ -1089,6 +1197,7 @@ function buildItemMesh(item: Item): THREE.Group {
         }
       });
       if (style === 'small') body.scale.setScalar(0.68);
+      if (style === 'rim') body.scale.setScalar(0.85);
       root.add(body);
       break;
     }
@@ -1836,16 +1945,31 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   const BOWL_X = SX_STOCK2;
   const BOWL_Z = 0.75;
   const SHELF_Y = NOODLE_RACK_Y - 0.1;
+  // 棚板は、リム小皿の山も載るように、スープ皿の山の左側（-z 側）へ広げてある（スープ皿の山の位置は変えていない）。
+  // 棚板そのものは取れる物ではなく、スープ皿の山・リム小皿の山がそれぞれ取り出し元になる
+  const RIM_Z = BOWL_Z - 0.55; // リム小皿の山（スープ皿の左）
+  const shelfBoard = box(0.5, 0.06, 1.05, 0x8a6a4b, BOWL_X, SHELF_Y, BOWL_Z - 0.275); // 棚板（生麺の棚と同じ厚み・色）
+  saladSpot.add(shelfBoard);
   const bowlShelf = new THREE.Group();
-  bowlShelf.add(box(0.5, 0.06, 0.5, 0x8a6a4b)); // 棚板（生麺の棚と同じ厚み・色）
-  const bowlStack = new THREE.Group();
-  for (let i = 0; i < 5; i++) bowlStack.add(cyl(0.2, 0.1, 0.05, 0xf5f5f5, 0, 0.03 + 0.025 + i * 0.045, 0));
-  bowlShelf.add(bowlStack);
+  for (let i = 0; i < 5; i++) bowlShelf.add(cyl(0.2, 0.1, 0.05, 0xf5f5f5, 0, 0.03 + 0.025 + i * 0.045, 0));
   bowlShelf.position.set(BOWL_X, SHELF_Y, BOWL_Z);
   setTarget(bowlShelf, { kind: 'plateStack', style: 'bowl' });
   saladSpot.add(bowlShelf);
   interactables.push(bowlShelf);
   decorIn(saladSpot, 'スープ皿', BOWL_X, SHELF_Y + 0.4, BOWL_Z, 0.45);
+  const rimShelf = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    rimShelf.add(cyl(0.26, 0.2, 0.03, 0xf7f5f0, 0, 0.03 + 0.015 + i * 0.032, 0));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.006, 6, 40), mat(0xa9715a)); // 茶色のふち
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.03 + 0.03 + i * 0.032;
+    rimShelf.add(ring);
+  }
+  rimShelf.position.set(BOWL_X, SHELF_Y, RIM_Z);
+  setTarget(rimShelf, { kind: 'plateStack', style: 'rim' });
+  saladSpot.add(rimShelf);
+  interactables.push(rimShelf);
+  decorIn(saladSpot, 'リム小皿', BOWL_X, SHELF_Y + 0.4, RIM_Z, 0.5);
 
   // ボトル（ドレッシング・パプリカパウダー・パセリ）：置ける台の天板の上のどこにでも置ける。
   // 位置は state.bottles（台の中心からの相対）。台の中心（surfaceOrigin）に足して、ワールド座標に置く

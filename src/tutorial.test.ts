@@ -19,6 +19,7 @@ const pass: Target = { kind: 'servePass' };
 const plateStack: Target = { kind: 'plateStack' };
 const smallStack: Target = { kind: 'plateStack', style: 'small' };
 const bowlStack: Target = { kind: 'plateStack', style: 'bowl' };
+const rimStack: Target = { kind: 'plateStack', style: 'rim' };
 const fridgeDoor: Target = { kind: 'fridgeDoor' };
 const fridgeDoor2: Target = { kind: 'fridgeDoor', unit: 1 }; // 右側の冷蔵庫
 const stock = (id: Extract<Target, { kind: 'stock' }>['id']): Target => ({ kind: 'stock', id });
@@ -39,7 +40,7 @@ const parsleyBack = table(-0.4, 0.95, 'left');
 const pepperBack = table(-0.4, 1.45, 'left');
 const saladBack = table(0.3, -0.5, 'salad');
 // ガーリック・唐辛子の容器は、台の上のどこに置いてもよい（矢印は標準の場所を指す）
-const fridgeBottle = (id: 'dressing' | 'paprika'): Target => ({ kind: 'fridgeBottle', id });
+const fridgeBottle = (id: 'dressing' | 'paprika' | 'garum'): Target => ({ kind: 'fridgeBottle', id });
 const bin = (id: 'garlic' | 'chili'): Target => ({ kind: 'tableTray', id });
 const garlicHome = table(-0.3, -0.5, 'hotWater');
 const chiliHome = table(0.3, -0.5, 'hotWater');
@@ -128,6 +129,29 @@ const SCRIPTS: Record<string, Act[]> = {
     { right: fridgeDoor }, fridgeTray('chicken'), topping(0), fridgeStock('saladBase'), saladSlot(0), topping(0), saladSlot(0),
     fridgeBottle('dressing'), { right: saladSlot(0) }, { free: saladBack },
     fridgeBottle('paprika'), { right: saladSlot(0) }, { free: table(0.3, -0.95, 'salad') },
+    saladSlot(0), pass,
+  ],
+  wakameSalad: [
+    { right: fridgeDoor2 }, fridgeTray('wakame'), topping(0),
+    { right: fridgeDoor }, fridgeStock('saladBase'), saladSlot(0), topping(0), saladSlot(0), topping(0), saladSlot(0),
+    fridgeBottle('dressing'), { right: saladSlot(0) }, { free: saladBack },
+    fridgeBottle('paprika'), { right: saladSlot(0) }, { free: table(0.3, -0.95, 'salad') },
+    saladSlot(0), pass,
+  ],
+  shrimpCocktail: [
+    { right: fridgeDoor2 }, fridgeTray('wakame'), topping(0),
+    { right: fridgeDoor }, fridgeTray('shrimp'), topping(1),
+    rimStack, saladSlot(0), topping(0), saladSlot(0), topping(1), saladSlot(0), topping(1), saladSlot(0),
+    fridgeBottle('dressing'), { right: saladSlot(0) }, { free: saladBack },
+    fridgeBottle('paprika'), { right: saladSlot(0) }, { free: table(0.3, -0.95, 'salad') },
+    saladSlot(0), pass,
+  ],
+  steamedChicken: [
+    { right: fridgeDoor2 }, fridgeTray('wakame'), topping(0), fridgeTray('vegPaste'), topping(1),
+    { right: fridgeDoor }, fridgeTray('chicken'), topping(2),
+    rimStack, saladSlot(0), topping(0), saladSlot(0), topping(2), saladSlot(0), topping(2), saladSlot(0),
+    topping(1), saladSlot(0),
+    fridgeBottle('garum'), { right: saladSlot(0) }, { free: saladBack },
     saladSlot(0), pass,
   ],
   cornSoup: [

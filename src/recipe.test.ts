@@ -88,6 +88,15 @@ describe('既定のソース（鍋で加熱する分）', () => {
       ['blackPepper', 'cheese', 'mushroom', 'noodle', 'pancetta', 'saltOilSauce', 'spinach', 'whiteSauce'],
     );
   });
+  it('サラダ系の3品の完成品の中身（レタスのサラダベースを使うのはわかめのサラダだけ）', () => {
+    expect([...getMenu('wakameSalad').ingredients].sort()).toEqual(['dressing', 'paprika', 'saladBase', 'wakame', 'wakame']);
+    expect([...getMenu('shrimpCocktail').ingredients].sort()).toEqual(['dressing', 'paprika', 'shrimp', 'shrimp', 'wakame']);
+    expect([...getMenu('steamedChicken').ingredients].sort()).toEqual(['chicken', 'chicken', 'garum', 'vegetablePaste', 'wakame']);
+    for (const id of ['wakameSalad', 'shrimpCocktail', 'steamedChicken']) {
+      expect(getMenu(id).station).toBe('salad');
+      expect(getMenu(id).sauce).toBeUndefined(); // 鍋は使わない
+    }
+  });
   it('無効にしたメニューのソースは対象外', () => {
     const off = MENU.map((m) => (m.id === 'penne' ? { ...m, enabled: false } : m));
     expect(findSauceRecipe(['tomatoSauce', 'garlic', 'chili'], off)).toBeNull();

@@ -4,11 +4,11 @@ import type { FreeTrayId, FridgeItemId, GameState, IngredientId, TrayId, TrayZon
 // トレー・ケース：冷蔵庫から取って、サラダ台の置き場に置くと、中身を1回分ずつ取れる。
 // 置き場の名前は、どれも「トレー置き場」。置き場は区画（TrayZone）ごとにあり、その区画に置ける種類だけが置ける：
 //   spinach … ほうれん草のトレー専用（置き場が1か所）
-//   topping … ほうれん草以外の、塩オイルソース・小エビ・サラダチキン・パンチェッタ・きのこ・ソテーソース・トマトソース。どれをどの置き場に置いてもよい（縦2×横5の10か所）
+//   topping … ほうれん草以外の、塩オイルソース・小エビ・サラダチキン・パンチェッタ・きのこ・わかめ・野菜ペースト・ソテーソース・トマトソース。どれをどの置き場に置いてもよい（縦2×横5の10か所）
 // ガーリック・唐辛子の容器だけは置き場（区画）を持たず、ボトルと同じように台の上のどこにでも置ける（FREE_TRAY_IDS。置き場所は state.freeTraySpot）。
 // 置き場の位置は scene.ts。ここは種類と区画の対応、名前、置き場の空きなど、位置に関係ない決まりだけ。
 
-export const TRAY_IDS: TrayId[] = ['spinach', 'saltOil', 'shrimp', 'chicken', 'pancetta', 'mushroom', 'sauteSauce', 'tomatoSauce', 'garlic', 'chili'];
+export const TRAY_IDS: TrayId[] = ['spinach', 'saltOil', 'shrimp', 'chicken', 'pancetta', 'mushroom', 'wakame', 'vegPaste', 'sauteSauce', 'tomatoSauce', 'garlic', 'chili'];
 
 // 台の上のどこにでも置ける容器
 export const FREE_TRAY_IDS: FreeTrayId[] = ['garlic', 'chili'];
@@ -25,6 +25,8 @@ export const TRAY_ZONE: Record<TrayId, TrayZone | null> = {
   chicken: 'topping',
   pancetta: 'topping',
   mushroom: 'topping',
+  wakame: 'topping',
+  vegPaste: 'topping',
   sauteSauce: 'topping',
   tomatoSauce: 'topping',
   garlic: null,
@@ -39,6 +41,8 @@ export const TRAY_CONTENT: Record<TrayId, IngredientId> = {
   chicken: 'chicken',
   pancetta: 'pancetta',
   mushroom: 'mushroom',
+  wakame: 'wakame',
+  vegPaste: 'vegetablePaste',
   sauteSauce: 'sauteSauce',
   tomatoSauce: 'tomatoSauce',
   garlic: 'garlic',
@@ -53,6 +57,8 @@ export const TRAY_NAME: Record<TrayId, string> = {
   chicken: 'サラダチキンのトレー',
   pancetta: 'パンチェッタのトレー',
   mushroom: 'きのこのトレー',
+  wakame: 'わかめのトレー',
+  vegPaste: '野菜ペーストのケース',
   sauteSauce: 'ソテーソースのケース',
   tomatoSauce: 'トマトソースのケース',
   garlic: 'ガーリックの容器',
@@ -73,6 +79,8 @@ export const TRAY_FRIDGE_ITEM: Record<TrayId, FridgeItemId> = {
   chicken: 'chickenTray',
   pancetta: 'pancettaTray',
   mushroom: 'mushroomTray',
+  wakame: 'wakameTray',
+  vegPaste: 'vegPasteCase',
   sauteSauce: 'sauteSauceCase',
   tomatoSauce: 'tomatoSauceCase',
   garlic: 'garlicBin',

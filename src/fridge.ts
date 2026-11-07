@@ -19,6 +19,8 @@ export const FRIDGE_ITEM_IDS: FridgeItemId[] = [
   'pancettaTray',
   'squid',
   'mushroomTray',
+  'wakameTray',
+  'vegPasteCase',
   'whiteSauce',
   'squidInkSauce',
   'sauteSauceCase',
@@ -26,6 +28,7 @@ export const FRIDGE_ITEM_IDS: FridgeItemId[] = [
   'chiliBin',
   'dressingBottle',
   'paprikaBottle',
+  'garumBottle',
 ];
 
 export const FRIDGE_ITEM_NAME: Record<FridgeItemId, string> = {
@@ -42,6 +45,8 @@ export const FRIDGE_ITEM_NAME: Record<FridgeItemId, string> = {
   pancettaTray: 'パンチェッタ',
   squid: 'イカ',
   mushroomTray: 'きのこ',
+  wakameTray: 'わかめ',
+  vegPasteCase: '野菜ペースト',
   whiteSauce: 'ホワイトソース缶',
   squidInkSauce: 'イカ墨ソース',
   sauteSauceCase: 'ソテーソース',
@@ -49,6 +54,7 @@ export const FRIDGE_ITEM_NAME: Record<FridgeItemId, string> = {
   chiliBin: '唐辛子',
   dressingBottle: 'ドレッシング',
   paprikaBottle: 'パプリカパウダー',
+  garumBottle: 'ガルムソース',
 };
 
 // 棚（最下段・下段・中段・上段）の天板の高さ。添字 0 = 最下段（庫内の底）
@@ -73,6 +79,8 @@ export const FRIDGE_ITEM_SIZE: Record<FridgeItemId, { hx: number; hz: number }> 
   pancettaTray: { hx: 0.2, hz: 0.2 },
   squid: { hx: 0.2, hz: 0.2 },
   mushroomTray: { hx: 0.2, hz: 0.2 },
+  wakameTray: { hx: 0.2, hz: 0.2 },
+  vegPasteCase: { hx: 0.15, hz: 0.15 },
   whiteSauce: { hx: 0.1, hz: 0.1 },
   squidInkSauce: { hx: 0.15, hz: 0.17 }, // トマトソースと同じ、パックが並んだ容器
   sauteSauceCase: { hx: 0.15, hz: 0.17 },
@@ -80,6 +88,7 @@ export const FRIDGE_ITEM_SIZE: Record<FridgeItemId, { hx: number; hz: number }> 
   chiliBin: { hx: 0.18, hz: 0.18 },
   dressingBottle: { hx: 0.07, hz: 0.07 }, // ボトル（台の上と同じ 1.4 倍の大きさ）
   paprikaBottle: { hx: 0.07, hz: 0.07 },
+  garumBottle: { hx: 0.07, hz: 0.07 },
 };
 
 // 最初の置き場所
@@ -101,6 +110,10 @@ export const FRIDGE_HOME: Record<FridgeItemId, FridgeSpot> = {
   // 2台目の冷蔵庫（右側の空いていた冷蔵庫）：上段にイカ（冷蔵庫の中から直接取る）ときのこのトレー、中段にホワイトソース缶とイカ墨ソース（これも冷蔵庫の中から直接取る）
   squid: { unit: 1, shelf: 3, x: 0.37, z: 0.5 },
   mushroomTray: { unit: 1, shelf: 3, x: 0.37, z: -0.5 },
+  // 右側の冷蔵庫の下段にわかめと野菜ペースト、最下段にガルムソースのボトル
+  wakameTray: { unit: 1, shelf: 1, x: 0.37, z: 0.55 },
+  vegPasteCase: { unit: 1, shelf: 1, x: 0.37, z: -0.5 },
+  garumBottle: { unit: 1, shelf: 0, x: 0.37, z: 0 },
   whiteSauce: { unit: 1, shelf: 2, x: 0.37, z: 0.5 },
   squidInkSauce: { unit: 1, shelf: 2, x: 0.37, z: -0.5 },
   // 最下段：ガーリックと唐辛子の容器（取り出して、台の上の好きな場所に置く）

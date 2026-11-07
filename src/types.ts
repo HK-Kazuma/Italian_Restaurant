@@ -19,6 +19,9 @@ export type IngredientId =
   | 'saltOilSauce' // 塩オイルソース（ペペロンチーノ）
   | 'whiteSauce' // ホワイトソース（きのこのクリームパスタ）
   | 'squidInkSauce' // イカ墨ソース（イカスミのパスタ）
+  | 'wakame'
+  | 'garum' // ガルムソース（ボトル。蒸し鶏の香味ソース）
+  | 'vegetablePaste' // 野菜ペースト（蒸し鶏の香味ソース）
   | 'squid'
   | 'mushroom'
   | 'saladBase'
@@ -29,10 +32,10 @@ export type IngredientId =
   | 'cornSoup';
 
 // 手に持って、皿にかける・振るボトル。決まった台の上に自由に置ける（置ける台は bottle.ts）
-export type BottleId = Extract<IngredientId, 'dressing' | 'paprika' | 'parsley' | 'blackPepper'>;
+export type BottleId = Extract<IngredientId, 'dressing' | 'paprika' | 'garum' | 'parsley' | 'blackPepper'>;
 
 // 最初は冷蔵庫にしまってあるボトル（取り出してから、台の上に置く）
-export type FridgeBottleId = Extract<BottleId, 'dressing' | 'paprika'>;
+export type FridgeBottleId = Extract<BottleId, 'dressing' | 'paprika' | 'garum'>;
 
 // 物を置ける台。salad = 右のサラダ台、left = IHの左の台、hotWater = 湯煎器の奥と右の台
 export type SurfaceId = 'salad' | 'left' | 'hotWater';
@@ -57,12 +60,12 @@ export type BottlePreview = {
 // 茹で麺器に入れる麺の種類（茹で上がると、同じ id の具材になる）
 export type NoodleKind = Extract<IngredientId, 'noodle' | 'penne'>;
 
-// 皿の種類。plate = パスタ・サラダの皿、small = ほうれん草のソテーの小皿、bowl = コーンスープのスープ皿。
+// 皿の種類。plate = パスタ・サラダの皿、small = ほうれん草のソテーの小皿、bowl = コーンスープのスープ皿、rim = 小エビのカクテル・蒸し鶏の香味ソースのリム小皿（茶色のふちの浅い皿）。
 // 見た目の違いと、スープ皿にだけパックを入れられる、という違いだけ。提供の判定は中身だけで決まる
-export type PlateStyle = 'plate' | 'small' | 'bowl';
+export type PlateStyle = 'plate' | 'small' | 'bowl' | 'rim';
 
 // 冷蔵庫から取ってサラダ台に置くトレー・ケース。spinach = ほうれん草のトレー、saltOil = 塩オイルソースのパックが入ったケース、
-// shrimp / chicken / pancetta / mushroom = 小エビ・サラダチキン・パンチェッタ・きのこのトレー、sauteSauce / tomatoSauce = ソテーソース・トマトソースのパックが入ったケース。
+// shrimp / chicken / pancetta / mushroom / wakame = 小エビ・サラダチキン・パンチェッタ・きのこ・わかめのトレー、vegPaste = 野菜ペーストのケース、sauteSauce / tomatoSauce = ソテーソース・トマトソースのパックが入ったケース。
 // どれを置けるかは置き場の区画（TrayZone）で決まる（種類と区画の対応は tray.ts）
 // garlic / chili = ガーリック・唐辛子のステンレスの容器。置き場（区画）はなく、ボトルと同じように台の上のどこにでも置ける（FreeTrayId）
 export type TrayId =
@@ -72,6 +75,8 @@ export type TrayId =
   | 'chicken'
   | 'pancetta'
   | 'mushroom'
+  | 'wakame'
+  | 'vegPaste'
   | 'sauteSauce'
   | 'tomatoSauce'
   | 'garlic'
@@ -98,13 +103,16 @@ export type FridgeItemId =
   | 'pancettaTray'
   | 'squid' // イカ（冷蔵庫の中から直接取る。トレー置き場には置かない）
   | 'mushroomTray'
+  | 'wakameTray'
+  | 'vegPasteCase'
   | 'whiteSauce'
   | 'squidInkSauce'
   | 'sauteSauceCase'
   | 'garlicBin'
   | 'chiliBin'
   | 'dressingBottle'
-  | 'paprikaBottle';
+  | 'paprikaBottle'
+  | 'garumBottle';
 
 // 冷蔵庫の棚の番号。0 = 最下段、1 = 下段、2 = 中段、3 = 上段
 export type FridgeShelf = 0 | 1 | 2 | 3;

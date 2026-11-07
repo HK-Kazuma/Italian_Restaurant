@@ -75,6 +75,7 @@ export const LEFT_COUNTER = { x: -2.6, z: -0.2 };
 export const BOTTLE_HOME: Record<BottleId, { surface: SurfaceId; x: number; z: number }> = {
   dressing: { surface: 'salad', x: -0.45, z: -0.9 },
   paprika: { surface: 'salad', x: -0.45, z: -1.25 },
+  garum: { surface: 'salad', x: -0.45, z: -1.4 },
   parsley: { surface: 'left', x: -0.4, z: 0.95 },
   blackPepper: { surface: 'left', x: -0.4, z: 1.45 }, // もとのトッピングの位置
 };

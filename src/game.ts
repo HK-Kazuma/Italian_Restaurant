@@ -901,7 +901,7 @@ export function describeItem(item: Item | null): string {
       return `鍋（${heat}：${pot.contents.map((id) => INGREDIENTS[id].name).join('・')}）`;
     }
     case 'plate': {
-      const kind = { plate: '皿', small: '小皿', bowl: 'スープ皿' }[item.style ?? 'plate'];
+      const kind = { plate: '皿', small: '小皿', bowl: 'スープ皿', rim: 'リム小皿' }[item.style ?? 'plate'];
       return item.contents.length === 0
         ? `${kind}（空）`
         : `${kind}（${item.contents.map((id) => INGREDIENTS[id].name).join('・')}）`;

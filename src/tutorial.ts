@@ -7,7 +7,7 @@ import { warmTime } from './pack';
 import { isNoodle } from './pot';
 import { getMenu, type MenuItem } from './recipe';
 import { TRAY_FRIDGE_ITEM, TRAY_NAME, TRAY_ZONE, freeTraySpots, isFreeTray } from './tray';
-import type { BottleId, FridgeItemId, FridgeUnit, GameState, IngredientId, NoodleKind, Pot, SurfaceId, Target, TrayId } from './types';
+import type { BottleId, FridgeBottleId, FridgeItemId, FridgeUnit, GameState, IngredientId, NoodleKind, Pot, SurfaceId, Target, TrayId } from './types';
 
 // チュートリアル：練習キッチンで、選んだメニューを「次はここ」と案内されながら作る。
 //
@@ -238,9 +238,9 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
       },
     });
 
-  // 皿・小皿・スープ皿・サラダベースを取って、台に置く
-  const plate = (style: 'plate' | 'small' | 'bowl' | 'saladBase' = 'plate') => {
-    const names = { plate: '皿', small: '小皿', bowl: 'スープ皿', saladBase: 'サラダベース' };
+  // 皿・小皿・スープ皿・リム小皿・サラダベースを取って、台に置く
+  const plate = (style: 'plate' | 'small' | 'bowl' | 'rim' | 'saladBase' = 'plate') => {
+    const names = { plate: '皿', small: '小皿', bowl: 'スープ皿', rim: 'リム小皿', saladBase: 'サラダベース' };
     const place = menu.station === 'pasta' ? '左の台' : 'サラダ台';
     return carry({
       label: `${names[style]}を取って、${place}に置く`,
@@ -356,18 +356,24 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
     },
   });
 
-  // 具材・トッピングを取って、皿にのせる
-  const top = (id: IngredientId, from?: GuideAt | ((s: GameState) => GuideAt)) =>
-    carry({
-      label: `${INGREDIENTS[id].name}を取って、${menu.station === 'pasta' ? '皿' : 'サラダ'}にのせる`,
+  // 具材・トッピングを取って、皿にのせる（n 回くり返す工程は、進み具合が出る）
+  const top = (id: IngredientId, from?: GuideAt | ((s: GameState) => GuideAt), n = 1) => {
+    const onPlate = (s: GameState) => Math.max(0, ...allPlates(s).map((p) => count(p, id)));
+    return carry({
+      label:
+        n > 1
+          ? `${INGREDIENTS[id].name}を${n}回、${menu.station === 'pasta' ? '皿' : 'サラダ'}にのせる`
+          : `${INGREDIENTS[id].name}を取って、${menu.station === 'pasta' ? '皿' : 'サラダ'}にのせる`,
       from: (s) => (typeof from === 'function' ? from(s) : (from ?? { kind: 'stock', id })),
       holding: (s) => s.hand?.kind === 'ingredient' && s.hand.id === id,
       to: plateAt,
-      done: (s) => plateHasAny(s, [id]) || served(s),
+      done: (s) => onPlate(s) >= n || served(s),
+      progress: (s) => (n > 1 ? `${Math.min(onPlate(s), n)}/${n}` : null),
     });
+  };
 
   // ボトル：取って、皿に右クリックでかけ（振り）、元の場所に戻す。手を空けないと、皿を持てない。
-  // ドレッシング・パプリカパウダーは、冷蔵庫から取り出す（元の場所は、サラダ台の上）
+  // ドレッシング・パプリカパウダー・ガルムソースは、冷蔵庫から取り出す（元の場所は、サラダ台の上）
   const bottle = (id: BottleId): TutorialStep => {
     const onPlate = (s: GameState) => plateHasAny(s, [id]);
     const holding = (s: GameState) => s.hand?.kind === 'bottle' && s.hand.id === id;
@@ -378,8 +384,8 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
       label: BOTTLE_ACTION[id],
       at: (s) => {
         if (inFridge(s)) {
-          const unit = s.fridgeItems[BOTTLE_FRIDGE_ITEM[id as 'dressing' | 'paprika']].unit;
-          return s.fridgeOpen[unit] ? { kind: 'fridgeBottle', id: id as 'dressing' | 'paprika' } : fridgeDoorOf(unit);
+          const unit = s.fridgeItems[BOTTLE_FRIDGE_ITEM[id as FridgeBottleId]].unit;
+          return s.fridgeOpen[unit] ? { kind: 'fridgeBottle', id: id as FridgeBottleId } : fridgeDoorOf(unit);
         }
         if (!holding(s)) return { kind: 'bottle', id };
         return onPlate(s) ? { kind: 'surfaceSpot', surface: spot.surface, x: spot.x, z: spot.z } : plateTarget(s);
@@ -389,7 +395,7 @@ function makeKit(menu: MenuItem, cfg: GameConfig) {
         if (!holding(s)) {
           if (s.hand) return '手がふさがっています（置くか、右クリックで捨てる）';
           if (inFridge(s)) {
-            const unit = s.fridgeItems[BOTTLE_FRIDGE_ITEM[id as 'dressing' | 'paprika']].unit;
+            const unit = s.fridgeItems[BOTTLE_FRIDGE_ITEM[id as FridgeBottleId]].unit;
             if (!s.fridgeOpen[unit]) return `${fridgeName(unit)}の扉を右クリックで開ける`;
           }
           return 'ボトルを左クリックで取る';
@@ -640,6 +646,38 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
     k.top('chicken', k.trayPlaced('chicken')),
     k.bottle('dressing'),
     k.bottle('paprika'),
+    k.serve,
+  ],
+  wakameSalad: (k) => [
+    k.openFridge(1), // わかめは、右側の冷蔵庫
+    k.trayToTable('wakame'),
+    k.plate('saladBase'),
+    k.top('wakame', k.trayPlaced('wakame'), 2),
+    k.bottle('dressing'),
+    k.bottle('paprika'),
+    k.serve,
+  ],
+  shrimpCocktail: (k) => [
+    k.openFridge(1),
+    k.trayToTable('wakame'),
+    k.trayToTable('shrimp'),
+    k.plate('rim'),
+    k.top('wakame', k.trayPlaced('wakame')),
+    k.top('shrimp', k.trayPlaced('shrimp'), 2),
+    k.bottle('dressing'),
+    k.bottle('paprika'),
+    k.serve,
+  ],
+  steamedChicken: (k) => [
+    k.openFridge(1), // わかめ・野菜ペースト・ガルムソースは、右側の冷蔵庫
+    k.trayToTable('wakame'),
+    k.trayToTable('vegPaste'),
+    k.trayToTable('chicken'),
+    k.plate('rim'),
+    k.top('wakame', k.trayPlaced('wakame')),
+    k.top('chicken', k.trayPlaced('chicken'), 2),
+    k.top('vegetablePaste', k.trayPlaced('vegPaste')),
+    k.bottle('garum'),
     k.serve,
   ],
   cornSoup: (k) => [
