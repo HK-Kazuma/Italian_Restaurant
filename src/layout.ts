@@ -141,9 +141,6 @@ export const OVEN_Z = {
   },
 };
 
-// レーンの中心の x（レーン 0 = 左の台の反対側（-x）、最後のレーン = 部屋の中央側（+x））
-export const OVEN_LANE_X = Array.from({ length: OVEN_BELT.lanes }, (_, i) => OVEN.x + (i - (OVEN_BELT.lanes - 1) / 2) * (OVEN_BELT.laneW + OVEN_BELT.laneGap));
-
 // オーブンの入口の先（壁側）の台。ドリア・鉄板焼きの具材を置く具材コーナー（いまは、テスト用の焼き皿だけ）
 const OVEN_COUNTER_D = 1.2;
 export const OVEN_COUNTER = {

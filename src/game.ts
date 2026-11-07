@@ -19,7 +19,7 @@ import {
   updateHeat,
   updateWasher,
 } from './pot';
-import { OVEN_DECK_NAME, bakeTime, canPlaceDish, canTakeDish, createOven, placeDish, takeDish, updateOven } from './oven';
+import { OVEN_DECK_NAME, bakeTime, canTakeDish, createOven, placeDish, resolvePlacement, takeDish, timeToEmerge, updateOven } from './oven';
 import { canStackPack, createPack, findWarmPack, soakPack, stockItem } from './pack';
 import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
 import { serveScore } from './score';
@@ -31,7 +31,7 @@ import { BAKE_DISHES, BOTTLE_HOME, FREE_TRAY_HOME, SURFACES } from './layout';
 import { OPEN_WORLD, launchPot, stepThrownPot, type ThrowAim } from './throw';
 import type { World } from './world';
 import { FREE_TRAY_IDS, TRAY_CONTENT, TRAY_FRIDGE_ITEM, TRAY_IDS, TRAY_NAME, TRAY_ZONE, isFreeTray, trayAt, trayOfFridgeItem } from './tray';
-import type { BottleId, BottlePreview, BottleSpot, FreeTrayId, FridgeItemId, FridgePreview, FridgeSpot, FridgeUnit, GameState, IngredientId, Item, Mode, Phase, Pot, TableSpot, Target, Toast, TrayId } from './types';
+import type { BottleId, BottlePreview, OvenPreview, BottleSpot, FreeTrayId, FridgeItemId, FridgePreview, FridgeSpot, FridgeUnit, GameState, IngredientId, Item, Mode, Phase, Pot, TableSpot, Target, Toast, TrayId } from './types';
 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
 type Action = () => void;
@@ -514,15 +514,27 @@ export class Game {
     return this.previewBottle(target) ?? this.previewFreeTray(target);
   }
 
+  // 手に持った焼き皿を、視点が合っている入口のベルトに置くとしたら、どこに置かれるか（縦は好きな位置、横は近い置き場にそろう）。
+  // 重なるときは valid = false。焼く前の焼き皿を持っていて、入口に視点が合っているとき以外は null
+  previewOven(target: Target | null): OvenPreview | null {
+    const s = this.state;
+    const hand = s.hand;
+    if (s.phase !== 'playing' || hand?.kind !== 'bakeDish' || hand.baked || target?.kind !== 'ovenInlet') return null;
+    const p = resolvePlacement(s.oven, target.deck, hand.style, target);
+    return { deck: target.deck, style: hand.style, x: p.x, s: p.s, valid: p.valid };
+  }
+
   // ジェットオーブンに視点が合っているときの案内（HUD 用）。オーブンに関係なければ null
   ovenHint(target: Target | null): string | null {
     const { hand, oven } = this.state;
     if (target?.kind === 'ovenStock') return hand ? null : `左クリック：焼き皿（${BAKE_DISHES[target.style].name}・テスト）を取る`;
     if (target?.kind === 'ovenInlet') {
       const name = `${OVEN_DECK_NAME[target.deck]}（${bakeTime(target.deck, this.cfg)}秒）`;
-      if (hand?.kind !== 'bakeDish') return `ジェットオーブンの入口：${name}`;
+      if (hand?.kind !== 'bakeDish') return `ジェットオーブンの入口：${name}（ジェットに入る手前に置いた皿が、この秒数で出てくる）`;
       if (hand.baked) return 'もう焼けている（入口には流せない）';
-      return canPlaceDish(oven, target.deck, hand.style, target.lane) ? `左クリック：${name}に流す` : '入口の置き場がふさがっている（少し待つ）';
+      const p = this.previewOven(target);
+      if (!p?.valid) return 'ここには置けない（ほかの皿に重なる）';
+      return `左クリック：ここに流す（${name}。約${Math.ceil(timeToEmerge(p.deck, p.style, p.s, this.cfg))}秒で出てくる）`;
     }
     if (target?.kind === 'ovenOutlet') {
       if (hand) return '手がふさがっている';
@@ -833,12 +845,13 @@ export class Game {
         return () => (s.hand = { kind: 'bakeDish', style: target.style, baked: false });
 
       case 'ovenInlet': {
-        // 焼く前の皿を、入口の最初の置き場に置く（そのレーンの最初の置き場が空いているとき）。置くと、ベルトで流れていく
-        if (hand?.kind !== 'bakeDish' || hand.baked || !canPlaceDish(s.oven, target.deck, hand.style, target.lane)) return null;
+        // 焼く前の皿を、入口のベルトの視点が合っている場所に置く（ほかの皿に重ならないとき）。置くと、ベルトで流れていく
+        const p = this.previewOven(target);
+        if (hand?.kind !== 'bakeDish' || !p?.valid) return null;
         return () => {
-          placeDish(s.oven, target.deck, hand.style, target.lane);
+          placeDish(s.oven, target.deck, hand.style, p);
           s.hand = null;
-          this.say(`${OVEN_DECK_NAME[target.deck]}に流した（${bakeTime(target.deck, this.cfg)}秒）`, 'info');
+          this.say(`${OVEN_DECK_NAME[target.deck]}に流した（ジェットに入る手前から ${bakeTime(target.deck, this.cfg)}秒）`, 'info');
         };
       }
 

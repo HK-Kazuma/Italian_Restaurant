@@ -188,6 +188,10 @@ export type Oven = {
   nextId: number;
 };
 
+// 手に持った焼き皿を入口のベルトに置こうとしたときの様子（置く前の見せ方に使う）。x, s は置かれる位置（ベルトの内側に収めたあと）。
+// valid = false のとき、ほかの皿に重なるので置けない
+export type OvenPreview = { deck: OvenDeck; style: BakeStyle; x: number; s: number; valid: boolean };
+
 export type Station = 'pasta' | 'salad';
 
 export type Ticket = {
@@ -229,7 +233,7 @@ export type Target =
   | { kind: 'ihBurner'; index: number }
   | { kind: 'hotWaterSlot'; index: number } // 熱湯に浸けるパックの置き場所
   | { kind: 'ovenStock'; style: BakeStyle } // 具材台のテスト用の焼き皿の山（クリックで手に取る）
-  | { kind: 'ovenInlet'; deck: OvenDeck; lane: number } // ジェットオーブンの入口（段・レーン）。皿を置くと流れていく
+  | { kind: 'ovenInlet'; deck: OvenDeck; x: number; s: number } // ジェットオーブンの入口のベルト（段）。x, s は視点が合っている点（x: ベルトの中心からの横のずれ、s: 入口の端からの距離）。皿を置くと流れていく
   | { kind: 'ovenOutlet'; deck: OvenDeck; lane: number } // ジェットオーブンの出口。出てきた皿を取る
   | { kind: 'bottle'; id: BottleId } // 台の上のボトル
   | { kind: 'tableTop'; surface: SurfaceId; x: number; z: number } // 台の天板。x, z は視点が合っている点（台の中心からの相対）
