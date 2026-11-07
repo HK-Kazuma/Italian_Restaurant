@@ -155,6 +155,8 @@ function hintFor(target: Target | null): string {
   // 置いたトレー・ケース：左クリックで中身を取る、右クリックで持ち上げて置き直す
   const placedTray = !hand ? game.placedTrayOf(target) : null;
   if (placedTray) return `左クリック：${trayContentName(placedTray)}を取る　右クリック：持ち上げて、置き直す`;
+  const oven = game.ovenHint(target);
+  if (oven) return oven;
   if (hand?.kind === 'bottle') {
     if (game.canUseBottleAt(target)) return `右クリック：${BOTTLE_ACTION[hand.id]}`;
     const p = game.previewBottle(target);

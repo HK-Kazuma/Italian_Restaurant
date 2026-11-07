@@ -19,6 +19,7 @@ import {
   updateHeat,
   updateWasher,
 } from './pot';
+import { OVEN_DECK_NAME, bakeTime, canPlaceDish, canTakeDish, createOven, placeDish, takeDish, updateOven } from './oven';
 import { canStackPack, createPack, findWarmPack, soakPack, stockItem } from './pack';
 import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
 import { serveScore } from './score';
@@ -26,7 +27,7 @@ import { createTicket, nextTicketInterval, pickMenu } from './tickets';
 import { tutorialSteps, type GuideAt, type TutorialStep, type TutorialView } from './tutorial';
 import { BOTTLE_FRIDGE_ITEM, BOTTLE_IDS, BOTTLE_PLATE, BOTTLE_SURFACES, BOTTLE_VERB, bottleOfFridgeItem, isFridgeBottle } from './bottle';
 import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShelf, fridgeItemOf, returnToFridge } from './fridge';
-import { BOTTLE_HOME, FREE_TRAY_HOME, SURFACES } from './layout';
+import { BAKE_DISHES, BOTTLE_HOME, FREE_TRAY_HOME, SURFACES } from './layout';
 import { OPEN_WORLD, launchPot, stepThrownPot, type ThrowAim } from './throw';
 import type { World } from './world';
 import { FREE_TRAY_IDS, TRAY_CONTENT, TRAY_FRIDGE_ITEM, TRAY_IDS, TRAY_NAME, TRAY_ZONE, isFreeTray, trayAt, trayOfFridgeItem } from './tray';
@@ -87,7 +88,7 @@ export class Game {
       trays: Object.fromEntries(TRAY_IDS.map((id) => [id, layout?.trays[id] ?? 'fridge'])) as GameState['trays'],
       traySpot: Object.fromEntries(TRAY_IDS.map((id) => [id, layout?.traySpot[id] ?? 0])) as GameState['traySpot'],
       freeTraySpot: Object.fromEntries(FREE_TRAY_IDS.map((id) => [id, { ...(layout?.freeTraySpot[id] ?? FREE_TRAY_HOME[id]) }])) as Record<FreeTrayId, TableSpot>,
-      fridgeOpen: [false, false],
+      fridgeOpen: [false, false, false],
       fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...(fridge ?? FRIDGE_HOME)[id] }])) as Record<FridgeItemId, FridgeSpot>,
       moving: null,
       // 引き継ぎがなければ、冷蔵庫にしまってあるボトル（null）以外は、もとの場所の台の上
@@ -100,6 +101,7 @@ export class Game {
       ihBurners: Array.from({ length: this.cfg.ihBurnerCount }, () => null),
       thrownPots: [],
       washer: createWasher(),
+      oven: createOven(),
       tickets: [],
       nextTicketAt: configFor(this.cfg, difficulty).firstTicketAt,
       nextTicketId: 1,
@@ -244,6 +246,7 @@ export class Game {
     s.time += dt;
     for (const b of s.boilers) updateBoiler(b, dt, this.cfg);
     updateWasher(s.washer, dt);
+    updateOven(s.oven, dt, this.cfg);
     for (const pack of s.hotWater) if (pack) soakPack(pack, dt, this.cfg); // 熱湯に浸かっている間だけ温まる
     for (const pot of s.ihBurners) if (pot) updateHeat(pot, dt); // 加熱が進むのはIHに載っている間だけ
     for (const thrown of s.thrownPots) stepThrownPot(thrown, dt, this.world);
@@ -509,6 +512,23 @@ export class Game {
   // 手に持った物（ボトル、またはガーリック・唐辛子の容器）を台の上に置くとしたときの様子（置く前の見せ方に使う）。どちらでもなければ null
   previewPlacement(target: Target | null): BottlePreview | null {
     return this.previewBottle(target) ?? this.previewFreeTray(target);
+  }
+
+  // ジェットオーブンに視点が合っているときの案内（HUD 用）。オーブンに関係なければ null
+  ovenHint(target: Target | null): string | null {
+    const { hand, oven } = this.state;
+    if (target?.kind === 'ovenStock') return hand ? null : `左クリック：焼き皿（${BAKE_DISHES[target.style].name}・テスト）を取る`;
+    if (target?.kind === 'ovenInlet') {
+      const name = `${OVEN_DECK_NAME[target.deck]}（${bakeTime(target.deck, this.cfg)}秒）`;
+      if (hand?.kind !== 'bakeDish') return `ジェットオーブンの入口：${name}`;
+      if (hand.baked) return 'もう焼けている（入口には流せない）';
+      return canPlaceDish(oven, target.deck, hand.style, target.lane) ? `左クリック：${name}に流す` : '入口の置き場がふさがっている（少し待つ）';
+    }
+    if (target?.kind === 'ovenOutlet') {
+      if (hand) return '手がふさがっている';
+      return canTakeDish(oven, target.deck, target.lane) ? '左クリック：焼けた皿を取る' : 'ジェットオーブンの出口：まだ出てきていない';
+    }
+    return null;
   }
 
   // 手に持っている物を捨てる
@@ -807,6 +827,29 @@ export class Game {
         return null;
       }
 
+      case 'ovenStock':
+        // 具材台のテスト用の焼き皿。手が空なら1枚取る
+        if (hand) return null;
+        return () => (s.hand = { kind: 'bakeDish', style: target.style, baked: false });
+
+      case 'ovenInlet': {
+        // 焼く前の皿を、入口の最初の置き場に置く（そのレーンの最初の置き場が空いているとき）。置くと、ベルトで流れていく
+        if (hand?.kind !== 'bakeDish' || hand.baked || !canPlaceDish(s.oven, target.deck, hand.style, target.lane)) return null;
+        return () => {
+          placeDish(s.oven, target.deck, hand.style, target.lane);
+          s.hand = null;
+          this.say(`${OVEN_DECK_NAME[target.deck]}に流した（${bakeTime(target.deck, this.cfg)}秒）`, 'info');
+        };
+      }
+
+      case 'ovenOutlet':
+        // 出口に出てきた皿を、いちばん先のものから1枚取る
+        if (hand || !canTakeDish(s.oven, target.deck, target.lane)) return null;
+        return () => {
+          const dish = takeDish(s.oven, target.deck, target.lane);
+          if (dish) s.hand = { kind: 'bakeDish', style: dish.style, baked: true };
+        };
+
       case 'washer': {
         const w = s.washer;
         if (hand?.kind === 'pot' && canInsert(w, hand.pot)) {
@@ -894,6 +937,8 @@ export function describeItem(item: Item | null): string {
       return `${INGREDIENTS[item.id].name}（ボトル）`;
     case 'ipad':
       return 'iPad';
+    case 'bakeDish':
+      return `焼き皿（${BAKE_DISHES[item.style].name}・${item.baked ? '焼き上がり' : '焼く前'}）`;
     case 'pot': {
       const { pot } = item;
       if (pot.contents.length === 0) return pot.dirty ? '鍋（使用済み）' : '鍋';

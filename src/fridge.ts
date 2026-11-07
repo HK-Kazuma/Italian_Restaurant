@@ -177,7 +177,7 @@ function findFreeSpot(
   const shelves = FRIDGE_SHELF_Y.map((_, i) => i as FridgeSpot['shelf']).sort(
     (a, b) => Math.abs(a - from.shelf) - Math.abs(b - from.shelf),
   );
-  const units: FridgeUnit[] = from.unit === 0 ? [0, 1] : [1, 0];
+  const units: FridgeUnit[] = ([0, 1, 2] as FridgeUnit[]).sort((a, b) => Math.abs(a - from.unit) - Math.abs(b - from.unit)); // 同じ冷蔵庫、隣、その隣の順
   for (const unit of units) {
     for (const shelf of shelves) {
       let best: FridgeSpot | null = null;
