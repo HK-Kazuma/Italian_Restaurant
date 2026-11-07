@@ -30,8 +30,8 @@ export type BottleId = Extract<IngredientId, 'dressing' | 'paprika' | 'parsley' 
 // 最初は冷蔵庫にしまってあるボトル（取り出してから、台の上に置く）
 export type FridgeBottleId = Extract<BottleId, 'dressing' | 'paprika'>;
 
-// ボトルを置ける台。salad = 右のサラダ台、left = IHの左の台
-export type SurfaceId = 'salad' | 'left';
+// 物を置ける台。salad = 右のサラダ台、left = IHの左の台、hotWater = 湯煎器の奥と右の台
+export type SurfaceId = 'salad' | 'left' | 'hotWater';
 
 // 台の上の置き場所。台の中心からの相対位置（x: 右、z: 手前）
 export type TableSpot = { surface: SurfaceId; x: number; z: number };

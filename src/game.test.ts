@@ -499,7 +499,7 @@ const chicken = toppingSlot(1); // チキンのトレーを、トッピングの
 const dressing: Target = { kind: 'bottle', id: 'dressing' };
 const paprika: Target = { kind: 'bottle', id: 'paprika' };
 // 台の天板の、視点が合っている点（台の中心からの相対）。既定はサラダ台
-const table = (x: number, z: number, surface: 'salad' | 'left' = 'salad'): Target => ({ kind: 'tableTop', surface, x, z });
+const table = (x: number, z: number, surface: 'salad' | 'left' | 'hotWater' = 'salad'): Target => ({ kind: 'tableTop', surface, x, z });
 const saladSlot = (j: number): Target => ({ kind: 'plateSlot', index: cfg.plateSlotCount + j });
 
 describe('Game: 冷蔵庫の扉', () => {
@@ -762,6 +762,13 @@ describe('Game: パセリのボトル', () => {
     g.interact(parsley);
     g.interact(table(-0.2, 0.0, 'left'));
     expect(g.state.bottles.parsley).toEqual({ surface: 'left', x: -0.2, z: 0 });
+  });
+
+  it('パセリ・ブラックペッパーは、湯煎器の奥と右の台にも置ける', () => {
+    const g = newGame();
+    g.interact(parsley);
+    g.interact(table(0.2, -0.3, 'hotWater'));
+    expect(g.state.bottles.parsley).toEqual({ surface: 'hotWater', x: 0.2, z: -0.3 });
   });
 
   it('ドレッシングとパプリカは、サラダ台にしか置けない（左の台は赤）', () => {
@@ -1952,6 +1959,14 @@ describe('Game: ガーリック・唐辛子の容器（冷蔵庫から取って�
     g.interact(chiliBin);
     g.interact(table(-0.2, 0.0, 'left'));
     expect(g.state.freeTraySpot.chili).toEqual({ surface: 'left', x: -0.2, z: 0 });
+  });
+
+  it('湯煎器の奥と右の台にも置ける', () => {
+    const g = newGame();
+    g.interact(garlicBin);
+    g.interact(table(0.2, -0.3, 'hotWater'));
+    expect(g.state.trays.garlic).toBe('table');
+    expect(g.state.freeTraySpot.garlic).toEqual({ surface: 'hotWater', x: 0.2, z: -0.3 });
   });
 
   it('置く前に、置こうとしている場所と、置けるかどうかが分かる。天板の縁は内側に収める', () => {

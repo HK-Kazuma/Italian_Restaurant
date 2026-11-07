@@ -55,6 +55,16 @@ export const LAYOUT: Layout = {
 export const SURFACES = {
   salad: { width: 1.5, depth: 3.0 },
   left: { width: 1.4, depth: 3.6 },
+  hotWater: { width: 1.6, depth: 1.7 }, // 湯煎器の奥と右に回り込むL字の台の、外側の大きさ
+};
+
+// 湯煎器（layout.hotWater）の奥と右の台。湯煎器の中心からの相対位置（x: 右、z: 手前）。天板の高さは 0.9。
+// 台の中心 = 外側の矩形の中心（置き場所の x, z はここからの相対）。手前と左は空けてあり、湯煎器の中が見える
+export const HOT_WATER_COUNTER = {
+  center: { x: 0.35, z: -0.35 },
+  // 奥の帯と右の帯（湯煎器の中心からの相対の矩形）
+  back: { minX: -0.45, maxX: 1.15, minZ: -1.2, maxZ: -0.5 },
+  right: { minX: 0.45, maxX: 1.15, minZ: -0.5, maxZ: 0.5 },
 };
 
 // IHの左の台の中心（この台は layout の対象ではなく、位置は固定）

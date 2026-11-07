@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { GameConfig } from './config';
 import { INGREDIENTS } from './ingredients';
 import { BOTTLE_FRIDGE_ITEM, BOTTLE_IDS, bottleOfFridgeItem } from './bottle';
-import { FREE_TRAY_HOME, LAYOUT, LEFT_COUNTER, SURFACES, type Layout } from './layout';
+import { FREE_TRAY_HOME, HOT_WATER_COUNTER, LAYOUT, LEFT_COUNTER, SURFACES, type Layout } from './layout';
 import { SAUCE_FILL_PER_UNIT, isNoodle } from './pot';
 import { plateLabel, potMonitor, potPopup } from './labels';
 import { Steam, type SteamOptions } from './steam';
@@ -1192,8 +1192,8 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
 
   // 部屋。冷蔵庫（2台）・サラダ台（layout.ts）がはみ出さないよう、右と奥と手前の壁は必要なら広げる
   const roomMinX = -3.6;
-  const roomMaxX = Math.max(3.6, layout.fridge.x + 0.8 + 0.1, layout.fridge2.x + 0.8 + 0.1, layout.saladTable.x + 0.55 + 0.1);
-  const roomMinZ = Math.min(-4.1, layout.saladTable.z - 1.35 - 0.1);
+  const roomMaxX = Math.max(3.6, layout.fridge.x + 0.8 + 0.1, layout.fridge2.x + 0.8 + 0.1, layout.saladTable.x + 0.55 + 0.1, layout.hotWater.x + HOT_WATER_COUNTER.right.maxX + 0.1);
+  const roomMinZ = Math.min(-4.1, layout.saladTable.z - 1.35 - 0.1, layout.hotWater.z + HOT_WATER_COUNTER.back.minZ - 0.1);
   const roomMaxZ = Math.max(4.1, layout.fridge.z + 1.0 + 0.1, layout.fridge2.z + 1.0 + 0.1);
   const roomW = roomMaxX - roomMinX + 0.8; // 床・天井・奥/手前の壁の幅（壁の外へ少しはみ出す）
   const roomD = roomMaxZ - roomMinZ + 0.8;
@@ -1747,7 +1747,9 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   // ガーリック・唐辛子の容器（お玉）：冷蔵庫から取って、ボトルと同じように台の上の好きな場所に置く（置き場所は state.freeTraySpot）。
   // 置くと、左クリックで1杯すくえる。右クリックで持ち上げて、置き直せる。手に持っている間と、冷蔵庫にある間は台の上から消える。
   // 位置は台の中心（surfaceOrigin）に足して、ワールド座標に置く（下のボトルと同じ）
-  const surfaceOrigin = (surface: SurfaceId) => (surface === 'salad' ? layout.saladTable : LEFT_COUNTER);
+  const hotWaterCounterOrigin = { x: layout.hotWater.x + HOT_WATER_COUNTER.center.x, z: layout.hotWater.z + HOT_WATER_COUNTER.center.z };
+  const surfaceOrigin = (surface: SurfaceId) =>
+    surface === 'salad' ? layout.saladTable : surface === 'hotWater' ? hotWaterCounterOrigin : LEFT_COUNTER;
   const freeTrayViews = new Map<FreeTrayId, { group: THREE.Group; label: Label }>();
   for (const id of FREE_TRAY_IDS) {
     const group = new THREE.Group();
@@ -1859,6 +1861,22 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     hotWaterSpot.add(nameLabel.sprite);
     hotWaterViews.push({ pack: new ItemView(slot), label, nameLabel });
   }
+  // 湯煎器の奥と右の台（L字）：物を置ける。天板は湯煎器の縁より少し高い。手前と左は空けて、湯煎器の中が見えるようにしてある。
+  // 2つの帯は同じ台（hotWater）として扱う。置き場所は、台の外側の矩形の中心からの相対位置
+  const hotWaterCounter = new THREE.Group();
+  hotWaterCounter.position.set(hotWaterCounterOrigin.x, 0, hotWaterCounterOrigin.z);
+  scene.add(hotWaterCounter);
+  for (const part of [HOT_WATER_COUNTER.back, HOT_WATER_COUNTER.right]) {
+    const w = part.maxX - part.minX;
+    const d = part.maxZ - part.minZ;
+    const cx = (part.minX + part.maxX) / 2 - HOT_WATER_COUNTER.center.x;
+    const cz = (part.minZ + part.maxZ) / 2 - HOT_WATER_COUNTER.center.z;
+    const body = box(w, 0.9, d, 0xb89f7a, cx, 0.45, cz);
+    setTarget(body, { kind: 'tableTop', surface: 'hotWater', x: 0, z: 0 });
+    body.userData[RESOLVE_KEY] = tableTopResolver('hotWater', hotWaterCounter);
+    hotWaterCounter.add(body);
+    interactables.push(body);
+  }
   decorIn(hotWaterSpot, '熱湯', 0, 0.55, 0.53, 0.5);
   decorIn(hotWaterSpot, '湯煎器', 0, 1.4, 0, 0.5); // 湯煎器の上に浮かぶ名前（パックの名前・タイマーより上）
   const hotWaterSteam = addSteam(hotWaterSpot, 0, 0.83, 0, { count: 14, rise: 0.45, spread: 0.5, size: 0.28 });
@@ -1870,6 +1888,9 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     rectAt(0, BOILER_Z, 3, 1.1, BOILER_TOP), // 茹で麺器
     rectAt(LEFT_COUNTER.x, LEFT_COUNTER.z, SURFACES.left.width, SURFACES.left.depth, 0.9), // 左の台（皿・トッピング・提供台）
     rectAt(layout.hotWater.x, layout.hotWater.z, 0.9, 1, 0.8), // 熱湯
+    ...[HOT_WATER_COUNTER.back, HOT_WATER_COUNTER.right].map((p) =>
+      rectAt(layout.hotWater.x + (p.minX + p.maxX) / 2, layout.hotWater.z + (p.minZ + p.maxZ) / 2, p.maxX - p.minX, p.maxZ - p.minZ, 0.9),
+    ), // 湯煎器の奥と右の台
     rectAt(layout.saladTable.x, layout.saladTable.z, SURFACES.salad.width, SURFACES.salad.depth, 0.9), // サラダ台
     rectAt(layout.fridge.x + 0.4, layout.fridge.z, 0.8, 2, 1.9), // 冷蔵庫（扉は含めない）
     rectAt(layout.fridge2.x + 0.4, layout.fridge2.z, 0.8, 2, 1.9), // 2台目の冷蔵庫

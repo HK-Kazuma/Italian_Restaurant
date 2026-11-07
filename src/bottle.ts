@@ -16,12 +16,12 @@ export function bottleOfFridgeItem(item: FridgeItemId): FridgeBottleId | null {
   return (Object.keys(BOTTLE_FRIDGE_ITEM) as FridgeBottleId[]).find((id) => BOTTLE_FRIDGE_ITEM[id] === item) ?? null;
 }
 
-// 置ける台。ドレッシングとパプリカパウダーはサラダ台だけ、パセリとブラックペッパーは左の台にもサラダ台にも置ける
+// 置ける台。ドレッシングとパプリカパウダーはサラダ台だけ、パセリとブラックペッパーはどの台にも置ける
 export const BOTTLE_SURFACES: Record<BottleId, SurfaceId[]> = {
   dressing: ['salad'],
   paprika: ['salad'],
-  parsley: ['salad', 'left'],
-  blackPepper: ['salad', 'left'],
+  parsley: ['salad', 'left', 'hotWater'],
+  blackPepper: ['salad', 'left', 'hotWater'],
 };
 
 // かけられる皿。サラダの皿（サラダ台）か、パスタの皿（左の台）か
