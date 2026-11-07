@@ -17,6 +17,10 @@ export type GameConfig = {
   cornSoupStackMax: number; // コーンスープのパックを一度に手に持てる数
   carbonaraStackMax: number; // カルボナーラのパックを一度に手に持てる数（ほかのパックは1つ）
 
+  // ジェットオーブン（ベルトコンベア式。左の台のさらに左）。皿を入口に置いてから、出口に出てくるまでの秒数
+  ovenUpperTime: number; // 上段
+  ovenLowerTime: number; // 下段
+
   // 鍋とIH
   ihBurnerCount: number; // IHコンロの口数
   potCount: number; // 鍋の総数（未決。6で余裕、4で標準、3以下で洗浄が勝負）
@@ -68,6 +72,9 @@ export const DEFAULT_CONFIG: GameConfig = {
   cornSoupWarmTime: 5,
   cornSoupStackMax: 5,
   carbonaraStackMax: 3,
+
+  ovenUpperTime: 30, // テスト用の仮の値（本番は 40秒）
+  ovenLowerTime: 50, // テスト用の仮の値（本番は 80秒）
 
   ihBurnerCount: 4,
   potCount: 5,

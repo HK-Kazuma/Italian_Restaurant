@@ -117,8 +117,8 @@ export type FridgeItemId =
 // 冷蔵庫の棚の番号。0 = 最下段、1 = 下段、2 = 中段、3 = 上段
 export type FridgeShelf = 0 | 1 | 2 | 3;
 
-// 冷蔵庫は2台ある。0 = 最初からある冷蔵庫（物が入っている）、1 = 隣に増やした冷蔵庫（最初は空）。どちらも同じ大きさで、棚の段数も同じ
-export type FridgeUnit = 0 | 1;
+// 冷蔵庫は3台ある。0 = 最初からある冷蔵庫（物が入っている）、1 = 隣に増やした冷蔵庫、2 = さらに隣に増やした冷蔵庫（最初は空）。どれも同じ大きさで、棚の段数も同じ
+export type FridgeUnit = 0 | 1 | 2;
 
 // 冷蔵庫の中の置き場所。unit = どちらの冷蔵庫か。x, z は、その冷蔵庫の基準点（前面の中央）からの相対（x: 奥行き、z: 幅）
 export type FridgeSpot = { unit: FridgeUnit; shelf: FridgeShelf; x: number; z: number };
@@ -174,6 +174,17 @@ export type Washer = {
   timer: number; // 洗浄の残り時間（秒）
 };
 
+// ジェットオーブン（ベルトコンベア式）の段。upper = 上段（短い時間で出てくる）、lower = 下段
+export type OvenDeck = 'upper' | 'lower';
+
+// ベルトに乗っている皿。lane = レーン（0 = 奥、1 = 手前）、s = 入口の端から皿の中心までの距離（m）
+export type OvenDish = { id: number; lane: number; s: number };
+
+export type Oven = {
+  decks: Record<OvenDeck, OvenDish[]>;
+  nextId: number;
+};
+
 export type Station = 'pasta' | 'salad';
 
 export type Ticket = {
@@ -192,7 +203,8 @@ export type Item =
   | { kind: 'tray'; id: TrayId } // 冷蔵庫から取ったトレー・ケース（ほうれん草・塩オイルソース・小エビ・チキン・パンチェッタ・イカ・きのこ・ソテーソース）
   | { kind: 'bottle'; id: BottleId } // ドレッシング・パプリカパウダー・パセリ。右クリックで皿にかける・振る（なくならない）
   | { kind: 'pot'; pot: Pot }
-  | { kind: 'ipad' }; // 練習キッチンの壁にかかっている iPad。右クリックで画面を開く（ゲーム開始・レシピ）
+  | { kind: 'ipad' } // 練習キッチンの壁にかかっている iPad。右クリックで画面を開く（ゲーム開始・レシピ）
+  | { kind: 'bakeDish'; baked: boolean }; // ジェットオーブンで焼く皿（鉄板・ドリア系。いまは長方形のテスト用）。baked = 焼き上がり
 
 // 視点の先にあるクリック可能な設備
 export type Target =
@@ -213,6 +225,9 @@ export type Target =
   | { kind: 'thrownPot'; id: number } // 投げて床・台に落ちている鍋（左クリックで拾う）
   | { kind: 'ihBurner'; index: number }
   | { kind: 'hotWaterSlot'; index: number } // 熱湯に浸けるパックの置き場所
+  | { kind: 'ovenStock' } // 具材台のテスト用の焼き皿（クリックで手に取る）
+  | { kind: 'ovenInlet'; deck: OvenDeck; lane: number } // ジェットオーブンの入口（段・レーン）。皿を置くと流れていく
+  | { kind: 'ovenOutlet'; deck: OvenDeck; lane: number } // ジェットオーブンの出口。出てきた皿を取る
   | { kind: 'bottle'; id: BottleId } // 台の上のボトル
   | { kind: 'tableTop'; surface: SurfaceId; x: number; z: number } // 台の天板。x, z は視点が合っている点（台の中心からの相対）
   | { kind: 'washer' }
@@ -247,7 +262,7 @@ export type GameState = {
   trays: Record<TrayId, 'fridge' | 'hand' | 'table'>; // トレー・ケースの場所（冷蔵庫 / 手 / サラダ台）
   traySpot: Record<TrayId, number>; // サラダ台に置いてあるとき、その区画の何番目の置き場か（同じ区画の置き場が複数ある）
   freeTraySpot: Record<FreeTrayId, TableSpot>; // 台の上のどこにでも置ける容器の置き場所（trays が 'table' のときだけ意味がある）
-  fridgeOpen: [boolean, boolean]; // 冷蔵庫の扉（添字 = FridgeUnit。最初はどちらも閉まっている）
+  fridgeOpen: [boolean, boolean, boolean]; // 冷蔵庫の扉（添字 = FridgeUnit。最初はどれも閉まっている）
   fridgeItems: Record<FridgeItemId, FridgeSpot>; // 冷蔵庫の中の物の置き場所（トレー・ケースは、取ったあとは使わない）
   moving: FridgeItemId | null; // 右クリックで持ち上げている最中の物（手とは別。棚に右クリックで置く）
   bottles: Record<BottleId, BottleSpot>; // 台の上のボトル
@@ -257,6 +272,7 @@ export type GameState = {
   ihBurners: (Pot | null)[];
   thrownPots: ThrownPot[]; // 投げた鍋（飛んでいる最中、または床・台に落ちている）
   washer: Washer;
+  oven: Oven; // ジェットオーブン（ベルトに乗っている皿）
   tickets: Ticket[];
   nextTicketAt: number;
   nextTicketId: number;

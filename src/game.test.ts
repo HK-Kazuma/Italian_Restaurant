@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG as cfg } from './config';
 import { FRIDGE_ITEM_IDS, fitsOnShelf } from './fridge';
 import { Game } from './game';
-import { BOTTLE_HOME } from './layout';
+import { BOTTLE_HOME, SURFACES } from './layout';
 import { getMenu } from './recipe';
 import { createTicket } from './tickets';
 import type { Target, TrayId } from './types';
@@ -798,7 +798,7 @@ describe('Game: パセリのボトル', () => {
     g.interact(parsley);
     const p = g.previewBottle(table(9, 9, 'left'))!;
     expect(p.x).toBeLessThan(0.7);
-    expect(p.z).toBeLessThan(1.8);
+    expect(p.z).toBeLessThan(SURFACES.left.depth / 2); // 手前の端（台を手前へ広げたぶん、奥行きの半分）
   });
 });
 
@@ -1500,17 +1500,32 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
     const door2: Target = { kind: 'fridgeDoor', unit: 1 };
     const shelf2 = (shelf: 0 | 1 | 2 | 3, x: number, z: number): Target => ({ kind: 'fridgeShelf', unit: 1, shelf, x, z });
 
+    it('3台目の冷蔵庫は最初は空で、扉は別々に開け閉めでき、ほかの冷蔵庫の物を置き直せる', () => {
+      const g = newGame(); // 1台目は開けてある
+      const door3: Target = { kind: 'fridgeDoor', unit: 2 };
+      const shelf3 = (shelf: 0 | 1 | 2 | 3, x: number, z: number): Target => ({ kind: 'fridgeShelf', unit: 2, shelf, x, z });
+      expect(Object.values(g.state.fridgeItems).filter((s) => s.unit === 2)).toHaveLength(0);
+      g.rightClick(door3);
+      expect(g.state.fridgeOpen).toEqual([true, false, true]);
+      const can: Target = { kind: 'stock', id: 'meatSauce', inFridge: true };
+      g.rightClick(can); // ミートソース缶を持ち上げて
+      g.rightClick(shelf3(2, 0.37, 0)); // 3台目へ
+      expect(g.state.fridgeItems.meatSauce.unit).toBe(2);
+      g.rightClick(door3);
+      expect(g.state.fridgeOpen).toEqual([true, false, false]);
+    });
+
     it('最初は、イカ・きのこ・わかめ・野菜ペースト・ガルムソース・ホワイトソース缶・イカ墨ソースだけが入っていて、扉は1台目と別々に開け閉めできる', () => {
       const g = newGame(); // 1台目は開けてある
-      expect(g.state.fridgeOpen).toEqual([true, false]);
+      expect(g.state.fridgeOpen).toEqual([true, false, false]);
       const inSecond = Object.entries(g.state.fridgeItems).filter(([, s]) => s.unit === 1).map(([id]) => id).sort();
       expect(inSecond).toEqual(['garumBottle', 'mushroomTray', 'squid', 'squidInkSauce', 'vegPasteCase', 'wakameTray', 'whiteSauce']);
       g.rightClick(door2);
-      expect(g.state.fridgeOpen).toEqual([true, true]);
+      expect(g.state.fridgeOpen).toEqual([true, true, false]);
       g.rightClick(fridgeShelf(1, 0, 0)); // 棚板の unit 省略 = 1台目
-      expect(g.state.fridgeOpen).toEqual([false, true]);
+      expect(g.state.fridgeOpen).toEqual([false, true, false]);
       g.rightClick(shelf2(2, 0.4, 0));
-      expect(g.state.fridgeOpen).toEqual([false, false]);
+      expect(g.state.fridgeOpen).toEqual([false, false, false]);
     });
 
     it('1台目の物を持ち上げて、2台目の棚に置ける。同じ位置でも1台目の物とは重ならない', () => {
@@ -1534,7 +1549,7 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
       g.rightClick(can);
       g.rightClick(shelf2(2, 0.37, 0)); // ミートソース缶を2台目へ
       g.rightClick(fridgeDoor); // 1台目を閉める
-      expect(g.state.fridgeOpen).toEqual([false, true]);
+      expect(g.state.fridgeOpen).toEqual([false, true, false]);
       expect(g.planInteract(can)).not.toBeNull(); // 缶は2台目にあり、2台目の扉は開いている
       expect(g.planInteract(tomatoSauceCase)).toBeNull(); // トマトソースは1台目で、扉が閉まっている
       g.rightClick(door2); // 2台目も閉める
@@ -1552,7 +1567,7 @@ describe('Game: 冷蔵庫の中の物を、右クリックで持ち上げて置�
       g.rightClick(door2); // 2台目の扉を閉める
       g.rightClick(can); // 閉まっている：扉を開ける
       expect(g.state.moving).toBeNull();
-      expect(g.state.fridgeOpen).toEqual([true, true]);
+      expect(g.state.fridgeOpen).toEqual([true, true, false]);
     });
   });
 
@@ -1877,7 +1892,7 @@ describe('Game: iPad からのゲーム開始（操作説明つき）', () => {
     g.rightClick({ kind: 'fridgeDoor' });
     expect(g.state.fridgeOpen[0]).toBe(true);
     g.getReady();
-    expect(g.state.fridgeOpen).toEqual([false, false]);
+    expect(g.state.fridgeOpen).toEqual([false, false, false]);
   });
 
   it('手に持っていたトレーのもとの場所に、ほかの物を置き直していたら、冷蔵庫の空いている場所に戻る', () => {
