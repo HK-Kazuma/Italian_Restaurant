@@ -62,7 +62,7 @@ export type NoodleKind = Extract<IngredientId, 'noodle' | 'penne'>;
 export type PlateStyle = 'plate' | 'small' | 'bowl';
 
 // 冷蔵庫から取ってサラダ台に置くトレー・ケース。spinach = ほうれん草のトレー、saltOil = 塩オイルソースのパックが入ったケース、
-// shrimp / chicken / pancetta / squid / mushroom = 小エビ・サラダチキン・パンチェッタ・イカ・きのこのトレー、sauteSauce / tomatoSauce = ソテーソース・トマトソースのパックが入ったケース。
+// shrimp / chicken / pancetta / mushroom = 小エビ・サラダチキン・パンチェッタ・きのこのトレー、sauteSauce / tomatoSauce = ソテーソース・トマトソースのパックが入ったケース。
 // どれを置けるかは置き場の区画（TrayZone）で決まる（種類と区画の対応は tray.ts）
 // garlic / chili = ガーリック・唐辛子のステンレスの容器。置き場（区画）はなく、ボトルと同じように台の上のどこにでも置ける（FreeTrayId）
 export type TrayId =
@@ -71,7 +71,6 @@ export type TrayId =
   | 'shrimp'
   | 'chicken'
   | 'pancetta'
-  | 'squid'
   | 'mushroom'
   | 'sauteSauce'
   | 'tomatoSauce'
@@ -81,8 +80,8 @@ export type TrayId =
 // 台の上のどこにでも置ける容器（置き場の区画を持たないトレー・ケース）。置き場所は state.freeTraySpot
 export type FreeTrayId = Extract<TrayId, 'garlic' | 'chili'>;
 
-// トレー置き場の区画。spinach・saltOil はその専用の置き場、topping = 小エビ・チキン・パンチェッタ・イカ・きのこ・ソテーソース・トマトソースのどれでも置ける置き場
-export type TrayZone = 'spinach' | 'saltOil' | 'topping';
+// トレー置き場の区画。spinach = ほうれん草のトレー専用の置き場、topping = ほうれん草以外のトレー・ケース（塩オイルソース・小エビ・チキン・パンチェッタ・きのこ・ソテーソース・トマトソース）のどれでも置ける置き場（縦2×横5の10か所）
+export type TrayZone = 'spinach' | 'topping';
 
 // 冷蔵庫の中の物（右クリックで持ち上げて、棚の好きな場所に置き直せる）。名前・大きさ・最初の置き場所は fridge.ts
 export type FridgeItemId =
@@ -97,7 +96,7 @@ export type FridgeItemId =
   | 'shrimpTray'
   | 'chickenTray'
   | 'pancettaTray'
-  | 'squidTray'
+  | 'squid' // イカ（冷蔵庫の中から直接取る。トレー置き場には置かない）
   | 'mushroomTray'
   | 'whiteSauce'
   | 'squidInkSauce'
@@ -195,7 +194,7 @@ export type Target =
   | { kind: 'fridgeDoor'; unit?: FridgeUnit } // 冷蔵庫（扉・本体）。右クリックで開閉。unit 省略 = 0（最初からある冷蔵庫）
   | { kind: 'fridgeShelf'; unit?: FridgeUnit; shelf: FridgeShelf; x: number; z: number } // 冷蔵庫の棚板。x, z は視点が合っている点（その冷蔵庫の基準点からの相対）。物を置き直す場所を選ぶ。unit 省略 = 0
   | { kind: 'fridgeTray'; id: TrayId } // 冷蔵庫の中のトレー・ケース（扉が開いている間だけ取れる）
-  | { kind: 'traySlot'; id: TrayZone; spot?: number } // サラダ台の上のトレー・ケース置き場。置いたものから、中身を1回分ずつ取れる。同じ区画の置き場が複数ある（id = 区画、spot = その番号、省略 = 0）
+  | { kind: 'traySlot'; id: TrayZone; spot?: number } // サラダ台の上のトレー置き場。置いたものから、中身を1回分ずつ取れる。同じ区画の置き場が複数ある（id = 区画、spot = その番号、省略 = 0）
   | { kind: 'fridgeBottle'; id: FridgeBottleId } // 冷蔵庫の中のボトル（ドレッシング・パプリカパウダー。扉が開いている間だけ取れる）
   | { kind: 'tableTray'; id: FreeTrayId } // 台の上に置いた容器（ガーリック・唐辛子）。左クリックで1杯すくう、右クリックで持ち上げる
   | { kind: 'boilerBasket'; index: number }

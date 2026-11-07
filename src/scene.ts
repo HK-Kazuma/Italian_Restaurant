@@ -1668,7 +1668,11 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   addFridgeItem('cornSoup', packStack(INGREDIENTS.cornSoup.color, 4), fridgeStock('cornSoup'));
 
   // イカ墨ソースのパック（右側の冷蔵庫）。温めずに、そのまま鍋に入れる
-  addFridgeItem('squidInkSauce', packStack(INGREDIENTS.squidInkSauce.color, 3), fridgeStock('squidInkSauce'));
+  // トマトソースのケースと同じ見た目（水色の容器にパックが並ぶ）。トレー置き場には置かず、冷蔵庫の中から直接取る
+  addFridgeItem('squidInkSauce', buildPackContainer(INGREDIENTS.squidInkSauce.color), fridgeStock('squidInkSauce'));
+
+  // イカ（ステンレスのバット）。ミートソース缶と同じく冷蔵庫の中から直接、トングで1掴み取る（トレー置き場には置かない）
+  addFridgeItem('squid', buildFoodPan('squid'), fridgeStock('squid'));
 
   // 最初は冷蔵庫にしまってあるボトル（ドレッシング・パプリカパウダー）。取り出すと、台の上に置ける（台の上と同じ大きさ）
   for (const id of Object.keys(BOTTLE_FRIDGE_ITEM) as FridgeBottleId[]) {
@@ -1718,8 +1722,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   saladSpot.position.set(layout.saladTable.x, 0, layout.saladTable.z);
   scene.add(saladSpot);
   const SX_WORK = -0.45; // サラダを作る台・トレー置き場
-  const SX_STOCK = 0.1; // 具材コーナー（中の列）
-  const SX_STOCK2 = 0.55; // 具材コーナー（右の列）
+  const SX_STOCK2 = 0.55; // スープ皿の棚の位置（トレー置き場の列は TRAY_COLUMNS）
 
   // 天板（ドレッシング・パプリカパウダー・パセリのボトルを置ける）
   const tableBody = box(SURFACES.salad.width, 0.9, SURFACES.salad.depth, 0xa9b4a0, 0, 0.45, 0);
@@ -1744,38 +1747,32 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
     slotLabels.push(label);
   }
 
-  // トレー・ケース置き場：冷蔵庫から取ったものを、置き場に置くと、1回分ずつ取れる（左クリック）。右クリックで持ち上げて、置き直せる。
-  // ほうれん草のトレー（トングで1掴み）、塩オイルソースのケース（お玉で1杯）、小エビ（お玉）、チキン・パンチェッタ（トング）、ソテーソース（パック）
-  // 置き場は区画（TrayZone）ごとにあり、その区画に置ける種類だけ置ける（種類と区画の対応は tray.ts）。
-  //   spinach … ほうれん草のトレー専用 / saltOil … 塩オイルソースのケース専用（具材コーナーの奥に3か所）
-  //   topping … 小エビ・チキン・パンチェッタ・イカ・きのこのトレーとソテーソース・トマトソースのケース。7か所のどこに、どれを置いてもよい
+  // トレー置き場：冷蔵庫から取ったものを、置き場に置くと、1回分ずつ取れる（左クリック）。右クリックで持ち上げて、置き直せる。
+  // ほうれん草のトレー（トングで1掴み）、塩オイルソースのケース（お玉で1杯）、小エビ（お玉）、チキン・パンチェッタ・きのこ（トング）、ソテーソース（パック）
+  // 置き場の名前は、どれも「トレー置き場」。置き場は区画（TrayZone）ごとにあり、その区画に置ける種類だけ置ける（種類と区画の対応は tray.ts）。
+  //   spinach … ほうれん草のトレー専用（サラダを作る台の奥）
+  //   topping … ほうれん草以外のトレー・ケース。具材コーナーに、縦2列（奥行き方向）×横5個（台の幅いっぱいに均等）の10か所。どこに、どれを置いてもよい
   // key = `${区画}:${番号}`（番号は state.traySpot と同じ）
   const trayViews = new Map<string, ItemView>();
   // 手に持っているトレー・ケースを置ける（空いている）置き場を、緑の印（置く範囲）と、上下に揺れる矢印で案内する
   const trayGuides = new Map<string, { zone: TrayZone; spot: number; group: THREE.Group; pad: THREE.Mesh; arrow: THREE.Group }>();
   const traySlots = new Map<string, THREE.Group>();
   // 名前の高さ：具材コーナーの隣の具材（ガーリックなど）と同じ高さ（1.3m）にそろえる。ほうれん草のトレーだけ少し低い
-  const TRAY_LABEL_Y: Record<TrayZone, number> = { spinach: 1.2, saltOil: 1.3, topping: 1.3 };
+  const TRAY_LABEL_Y: Record<TrayZone, number> = { spinach: 1.2, topping: 1.3 };
   // 置き場の大きさ（x 方向 × z 方向）。小エビなどのバット（0.4 四方）が収まる大きさにしてある
   const TRAY_SLOT_SIZE: Record<TrayZone, { w: number; d: number }> = {
     spinach: { w: 0.34, d: 0.4 },
-    saltOil: { w: 0.34, d: 0.4 },
     topping: { w: 0.42, d: 0.42 },
   };
   const trayLabels = new Map<string, Label>();
+  const TRAY_COLUMNS = [0.07, 0.5]; // 縦2列の x（手前の列、奥の列）。幅 0.42 の置き場が、サラダを作る台（x=-0.45）と台の右端の間に収まる
+  const TRAY_ROWS = [1.12, 0.56, 0, -0.56, -1.12]; // 横5個の z（台の奥行き 3.0m に均等。間隔 0.56）
   const TRAY_SLOT_DEFS: [TrayZone, number, number, number][] = [
     ['spinach', 0, SX_WORK, -0.5],
-    ['saltOil', 0, SX_STOCK2, -0.2],
-    ['saltOil', 1, SX_STOCK2, 0.3], // 具材の列の奥（パンチェッタの置き場の後ろ）
-    ['saltOil', 2, SX_STOCK2, -0.7], // 同じく奥（唐辛子の後ろあたり）
-    // トッピングの置き場：もとは小エビ・チキン・パンチェッタ・ソテーソースの取り出し口があった場所
-    ['topping', 0, SX_STOCK, 1.2], // 手前の冷蔵庫の角が、プレイヤーからの視線を遮らない位置から並べる
-    ['topping', 1, SX_STOCK, 0.75],
-    ['topping', 2, SX_STOCK, 0.3],
-    ['topping', 3, SX_STOCK2, 1.2],
-    ['topping', 4, SX_STOCK2, 0.75],
-    ['topping', 5, SX_STOCK, -1.05], // イカ・きのこのトレーが増えた分（具材の列の奥）
-    ['topping', 6, SX_STOCK2, -1.2],
+    // 縦2列（x: 手前の列 → 奥の列）× 横5個（z: 手前 → 奥に均等）。番号は、手前の列の手前から奥へ 0〜4、奥の列の手前から奥へ 5〜9
+    ...TRAY_COLUMNS.flatMap((x, row) =>
+      TRAY_ROWS.map((z, col): [TrayZone, number, number, number] => ['topping', row * TRAY_ROWS.length + col, x, z]),
+    ),
   ];
   for (const zone of Object.keys(TRAY_SPOT_COUNT) as TrayZone[]) {
     // 置き場の数が tray.ts と合っていないと、空きの判定とずれる

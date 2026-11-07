@@ -17,7 +17,7 @@ export const FRIDGE_ITEM_IDS: FridgeItemId[] = [
   'shrimpTray',
   'chickenTray',
   'pancettaTray',
-  'squidTray',
+  'squid',
   'mushroomTray',
   'whiteSauce',
   'squidInkSauce',
@@ -40,7 +40,7 @@ export const FRIDGE_ITEM_NAME: Record<FridgeItemId, string> = {
   shrimpTray: '小エビ',
   chickenTray: 'サラダチキン',
   pancettaTray: 'パンチェッタ',
-  squidTray: 'イカ',
+  squid: 'イカ',
   mushroomTray: 'きのこ',
   whiteSauce: 'ホワイトソース缶',
   squidInkSauce: 'イカ墨ソース',
@@ -71,10 +71,10 @@ export const FRIDGE_ITEM_SIZE: Record<FridgeItemId, { hx: number; hz: number }> 
   shrimpTray: { hx: 0.2, hz: 0.2 },
   chickenTray: { hx: 0.2, hz: 0.2 },
   pancettaTray: { hx: 0.2, hz: 0.2 },
-  squidTray: { hx: 0.2, hz: 0.2 },
+  squid: { hx: 0.2, hz: 0.2 },
   mushroomTray: { hx: 0.2, hz: 0.2 },
   whiteSauce: { hx: 0.1, hz: 0.1 },
-  squidInkSauce: { hx: 0.08, hz: 0.1 },
+  squidInkSauce: { hx: 0.15, hz: 0.17 }, // トマトソースと同じ、パックが並んだ容器
   sauteSauceCase: { hx: 0.15, hz: 0.17 },
   garlicBin: { hx: 0.18, hz: 0.18 }, // ステンレスの丸い容器（半径 0.17）
   chiliBin: { hx: 0.18, hz: 0.18 },
@@ -98,8 +98,8 @@ export const FRIDGE_HOME: Record<FridgeItemId, FridgeSpot> = {
   chickenTray: { unit: 0, shelf: 3, x: 0.37, z: -0.7 },
   pancettaTray: { unit: 0, shelf: 2, x: 0.37, z: 0.7 },
   sauteSauceCase: { unit: 0, shelf: 2, x: 0.37, z: -0.7 },
-  // 2台目の冷蔵庫（右側の空いていた冷蔵庫）：上段にイカ・きのこのトレー、中段にホワイトソース缶とイカ墨ソース
-  squidTray: { unit: 1, shelf: 3, x: 0.37, z: 0.5 },
+  // 2台目の冷蔵庫（右側の空いていた冷蔵庫）：上段にイカ（冷蔵庫の中から直接取る）ときのこのトレー、中段にホワイトソース缶とイカ墨ソース（これも冷蔵庫の中から直接取る）
+  squid: { unit: 1, shelf: 3, x: 0.37, z: 0.5 },
   mushroomTray: { unit: 1, shelf: 3, x: 0.37, z: -0.5 },
   whiteSauce: { unit: 1, shelf: 2, x: 0.37, z: 0.5 },
   squidInkSauce: { unit: 1, shelf: 2, x: 0.37, z: -0.5 },

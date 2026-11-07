@@ -2,29 +2,28 @@ import { INGREDIENTS } from './ingredients';
 import type { FreeTrayId, FridgeItemId, GameState, IngredientId, TrayId, TrayZone } from './types';
 
 // トレー・ケース：冷蔵庫から取って、サラダ台の置き場に置くと、中身を1回分ずつ取れる。
-// 置き場は区画（TrayZone）ごとにあり、その区画に置ける種類だけが置ける：
-//   spinach … ほうれん草のトレー専用 / saltOil … 塩オイルソースのケース専用（置き場が3か所）
-//   topping … 小エビ・サラダチキン・パンチェッタ・イカ・きのこのトレーと、ソテーソース・トマトソースのケース。どれをどの置き場に置いてもよい（置き場が7か所）
+// 置き場の名前は、どれも「トレー置き場」。置き場は区画（TrayZone）ごとにあり、その区画に置ける種類だけが置ける：
+//   spinach … ほうれん草のトレー専用（置き場が1か所）
+//   topping … ほうれん草以外の、塩オイルソース・小エビ・サラダチキン・パンチェッタ・きのこ・ソテーソース・トマトソース。どれをどの置き場に置いてもよい（縦2×横5の10か所）
 // ガーリック・唐辛子の容器だけは置き場（区画）を持たず、ボトルと同じように台の上のどこにでも置ける（FREE_TRAY_IDS。置き場所は state.freeTraySpot）。
 // 置き場の位置は scene.ts。ここは種類と区画の対応、名前、置き場の空きなど、位置に関係ない決まりだけ。
 
-export const TRAY_IDS: TrayId[] = ['spinach', 'saltOil', 'shrimp', 'chicken', 'pancetta', 'squid', 'mushroom', 'sauteSauce', 'tomatoSauce', 'garlic', 'chili'];
+export const TRAY_IDS: TrayId[] = ['spinach', 'saltOil', 'shrimp', 'chicken', 'pancetta', 'mushroom', 'sauteSauce', 'tomatoSauce', 'garlic', 'chili'];
 
 // 台の上のどこにでも置ける容器
 export const FREE_TRAY_IDS: FreeTrayId[] = ['garlic', 'chili'];
 export const isFreeTray = (id: string): id is FreeTrayId => (FREE_TRAY_IDS as string[]).includes(id);
 
 // その区画の置き場の数（scene.ts の置き場の定義と合わせる）
-export const TRAY_SPOT_COUNT: Record<TrayZone, number> = { spinach: 1, saltOil: 3, topping: 7 };
+export const TRAY_SPOT_COUNT: Record<TrayZone, number> = { spinach: 1, topping: 10 };
 
 // null = 置き場（区画）を持たない（台の上のどこにでも置ける）
 export const TRAY_ZONE: Record<TrayId, TrayZone | null> = {
   spinach: 'spinach',
-  saltOil: 'saltOil',
+  saltOil: 'topping',
   shrimp: 'topping',
   chicken: 'topping',
   pancetta: 'topping',
-  squid: 'topping',
   mushroom: 'topping',
   sauteSauce: 'topping',
   tomatoSauce: 'topping',
@@ -39,7 +38,6 @@ export const TRAY_CONTENT: Record<TrayId, IngredientId> = {
   shrimp: 'shrimp',
   chicken: 'chicken',
   pancetta: 'pancetta',
-  squid: 'squid',
   mushroom: 'mushroom',
   sauteSauce: 'sauteSauce',
   tomatoSauce: 'tomatoSauce',
@@ -54,7 +52,6 @@ export const TRAY_NAME: Record<TrayId, string> = {
   shrimp: '小エビのトレー',
   chicken: 'サラダチキンのトレー',
   pancetta: 'パンチェッタのトレー',
-  squid: 'イカのトレー',
   mushroom: 'きのこのトレー',
   sauteSauce: 'ソテーソースのケース',
   tomatoSauce: 'トマトソースのケース',
@@ -66,7 +63,7 @@ export const TRAY_NAME: Record<TrayId, string> = {
 export const trayContentName = (id: TrayId): string => INGREDIENTS[TRAY_CONTENT[id]].name;
 
 // 何も置いていない置き場の名前
-export const TRAY_ZONE_NAME: Record<TrayZone, string> = { spinach: 'トレー置き場', saltOil: 'ケース置き場', topping: 'トレー置き場' };
+export const TRAY_ZONE_NAME: Record<TrayZone, string> = { spinach: 'トレー置き場', topping: 'トレー置き場' };
 
 // 冷蔵庫の中の物としての id
 export const TRAY_FRIDGE_ITEM: Record<TrayId, FridgeItemId> = {
@@ -75,7 +72,6 @@ export const TRAY_FRIDGE_ITEM: Record<TrayId, FridgeItemId> = {
   shrimp: 'shrimpTray',
   chicken: 'chickenTray',
   pancetta: 'pancettaTray',
-  squid: 'squidTray',
   mushroom: 'mushroomTray',
   sauteSauce: 'sauteSauceCase',
   tomatoSauce: 'tomatoSauceCase',

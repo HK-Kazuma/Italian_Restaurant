@@ -42,15 +42,13 @@ describe('トレー・ケースの決まり', () => {
     expect(trayContentName('tomatoSauce')).toBe('トマトソース');
     expect(trayContentName('spinach')).toBe('ほうれん草');
     expect(trayContentName('saltOil')).toBe('塩オイルソース');
-    expect(trayContentName('squid')).toBe('イカ');
     expect(trayContentName('mushroom')).toBe('きのこ');
   });
 
-  it('小エビ・チキン・パンチェッタ・イカ・きのこ・ソテーソース・トマトソースは、同じトッピングの置き場（7か所）に置く', () => {
-    for (const id of ['shrimp', 'chicken', 'pancetta', 'squid', 'mushroom', 'sauteSauce', 'tomatoSauce'] as const) expect(TRAY_ZONE[id]).toBe('topping');
+  it('塩オイルソース・小エビ・チキン・パンチェッタ・きのこ・ソテーソース・トマトソースは、同じトレー置き場（10か所）に置く', () => {
+    for (const id of ['shrimp', 'chicken', 'pancetta', 'mushroom', 'sauteSauce', 'tomatoSauce', 'saltOil'] as const) expect(TRAY_ZONE[id]).toBe('topping');
     expect(TRAY_ZONE.spinach).toBe('spinach');
-    expect(TRAY_ZONE.saltOil).toBe('saltOil');
-    expect(TRAY_SPOT_COUNT).toEqual({ spinach: 1, saltOil: 3, topping: 7 });
+    expect(TRAY_SPOT_COUNT).toEqual({ spinach: 1, topping: 10 });
   });
 
   it('ガーリック・唐辛子の容器は置き場（区画）を持たず、台の上のどこにでも置ける', () => {
@@ -59,7 +57,7 @@ describe('トレー・ケースの決まり', () => {
     expect(TRAY_CONTENT.garlic).toBe('garlic');
     expect(trayContentName('garlic')).toBe('ガーリック');
     expect(trayContentName('chili')).toBe('唐辛子');
-    expect(freeTraySpots(placement(), 'topping')).toEqual([0, 1, 2, 3, 4, 5, 6]); // 置き場の空きには数えない
+    expect(freeTraySpots(placement(), 'topping')).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]); // 置き場の空きには数えない
   });
 });
 
@@ -70,14 +68,14 @@ describe('置き場の空き', () => {
     expect(trayAt(s, 'topping', 1)).toBeNull(); // 手に持っている
     expect(trayAt(s, 'topping', 0)).toBeNull();
     expect(trayAt(s, 'spinach', 0)).toBe('spinach');
-    expect(trayAt(s, 'saltOil', 0)).toBeNull(); // 同じ番号でも、区画が違う
+    expect(trayAt(s, 'topping', 0)).toBeNull(); // 同じ番号でも、区画が違う
   });
 
   it('空いている置き場の番号を、若い順に返す', () => {
-    expect(freeTraySpots(placement(), 'topping')).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(freeTraySpots(placement(), 'topping')).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     const s = placement({ shrimp: ['table', 0], sauteSauce: ['table', 2] });
-    expect(freeTraySpots(s, 'topping')).toEqual([1, 3, 4, 5, 6]);
+    expect(freeTraySpots(s, 'topping')).toEqual([1, 3, 4, 5, 6, 7, 8, 9]);
     expect(freeTraySpots(placement({ spinach: ['table', 0] }), 'spinach')).toEqual([]);
-    expect(freeTraySpots(placement({ saltOil: ['table', 1] }), 'saltOil')).toEqual([0, 2]);
+    expect(freeTraySpots(placement({ saltOil: ['table', 1] }), 'topping')).toEqual([0, 2, 3, 4, 5, 6, 7, 8, 9]);
   });
 });

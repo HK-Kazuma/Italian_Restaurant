@@ -570,11 +570,10 @@ const RECIPES: Record<string, (k: Kit) => TutorialStep[]> = {
   squidInk: (k) => [
     k.noodleToBasket(),
     k.press,
-    k.openFridge(1), // イカ墨ソースとイカは、右側の冷蔵庫
-    k.trayToTable('squid'),
+    k.openFridge(1), // イカ墨ソースとイカは、右側の冷蔵庫の中から直接取る
     k.potToBurner,
     k.sauceToPot('squidInkSauce', 1, stock('squidInkSauce'), { fridge: true }),
-    k.sauceToPot('squid', 1, k.trayPlaced('squid')),
+    k.sauceToPot('squid', 1, stock('squid'), { fridge: true }),
     k.plate(),
     k.waitHeat,
     k.noodleOut('pot'),

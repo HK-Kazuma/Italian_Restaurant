@@ -24,11 +24,11 @@ const fridgeDoor2: Target = { kind: 'fridgeDoor', unit: 1 }; // 右側の冷蔵�
 const stock = (id: Extract<Target, { kind: 'stock' }>['id']): Target => ({ kind: 'stock', id });
 const fridgeStock = (id: Extract<Target, { kind: 'stock' }>['id']): Target => ({ kind: 'stock', id, inFridge: true });
 const bottle = (id: Extract<Target, { kind: 'bottle' }>['id']): Target => ({ kind: 'bottle', id });
-const tray = (id: 'spinach' | 'saltOil'): Target => ({ kind: 'traySlot', id });
+const tray = (id: 'spinach'): Target => ({ kind: 'traySlot', id });
 const fridgeTray = (id: TrayId): Target => ({ kind: 'fridgeTray', id });
 // 小エビ・チキン・パンチェッタ・イカ・きのこのトレーとソテーソースのケースを置く、トッピングの置き場（spot 番目）
 const topping = (spot: number): Target => ({ kind: 'traySlot', id: 'topping', spot });
-const table = (x: number, z: number, surface: 'salad' | 'left'): Target => ({ kind: 'tableTop', surface, x, z });
+const table = (x: number, z: number, surface: 'salad' | 'left' | 'hotWater'): Target => ({ kind: 'tableTop', surface, x, z });
 
 // 台本の1手：左クリック / 右クリック / 時間を進める / 矢印が指さない場所への左クリック（ボトルを台に置くなど）
 type Act = Target | { right: Target } | { wait: number } | { free: Target };
@@ -41,8 +41,8 @@ const saladBack = table(0.3, -0.5, 'salad');
 // ガーリック・唐辛子の容器は、台の上のどこに置いてもよい（矢印は標準の場所を指す）
 const fridgeBottle = (id: 'dressing' | 'paprika'): Target => ({ kind: 'fridgeBottle', id });
 const bin = (id: 'garlic' | 'chili'): Target => ({ kind: 'tableTray', id });
-const garlicHome = table(0.1, -0.15, 'salad');
-const chiliHome = table(0.1, -0.6, 'salad');
+const garlicHome = table(-0.3, -0.5, 'hotWater');
+const chiliHome = table(0.3, -0.5, 'hotWater');
 
 // 洗い終わった鍋を、鍋置き場に戻す（最後の工程）
 const returnPot = (): Act[] => [wait(cfg.potWashTime + 1), washer, potSlot(0)];
@@ -69,9 +69,9 @@ const SCRIPTS: Record<string, Act[]> = {
     stock('cheese'), slot(0), slot(0), pass, ...returnPot(),
   ],
   peperoncino: [
-    rack, basket(0), button(0), { right: fridgeDoor }, fridgeTray('saltOil'), tray('saltOil'),
+    rack, basket(0), button(0), { right: fridgeDoor }, fridgeTray('saltOil'), topping(0),
     fridgeTray('garlic'), { free: garlicHome }, fridgeTray('chili'), { free: chiliHome }, potSlot(0), burner(0),
-    tray('saltOil'), burner(0), bin('garlic'), burner(0), bin('chili'), burner(0),
+    topping(0), burner(0), bin('garlic'), burner(0), bin('chili'), burner(0),
     plateStack, slot(0), wait(cfg.boilTime + 1),
     basket(0), slot(0), burner(0), slot(0), washer,
     bottle('parsley'), { right: slot(0) }, { free: parsleyBack }, slot(0), pass, ...returnPot(),
@@ -94,8 +94,8 @@ const SCRIPTS: Record<string, Act[]> = {
     bottle('parsley'), { right: slot(0) }, { free: parsleyBack }, slot(0), pass, ...returnPot(),
   ],
   squidInk: [
-    rack, basket(0), button(0), { right: fridgeDoor2 }, fridgeTray('squid'), topping(0),
-    potSlot(0), burner(0), fridgeStock('squidInkSauce'), burner(0), topping(0), burner(0),
+    rack, basket(0), button(0), { right: fridgeDoor2 },
+    potSlot(0), burner(0), fridgeStock('squidInkSauce'), burner(0), fridgeStock('squid'), burner(0),
     plateStack, slot(0), wait(cfg.boilTime + 1),
     basket(0), burner(0), ...mix(), burner(0), slot(0), washer,
     bottle('parsley'), { right: slot(0) }, { free: parsleyBack }, slot(0), pass, ...returnPot(),
@@ -103,9 +103,9 @@ const SCRIPTS: Record<string, Act[]> = {
   mushroomCream: [
     rack, basket(0), button(0), { right: fridgeDoor2 }, fridgeTray('mushroom'), topping(0),
     { right: fridgeDoor }, fridgeTray('spinach'), tray('spinach'), fridgeTray('pancetta'), topping(1),
-    fridgeTray('saltOil'), tray('saltOil'),
+    fridgeTray('saltOil'), topping(2),
     potSlot(0), burner(0), fridgeStock('whiteSauce'), burner(0),
-    tray('spinach'), burner(0), topping(1), burner(0), topping(0), burner(0), tray('saltOil'), burner(0),
+    tray('spinach'), burner(0), topping(1), burner(0), topping(0), burner(0), topping(2), burner(0),
     plateStack, slot(0), wait(cfg.boilTime + 1),
     basket(0), slot(0), burner(0), slot(0), washer,
     stock('cheese'), slot(0), bottle('blackPepper'), { right: slot(0) }, { free: pepperBack },

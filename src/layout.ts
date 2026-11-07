@@ -80,8 +80,8 @@ export const BOTTLE_HOME: Record<BottleId, { surface: SurfaceId; x: number; z: n
 };
 
 // ガーリック・唐辛子の容器の、台の上の標準の置き場所（チュートリアルの矢印が指す。台の中心からの相対位置）。
-// 置く場所は自由に選べる。ここはもとの具材コーナーの位置
+// 置く場所は自由に選べる。サラダ台の具材コーナーはトレー置き場が並ぶので、標準の置き場は湯煎器の奥の台にした
 export const FREE_TRAY_HOME: Record<FreeTrayId, { surface: SurfaceId; x: number; z: number }> = {
-  garlic: { surface: 'salad', x: 0.1, z: -0.15 },
-  chili: { surface: 'salad', x: 0.1, z: -0.6 },
+  garlic: { surface: 'hotWater', x: -0.3, z: -0.5 },
+  chili: { surface: 'hotWater', x: 0.3, z: -0.5 },
 };
