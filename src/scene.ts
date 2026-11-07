@@ -1844,13 +1844,14 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   for (let j = 0; j < cfg.saladSlotCount; j++) {
     const slot = new THREE.Group();
     slot.add(cyl(0.3, 0.3, 0.012, 0xcfc4ae, 0, 0.006, 0));
-    slot.position.set(SX_WORK, 0.9, 0.8 - j * 0.7);
+    slot.position.set(SX_WORK, 0.9, 0.8 - j * 0.9);
+    //(SX_WORK, 0.9, 0.8 - j * x) xはサラダベース置き場の横間隔
     setTarget(slot, { kind: 'plateSlot', index: cfg.plateSlotCount + j });
     saladSpot.add(slot);
     interactables.push(slot);
     slotViews.push(new ItemView(slot));
     const label = makeLabel('', 0.8);
-    label.sprite.position.set(SX_WORK, 1.25, 1.05 - j * 0.7);
+    label.sprite.position.set(SX_WORK, 1.25, 1.05 - j * 0.9);
     label.sprite.visible = false;
     saladSpot.add(label.sprite);
     slotLabels.push(label);
@@ -1877,7 +1878,7 @@ export function createKitchen(cfg: GameConfig, layout: Layout = LAYOUT): Kitchen
   const TRAY_COLUMNS = [0.07, 0.5]; // 縦2列の x（手前の列、奥の列）。幅 0.42 の置き場が、サラダを作る台（x=-0.45）と台の右端の間に収まる
   const TRAY_ROWS = [1.12, 0.56, 0, -0.56, -1.12]; // 横5個の z（台の奥行き 3.0m に均等。間隔 0.56）
   const TRAY_SLOT_DEFS: [TrayZone, number, number, number][] = [
-    ['spinach', 0, SX_WORK, -0.5],
+    ['spinach', 0, SX_WORK, -1.1], // ほうれん草のトレー置き場
     // 縦2列（x: 手前の列 → 奥の列）× 横5個（z: 手前 → 奥に均等）。番号は、手前の列の手前から奥へ 0〜4、奥の列の手前から奥へ 5〜9
     ...TRAY_COLUMNS.flatMap((x, row) =>
       TRAY_ROWS.map((z, col): [TrayZone, number, number, number] => ['topping', row * TRAY_ROWS.length + col, x, z]),
