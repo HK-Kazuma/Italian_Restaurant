@@ -192,6 +192,10 @@ export type Oven = {
 // valid = false のとき、ほかの皿に重なるので置けない
 export type OvenPreview = { deck: OvenDeck; style: BakeStyle; x: number; s: number; valid: boolean };
 
+// 下駄の山を置き直そうとしたときの様子（置く前の見せ方に使う）。x, z は台の中心からの相対位置。
+// valid = false のとき、reason は置けない理由（gap: ボトル・容器に近すぎる、surface: この台には置けない）
+export type GetaPreview = { surface: SurfaceId; x: number; z: number; valid: boolean; reason?: 'gap' | 'surface' };
+
 export type Station = 'pasta' | 'salad';
 
 export type Ticket = {
@@ -211,7 +215,8 @@ export type Item =
   | { kind: 'bottle'; id: BottleId } // ドレッシング・パプリカパウダー・パセリ。右クリックで皿にかける・振る（なくならない）
   | { kind: 'pot'; pot: Pot }
   | { kind: 'ipad' } // 練習キッチンの壁にかかっている iPad。右クリックで画面を開く（ゲーム開始・レシピ）
-  | { kind: 'bakeDish'; style: BakeStyle; baked: boolean }; // ジェットオーブンで焼く皿（いまはテスト用。ドリア系 = 長方形、ピザ系 = 丸）。baked = 焼き上がり
+  | { kind: 'bakeDish'; style: BakeStyle; baked: boolean; geta?: boolean } // ジェットオーブンで焼く皿（いまはテスト用。ドリア系 = 長方形、ピザ系 = 丸）。baked = 焼き上がり。geta = 下駄（木の台）に乗せてある（ドリア系の焼き上がりだけ。提供できる形）
+  | { kind: 'geta' }; // ドリアの下にひく下駄（木の台）1枚。焼き上がったドリアに左クリックで、ドリアを乗せられる
 
 // 視点の先にあるクリック可能な設備
 export type Target =
@@ -233,6 +238,7 @@ export type Target =
   | { kind: 'ihBurner'; index: number }
   | { kind: 'hotWaterSlot'; index: number } // 熱湯に浸けるパックの置き場所
   | { kind: 'ovenStock'; style: BakeStyle } // 具材台のテスト用の焼き皿の山（クリックで手に取る）
+  | { kind: 'getaStack' } // 提供台の左の下駄の山（左クリックで1枚取る、右クリックで持ち上げて置き直す）
   | { kind: 'ovenInlet'; deck: OvenDeck; x: number; s: number } // ジェットオーブンの入口のベルト（段）。x, s は視点が合っている点（x: ベルトの中心からの横のずれ、s: 入口の端からの距離）。皿を置くと流れていく
   | { kind: 'ovenOutlet'; deck: OvenDeck; lane: number } // ジェットオーブンの出口。出てきた皿を取る
   | { kind: 'bottle'; id: BottleId } // 台の上のボトル
@@ -272,6 +278,8 @@ export type GameState = {
   fridgeOpen: [boolean, boolean, boolean]; // 冷蔵庫の扉（添字 = FridgeUnit。最初はどれも閉まっている）
   fridgeItems: Record<FridgeItemId, FridgeSpot>; // 冷蔵庫の中の物の置き場所（トレー・ケースは、取ったあとは使わない）
   moving: FridgeItemId | null; // 右クリックで持ち上げている最中の物（手とは別。棚に右クリックで置く）
+  getaSpot: TableSpot; // 下駄の山の置き場所（提供台の左）
+  getaMoving: boolean; // 下駄の山を右クリックで持ち上げている最中（手とは別。台に右クリックで置く）
   bottles: Record<BottleId, BottleSpot>; // 台の上のボトル
   bottleShakeAt: number | null; // 手に持ったボトルを最後に振った（かけた）ゲーム内時刻。振る動きの表示に使う
   hotWater: (Pack | null)[]; // 熱湯に浸けているパック（3×3の9か所、左上から横に数える）。null = 空き

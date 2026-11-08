@@ -2020,7 +2020,7 @@ describe('Game: ガーリック・唐辛子の容器（冷蔵庫から取って�
     expect(g.previewFreeTray(table(0.1, 0.8 + 0.2))?.reason).toBe('gap'); // 唐辛子の容器に近すぎる
     expect(g.planInteract(table(0.1, 0.8 + 0.2))).toBeNull();
     expect(g.previewFreeTray(table(0.1, 0.8 + 0.5))?.valid).toBe(true);
-    expect(g.previewFreeTray(table(0.1, 0.8 + 0.2, 'left'))?.valid).toBe(true); // 左の台なら関係ない
+    expect(g.previewFreeTray(table(0.1, 0, 'left'))?.valid).toBe(true); // 左の台なら関係ない（提供台の左の下駄の山とは、重ならない場所）
     const dress = g.state.bottles.dressing!;
     expect(g.previewFreeTray(table(dress.x + 0.1, dress.z))?.reason).toBe('gap'); // ボトルにも近すぎる
   });

@@ -147,6 +147,11 @@ function frontEmerged(oven: Oven, deck: OvenDeck, lane: number): OvenDish | null
   return front;
 }
 
+// 出口の、そのレーンでいちばん先に取れる皿（取らずに見るだけ。なければ null）
+export function peekDish(oven: Oven, deck: OvenDeck, lane: number): OvenDish | null {
+  return frontEmerged(oven, deck, lane);
+}
+
 // 出口に出てきた皿があるか（取れるか）
 export function canTakeDish(oven: Oven, deck: OvenDeck, lane: number): boolean {
   return frontEmerged(oven, deck, lane) !== null;

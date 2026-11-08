@@ -19,7 +19,7 @@ import {
   updateHeat,
   updateWasher,
 } from './pot';
-import { OVEN_DECK_NAME, bakeTime, canTakeDish, createOven, placeDish, resolvePlacement, takeDish, timeToEmerge, updateOven } from './oven';
+import { OVEN_DECK_NAME, bakeTime, canTakeDish, createOven, peekDish, placeDish, resolvePlacement, takeDish, timeToEmerge, updateOven } from './oven';
 import { canStackPack, createPack, findWarmPack, soakPack, stockItem } from './pack';
 import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
 import { serveScore } from './score';
@@ -27,11 +27,11 @@ import { createTicket, nextTicketInterval, pickMenu } from './tickets';
 import { tutorialSteps, type GuideAt, type TutorialStep, type TutorialView } from './tutorial';
 import { BOTTLE_FRIDGE_ITEM, BOTTLE_IDS, BOTTLE_PLATE, BOTTLE_SURFACES, BOTTLE_VERB, bottleOfFridgeItem, isFridgeBottle } from './bottle';
 import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShelf, fridgeItemOf, returnToFridge } from './fridge';
-import { BAKE_DISHES, BOTTLE_HOME, FREE_TRAY_HOME, SURFACES } from './layout';
+import { BAKE_DISHES, BOTTLE_HOME, FREE_TRAY_HOME, GETA, GETA_HOME, GETA_RANGE, SURFACES } from './layout';
 import { OPEN_WORLD, launchPot, stepThrownPot, type ThrowAim } from './throw';
 import type { World } from './world';
 import { FREE_TRAY_IDS, TRAY_CONTENT, TRAY_FRIDGE_ITEM, TRAY_IDS, TRAY_NAME, TRAY_ZONE, isFreeTray, trayAt, trayOfFridgeItem } from './tray';
-import type { BottleId, BottlePreview, OvenPreview, BottleSpot, FreeTrayId, FridgeItemId, FridgePreview, FridgeSpot, FridgeUnit, GameState, IngredientId, Item, Mode, Phase, Pot, TableSpot, Target, Toast, TrayId } from './types';
+import type { BottleId, BottlePreview, GetaPreview, OvenPreview, BottleSpot, FreeTrayId, FridgeItemId, FridgePreview, FridgeSpot, FridgeUnit, GameState, IngredientId, Item, Mode, Phase, Pot, TableSpot, Target, Toast, TrayId } from './types';
 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
 type Action = () => void;
@@ -43,9 +43,13 @@ type CarriedLayout = {
   traySpot: GameState['traySpot']; // サラダ台に置いたトレー・ケースの置き場の番号
   freeTraySpot: GameState['freeTraySpot']; // 台の上のどこにでも置ける容器（ガーリック・唐辛子）の置き場所
   bottles: GameState['bottles']; // ボトルの置き場所
+  getaSpot: GameState['getaSpot']; // 下駄の山の置き場所
 };
 
 const TOAST_SECONDS = 2.5;
+
+// 焼き上がったドリア系の皿か（下駄に乗せられる物）
+const isBakedDoria = (item: Item): item is Extract<Item, { kind: 'bakeDish' }> => item.kind === 'bakeDish' && item.style === 'doria' && item.baked;
 
 const copySpot = (spot: BottleSpot): BottleSpot => (spot ? { ...spot } : null);
 
@@ -91,6 +95,8 @@ export class Game {
       fridgeOpen: [false, false, false],
       fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...(fridge ?? FRIDGE_HOME)[id] }])) as Record<FridgeItemId, FridgeSpot>,
       moving: null,
+      getaSpot: { ...(layout?.getaSpot ?? GETA_HOME) },
+      getaMoving: false,
       // 引き継ぎがなければ、冷蔵庫にしまってあるボトル（null）以外は、もとの場所の台の上
       bottles: Object.fromEntries(
         BOTTLE_IDS.map((id) => [id, layout ? copySpot(layout.bottles[id]) : isFridgeBottle(id) ? null : { ...BOTTLE_HOME[id] }]),
@@ -131,6 +137,7 @@ export class Game {
       bottles: Object.fromEntries(
         BOTTLE_IDS.map((id) => [id, prev.bottles[id] ? { ...prev.bottles[id] } : isFridgeBottle(id) ? null : { ...BOTTLE_HOME[id] }]),
       ) as Record<BottleId, BottleSpot>,
+      getaSpot: { ...prev.getaSpot },
     };
   }
 
@@ -290,6 +297,8 @@ export class Game {
   // 右クリック：
   //  - 冷蔵庫の中の物を持ち上げている最中：棚に視点が合っていればそこに置く。それ以外ならやめる
   //  - 手が空で、サラダ台のトレー置き場に置いたトレー・ケース（台の上に置いたガーリック・唐辛子の容器も）に視点が合っていれば、それを手に持ち上げる（左クリックで別の置き場・場所に置き直せる）
+  //  - 下駄の山を持ち上げている最中：台に視点が合っていればそこに置く。それ以外ならやめる
+  //  - 手が空で、下駄の山に視点が合っていれば、山ごと持ち上げる
   //  - 扉が開いていて、冷蔵庫の中の物に視点が合っていれば、その物を持ち上げる（棚の好きな場所に置き直せる）
   //  - 冷蔵庫の扉・棚・本体に視点が合っていれば、扉を開閉する
   //  - iPad を持っていれば、画面を開く（ゲーム開始・レシピ）
@@ -301,6 +310,10 @@ export class Game {
     if (s.phase !== 'playing') return;
     if (s.moving) {
       this.placeMoving(target);
+      return;
+    }
+    if (s.getaMoving) {
+      this.placeGeta(target);
       return;
     }
     if (s.hand?.kind === 'ipad') {
@@ -319,6 +332,12 @@ export class Game {
       s.trays[placed] = 'hand';
       const where = isFreeTray(placed) ? '台の上に視点を合わせて左クリックで置く' : '置き場に視点を合わせて左クリックで置く';
       this.say(`${TRAY_NAME[placed]}を持ち上げた（${where}）`, 'info');
+      return;
+    }
+    // 手が空で、下駄の山に視点が合っていれば、山ごと持ち上げる（台に右クリックで置き直せる）
+    if (!s.hand && target?.kind === 'getaStack') {
+      s.getaMoving = true;
+      this.say('下駄を持ち上げた（台に視点を合わせて右クリックで置く）', 'info');
       return;
     }
     const item = fridgeItemOf(target);
@@ -419,6 +438,77 @@ export class Game {
     this.say('置き直しをやめた', 'info');
   }
 
+  // 下駄の山（台の上）が、点（surface, x, z）から pad だけ離れた範囲にかかっているか。持ち上げている間は、台の上にないので false
+  private getaNear(surface: string, x: number, z: number, pad: number): boolean {
+    const { getaSpot, getaMoving } = this.state;
+    if (getaMoving || getaSpot.surface !== surface) return false;
+    return Math.abs(getaSpot.x - x) < GETA.d / 2 + pad && Math.abs(getaSpot.z - z) < GETA.w / 2 + pad;
+  }
+
+  // 持ち上げた下駄の山を、視点が合っている台の天板に置くとしたら、どこにどう置かれるか。
+  // 位置は置ける範囲（layout.ts の GETA_RANGE）に収める。左の台以外や、ボトル・容器に近すぎる場所では valid = false
+  previewGeta(target: Target | null): GetaPreview | null {
+    const s = this.state;
+    if (s.phase !== 'playing' || !s.getaMoving || target?.kind !== 'tableTop') return null;
+    const { surface } = target;
+    const x = Math.min(GETA_RANGE.maxX, Math.max(GETA_RANGE.minX, target.x));
+    const z = Math.min(GETA_RANGE.maxZ, Math.max(GETA_RANGE.minZ, target.z));
+    if (surface !== GETA_HOME.surface) return { surface, x, z, valid: false, reason: 'surface' };
+    const hx = GETA.d / 2;
+    const hz = GETA.w / 2;
+    const blocked =
+      BOTTLE_IDS.some((id) => {
+        const spot = s.bottles[id];
+        return spot?.surface === surface && Math.abs(spot.x - x) < hx + 0.06 && Math.abs(spot.z - z) < hz + 0.06;
+      }) ||
+      FREE_TRAY_IDS.some((id) => {
+        const spot = s.freeTraySpot[id];
+        return s.trays[id] === 'table' && spot.surface === surface && Math.abs(spot.x - x) < hx + 0.19 && Math.abs(spot.z - z) < hz + 0.19;
+      });
+    return blocked ? { surface, x, z, valid: false, reason: 'gap' } : { surface, x, z, valid: true };
+  }
+
+  // 持ち上げている下駄の山を置く（台に視点が合っていて、置ける場所のとき）。それ以外の右クリックは、置き直しをやめる
+  private placeGeta(target: Target | null): void {
+    const s = this.state;
+    if (target?.kind === 'tableTop') {
+      const p = this.previewGeta(target);
+      if (p?.valid) {
+        s.getaSpot = { surface: p.surface, x: p.x, z: p.z };
+        s.getaMoving = false;
+        this.say('下駄を置いた', 'info');
+      } else {
+        this.say(p?.reason === 'surface' ? 'ここには置けない（提供台の左の台にだけ置ける）' : 'ここには置けない（ボトル・容器に近すぎる）', 'bad');
+      }
+      return;
+    }
+    s.getaMoving = false;
+    this.say('置き直しをやめた', 'info');
+  }
+
+  // 下駄・焼き上がったドリアに関する案内（HUD 用）。関係なければ null
+  getaHint(target: Target | null): string | null {
+    const { hand, getaMoving } = this.state;
+    if (getaMoving) {
+      const p = this.previewGeta(target);
+      if (p?.valid) return '右クリック：ここに置く';
+      if (p?.reason === 'surface') return 'ここには置けない（提供台の左の台にだけ置ける）';
+      if (p) return 'ここには置けない（ボトル・容器に近すぎる）';
+      return '台の上に視点を合わせて右クリックで置く（それ以外で右クリックすると、やめる）';
+    }
+    if (target?.kind === 'getaStack') {
+      if (!hand) return '左クリック：下駄を取る　右クリック：持ち上げて、置き直す';
+      if (hand.kind === 'geta') return '左クリック：下駄を戻す';
+      if (isBakedDoria(hand) && !hand.geta) return '左クリック：ドリアを下駄に乗せる';
+      return null;
+    }
+    if (target?.kind === 'servePass' && hand?.kind === 'bakeDish') {
+      if (isBakedDoria(hand) && hand.geta) return '左クリック：ドリアを提供台に出す（ドリアのメニューは未実装のため採点なし）';
+      if (isBakedDoria(hand)) return '下駄に乗せてから出す（提供台の左の下駄の山をクリック）';
+    }
+    return null;
+  }
+
   // ボトルを持っているとき、右クリックでサラダの皿にかける・振る。ボトルは手に残る
   private useBottle(target: Target | null): void {
     const hand = this.state.hand;
@@ -478,7 +568,8 @@ export class Game {
       FREE_TRAY_IDS.some((id) => {
         const spot = s.freeTraySpot[id];
         return s.trays[id] === 'table' && spot.surface === surface && Math.hypot(spot.x - x, spot.z - z) < FREE_TRAY_BOTTLE_GAP;
-      });
+      }) ||
+      this.getaNear(surface, x, z, 0.06); // 下駄の山の上には置かない
     return tooClose
       ? { id: hand.id, surface, x, z, valid: false, reason: 'gap' }
       : { id: hand.id, surface, x, z, valid: true };
@@ -505,7 +596,8 @@ export class Game {
       BOTTLE_IDS.some((b) => {
         const spot = s.bottles[b];
         return spot?.surface === surface && Math.hypot(spot.x - x, spot.z - z) < FREE_TRAY_BOTTLE_GAP;
-      });
+      }) ||
+      this.getaNear(surface, x, z, 0.19); // 下駄の山の上には置かない（容器の半径ぶん離す）
     return tooClose ? { id, surface, x, z, valid: false, reason: 'gap' } : { id, surface, x, z, valid: true };
   }
 
@@ -537,6 +629,11 @@ export class Game {
       return `左クリック：ここに流す（${name}。約${Math.ceil(timeToEmerge(p.deck, p.style, p.s, this.cfg))}秒で出てくる）`;
     }
     if (target?.kind === 'ovenOutlet') {
+      if (hand?.kind === 'geta') {
+        const dish = peekDish(oven, target.deck, target.lane);
+        if (!dish) return 'ジェットオーブンの出口：まだ出てきていない';
+        return dish.style === 'doria' ? '左クリック：焼けたドリアを下駄に乗せる' : '下駄に乗せられるのは、ドリア系だけ';
+      }
       if (hand) return '手がふさがっている';
       return canTakeDish(oven, target.deck, target.lane) ? '左クリック：焼けた皿を取る' : 'ジェットオーブンの出口：まだ出てきていない';
     }
@@ -743,6 +840,13 @@ export class Game {
       }
 
       case 'servePass':
+        // 下駄に乗せた焼き上がりのドリア。ドリアのメニューはまだないので、出すだけ（採点なし）
+        if (hand?.kind === 'bakeDish' && isBakedDoria(hand) && hand.geta) {
+          return () => {
+            s.hand = null;
+            this.say('ドリアを提供台に出した（ドリアのメニューは未実装のため採点なし）', 'info');
+          };
+        }
         if (hand?.kind !== 'plate') return null;
         return () => this.serve(hand);
 
@@ -844,6 +948,14 @@ export class Game {
         if (hand) return null;
         return () => (s.hand = { kind: 'bakeDish', style: target.style, baked: false });
 
+      case 'getaStack':
+        // 下駄の山（持ち上げている間は取れない）。手が空なら1枚取る。下駄を持っていれば戻す。焼き上がったドリアを持っていれば、下駄に乗せる
+        if (s.getaMoving) return null;
+        if (!hand) return () => (s.hand = { kind: 'geta' });
+        if (hand.kind === 'geta') return () => (s.hand = null);
+        if (isBakedDoria(hand) && !hand.geta) return () => (s.hand = { ...hand, geta: true });
+        return null;
+
       case 'ovenInlet': {
         // 焼く前の皿を、入口のベルトの視点が合っている場所に置く（ほかの皿に重ならないとき）。置くと、ベルトで流れていく
         const p = this.previewOven(target);
@@ -856,6 +968,13 @@ export class Game {
       }
 
       case 'ovenOutlet':
+        // 下駄を持っていれば、出てきたドリアを下駄に乗せて取る（ドリア系だけ）
+        if (hand?.kind === 'geta') {
+          if (peekDish(s.oven, target.deck, target.lane)?.style !== 'doria') return null;
+          return () => {
+            if (takeDish(s.oven, target.deck, target.lane)) s.hand = { kind: 'bakeDish', style: 'doria', baked: true, geta: true };
+          };
+        }
         // 出口に出てきた皿を、いちばん先のものから1枚取る
         if (hand || !canTakeDish(s.oven, target.deck, target.lane)) return null;
         return () => {
@@ -950,7 +1069,10 @@ export function describeItem(item: Item | null): string {
       return `${INGREDIENTS[item.id].name}（ボトル）`;
     case 'ipad':
       return 'iPad';
+    case 'geta':
+      return '下駄';
     case 'bakeDish':
+      if (item.geta) return `${BAKE_DISHES[item.style].name}（焼き上がり・下駄つき）`;
       return `焼き皿（${BAKE_DISHES[item.style].name}・${item.baked ? '焼き上がり' : '焼く前'}）`;
     case 'pot': {
       const { pot } = item;
