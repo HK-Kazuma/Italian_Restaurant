@@ -1,4 +1,4 @@
-import type { BakeStyle, BottleId, FreeTrayId, SurfaceId } from './types';
+import type { BakeStyle, BottleId, FreeTrayId, SurfaceId, TableSpot } from './types';
 
 // 設備の置き場所。ここの数値を直すと、その設備が動く（保存すると開発サーバーが自動で読み込み直す）。
 //
@@ -79,6 +79,29 @@ export const HOT_WATER_COUNTER = {
 // IHの左の台の中心（この台は layout の対象ではなく、位置は固定）。もとの中心 z = -0.2 から、広げた分の半分だけ手前へ
 export const LEFT_COUNTER = { x: -2.6, z: -0.2 + LEFT_COUNTER_EXTEND / 2 };
 
+// 提供台（左の台の上の緑の台）。ワールド座標の中心と、一辺の長さ
+export const SERVE_PASS = { x: -2.4, z: 1.0, size: 0.7 };
+
+// 下駄（ドリアの下にひく木の台）。w = 長い辺、d = 短い辺、h = 厚み。ドリアの皿（BAKE_DISHES.doria）より、ひと回り大きい。
+// 下駄の山は、長い辺を z 方向にそろえて積む（stackHeight 枚）。山の置き場は、左の台の、提供台の左（手前の壁側 = +z）のあき地
+export const GETA = { w: 0.52, d: 0.36, h: 0.022, stackHeight: 8 };
+const GETA_EDGE = 0.03; // 台の縁から、山までの最小のすき間
+const GETA_PASS_GAP = 0.05; // 提供台から、山までの最小のすき間
+// 山の中心を置ける範囲（左の台の中心からの相対。x: 右、z: 手前）。左の台の上で、提供台より壁側（+z）のあき地に限る。
+// 皿・トッピングの置き場は台の奥（-z）側なので、提供台より手前なら、それらに重ならない
+export const GETA_RANGE = {
+  minX: -SURFACES.left.width / 2 + GETA.d / 2 + GETA_EDGE,
+  maxX: SURFACES.left.width / 2 - GETA.d / 2 - GETA_EDGE,
+  minZ: SERVE_PASS.z + SERVE_PASS.size / 2 + GETA_PASS_GAP + GETA.w / 2 - LEFT_COUNTER.z,
+  maxZ: SURFACES.left.depth / 2 - GETA_EDGE - GETA.w / 2,
+};
+// 下駄の山の最初の置き場所（提供台のすぐ左）。台の中心からの相対位置
+export const GETA_HOME: TableSpot = {
+  surface: 'left',
+  x: SERVE_PASS.x - LEFT_COUNTER.x,
+  z: GETA_RANGE.minZ + 0.1,
+};
+
 // ボトルの最初の置き場所。台の中心からの相対位置（x: 右、z: 手前）。
 // パセリは、もとのトッピングの位置（左の台の奥の列）
 export const BOTTLE_HOME: Record<BottleId, { surface: SurfaceId; x: number; z: number }> = {
@@ -141,11 +164,29 @@ export const OVEN_Z = {
   },
 };
 
+// 部屋の左の壁（中心線）の x。壁の厚みは 0.1 なので、部屋の内側の面はここから 0.05 だけ右
+export const ROOM_MIN_X = -3.6;
+export const WALL_HALF = 0.05;
+
 // オーブンの入口の先（壁側）の台。ドリア・鉄板焼きの具材を置く具材コーナー（いまは、テスト用の焼き皿だけ）
+// 右の端（部屋の中央側）は左の台・オーブンと同じ列の端（OVEN.x + 左の台の幅/2）のまま、左へ伸ばして左の壁の内側の面に接する
 const OVEN_COUNTER_D = 1.2;
+const OVEN_COUNTER_MAX_X = OVEN.x + SURFACES.left.width / 2; // 右の端（動かさない）
+const OVEN_COUNTER_MIN_X = ROOM_MIN_X + WALL_HALF; // 左の端 = 左の壁の内側の面
 export const OVEN_COUNTER = {
-  width: SURFACES.left.width, // x 方向（左の台と同じ幅）
+  width: OVEN_COUNTER_MAX_X - OVEN_COUNTER_MIN_X, // x 方向
   depth: OVEN_COUNTER_D, // z 方向
-  x: OVEN.x,
+  x: (OVEN_COUNTER_MAX_X + OVEN_COUNTER_MIN_X) / 2,
   z: OVEN_Z.inlet.maxZ + 0.02 + OVEN_COUNTER_D / 2,
+};
+
+// 具材台の下の棚。天板（高さ 0.9）の下が、上下2段の棚になっている。広さは具材台と同じ（x: 壁 〜 部屋の中央側、z: 具材台の奥行き）。
+// 部屋の中央側（+x）が開いていて、そこから皿を取る。段ごとに、ドリア系の皿の山を並べる
+//   shelfTopY … 各段の棚板の上面の高さ（下段・上段）。天板の下面は 0.9 - topThickness
+export const OVEN_COUNTER_SHELF = {
+  topThickness: 0.05, // 天板の厚み
+  boardThickness: 0.03, // 棚板の厚み
+  shelfTopY: [0.1, 0.5] as const, // 下段・上段の棚板の上面の高さ
+  stacksPerTier: 2, // 1段に並べる山の数（開いている面の端に、z 方向に並べる。奥は視点の線が天板に遮られて狙えないので、手前の端に寄せる）
+  stackHeight: 5, // 1つの山の皿の枚数
 };

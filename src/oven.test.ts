@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG as cfg } from './config';
 import { Game } from './game';
-import { BAKE_DISH, BAKE_DISHES, LEFT_COUNTER, OVEN, OVEN_BELT, OVEN_COUNTER, OVEN_Z, SURFACES } from './layout';
+import { BAKE_DISH, BAKE_DISHES, LEFT_COUNTER, OVEN, OVEN_BELT, OVEN_COUNTER, OVEN_COUNTER_SHELF, OVEN_Z, ROOM_MIN_X, SURFACES, WALL_HALF } from './layout';
 import {
   beltSpeed,
   canPlaceDish,
@@ -63,6 +63,21 @@ describe('ジェットオーブンの大きさ・並び', () => {
     expect(OVEN_Z.body.minZ).toBeCloseTo(OVEN_Z.outlet.maxZ);
     expect(OVEN_Z.outlet.minZ).toBeGreaterThanOrEqual(leftCounterBack);
     expect(OVEN_Z.outlet.minZ - leftCounterBack).toBeLessThan(0.1);
+  });
+
+  it('具材台は左の壁の内側の面まで伸びていて、右の端は左の台・オーブンの列の端のまま', () => {
+    expect(OVEN_COUNTER.x - OVEN_COUNTER.width / 2).toBeCloseTo(ROOM_MIN_X + WALL_HALF);
+    expect(OVEN_COUNTER.x + OVEN_COUNTER.width / 2).toBeCloseTo(LEFT_COUNTER.x + SURFACES.left.width / 2);
+    expect(OVEN_COUNTER.width).toBeGreaterThan(SURFACES.left.width); // 伸びた
+  });
+
+  it('具材台の下は2段の棚で、棚板の上に、ドリア系の皿の山が収まる（広さは具材台と同じ）', () => {
+    const { shelfTopY, topThickness, boardThickness, stacksPerTier, stackHeight } = OVEN_COUNTER_SHELF;
+    expect(shelfTopY).toHaveLength(2);
+    const stackTop = stackHeight * BAKE_DISH.h; // 山の高さ
+    const ceiling = [shelfTopY[1] - boardThickness, 0.9 - topThickness]; // 各段の上にある棚板・天板の下面
+    shelfTopY.forEach((y, tier) => expect(y + stackTop).toBeLessThanOrEqual(ceiling[tier]));
+    expect(stacksPerTier * BAKE_DISH.w).toBeLessThanOrEqual(OVEN_COUNTER.depth); // 山が奥行きに収まる
   });
 
   it('オーブンは左の台と同じ列（x）にあり、IHコンロより手前（+z）側にある', () => {

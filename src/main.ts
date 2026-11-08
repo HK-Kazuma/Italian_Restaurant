@@ -155,6 +155,8 @@ function hintFor(target: Target | null): string {
   // 置いたトレー・ケース：左クリックで中身を取る、右クリックで持ち上げて置き直す
   const placedTray = !hand ? game.placedTrayOf(target) : null;
   if (placedTray) return `左クリック：${trayContentName(placedTray)}を取る　右クリック：持ち上げて、置き直す`;
+  const geta = game.getaHint(target);
+  if (geta) return geta;
   const oven = game.ovenHint(target);
   if (oven) return oven;
   if (hand?.kind === 'bottle') {
@@ -260,7 +262,7 @@ function frame(): void {
   player.applyTo(camera);
   if (game.state.phase === 'playing' && !game.state.ipadOpen) interactor.update(game);
   else interactor.clear();
-  kitchen.sync(game.state, dt, game.previewPlacement(interactor.current), game.previewFridge(interactor.current), interactor.current, game.previewOven(interactor.current));
+  kitchen.sync(game.state, dt, game.previewPlacement(interactor.current), game.previewFridge(interactor.current), interactor.current, game.previewOven(interactor.current), game.previewGeta(interactor.current));
   const tutorial = tutorialGuide();
   hud.update(game.state, best, hintFor(interactor.current), game.tutorialView());
   hud.setGuide(game.state.phase === 'playing' && !game.state.ipadOpen ? offscreenGuide(kitchen.trayGuide(game.state) ?? tutorial) : null);
