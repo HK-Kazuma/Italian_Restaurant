@@ -180,6 +180,17 @@ export const OVEN_COUNTER = {
   z: OVEN_Z.inlet.maxZ + 0.02 + OVEN_COUNTER_D / 2,
 };
 
+// 具材台は全部で3台。OVEN_COUNTER（オーブンの入口の先）を1台目にして、同じ大きさのものを、壁側（+z）へすき間なく横に並べる。
+// 3台とも部屋の中央側（+x）が開いた2段の棚で、ドリア系の皿の山が入っている。部屋の手前（+z）の壁は、いちばん奥の台に合わせて広がる
+export const OVEN_COUNTER_COUNT = 3;
+export const OVEN_COUNTER_ZS: readonly number[] = Array.from({ length: OVEN_COUNTER_COUNT }, (_, i) => OVEN_COUNTER.z + i * OVEN_COUNTER.depth);
+// 3台をまとめた広さ（z 方向）と中心
+export const OVEN_COUNTER_ROW = {
+  depth: OVEN_COUNTER.depth * OVEN_COUNTER_COUNT,
+  z: OVEN_COUNTER.z + (OVEN_COUNTER.depth * (OVEN_COUNTER_COUNT - 1)) / 2,
+  maxZ: OVEN_COUNTER.z + OVEN_COUNTER.depth * (OVEN_COUNTER_COUNT - 0.5),
+};
+
 // 具材台の下の棚。天板（高さ 0.9）の下が、上下2段の棚になっている。広さは具材台と同じ（x: 壁 〜 部屋の中央側、z: 具材台の奥行き）。
 // 部屋の中央側（+x）が開いていて、そこから皿を取る。段ごとに、ドリア系の皿の山を並べる
 //   shelfTopY … 各段の棚板の上面の高さ（下段・上段）。天板の下面は 0.9 - topThickness

@@ -180,8 +180,13 @@ export type OvenDeck = 'upper' | 'lower';
 // 焼き皿の種類（いまはテスト用）。doria = ドリア系（長方形。ベルトに 流れの向きに2つ × 横に3つ）、pizza = ピザ系（丸い。流れの向きに2つ × 横に2つ）
 export type BakeStyle = 'doria' | 'pizza';
 
-// ベルトに乗っている皿。x = ベルトの中心から皿の中心までの横のずれ（m）、s = 入口の端から皿の中心までの距離（m）
-export type OvenDish = { id: number; style: BakeStyle; x: number; s: number };
+// 焼き皿の焼け具合。raw = 焼く前、half = 生焼け（もう一度焼けば焼き上がる）、baked = 焼き上がり（提供できる）、burnt = 焦げた（提供できない）。
+// どれになるかは、焼いた秒数の合計（cooked）で決まる（oven.ts の bakeState）
+export type BakeState = 'raw' | 'half' | 'baked' | 'burnt';
+
+// ベルトに乗っている皿。x = ベルトの中心から皿の中心までの横のずれ（m）、s = 入口の端から皿の中心までの距離（m）。
+// cooked = 流す前までに焼いた秒数の合計（省略 = 0。今回の1周で出てくるまでの秒数は、まだ含まない）
+export type OvenDish = { id: number; style: BakeStyle; x: number; s: number; cooked?: number };
 
 export type Oven = {
   decks: Record<OvenDeck, OvenDish[]>;
@@ -215,7 +220,7 @@ export type Item =
   | { kind: 'bottle'; id: BottleId } // ドレッシング・パプリカパウダー・パセリ。右クリックで皿にかける・振る（なくならない）
   | { kind: 'pot'; pot: Pot }
   | { kind: 'ipad' } // 練習キッチンの壁にかかっている iPad。右クリックで画面を開く（ゲーム開始・レシピ）
-  | { kind: 'bakeDish'; style: BakeStyle; baked: boolean; geta?: boolean } // ジェットオーブンで焼く皿（いまはテスト用。ドリア系 = 長方形、ピザ系 = 丸）。baked = 焼き上がり。geta = 下駄（木の台）に乗せてある（ドリア系の焼き上がりだけ。提供できる形）
+  | { kind: 'bakeDish'; style: BakeStyle; cooked: number; state: BakeState; geta?: boolean } // ジェットオーブンで焼く皿（ドリア系 = 長方形、ピザ系 = 丸）。cooked = これまでに焼いた秒数の合計、state = その焼け具合（oven.ts の bakeItem で作る）。geta = 下駄（木の台）に乗せてある（ドリア系の焼き上がりだけ。提供できる形）
   | { kind: 'geta' }; // ドリアの下にひく下駄（木の台）1枚。焼き上がったドリアに左クリックで、ドリアを乗せられる
 
 // 視点の先にあるクリック可能な設備

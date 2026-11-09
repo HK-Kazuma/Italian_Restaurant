@@ -19,7 +19,7 @@ import {
   updateHeat,
   updateWasher,
 } from './pot';
-import { OVEN_DECK_NAME, bakeTime, canTakeDish, createOven, peekDish, placeDish, resolvePlacement, takeDish, timeToEmerge, updateOven } from './oven';
+import { BAKE_STATE_NAME, OVEN_DECK_NAME, bakeItem, bakeState, bakeTime, canTakeDish, createOven, peekDish, placeDish, resolvePlacement, stateOnExit, takeDish, timeToEmerge, updateOven } from './oven';
 import { canStackPack, createPack, findWarmPack, soakPack, stockItem } from './pack';
 import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
 import { serveScore } from './score';
@@ -49,7 +49,8 @@ type CarriedLayout = {
 const TOAST_SECONDS = 2.5;
 
 // 焼き上がったドリア系の皿か（下駄に乗せられる物）
-const isBakedDoria = (item: Item): item is Extract<Item, { kind: 'bakeDish' }> => item.kind === 'bakeDish' && item.style === 'doria' && item.baked;
+type BakedDoria = Extract<Item, { kind: 'bakeDish' }> & { style: 'doria'; state: 'baked' };
+const isBakedDoria = (item: Item): item is BakedDoria => item.kind === 'bakeDish' && item.style === 'doria' && item.state === 'baked';
 
 const copySpot = (spot: BottleSpot): BottleSpot => (spot ? { ...spot } : null);
 
@@ -505,6 +506,9 @@ export class Game {
     if (target?.kind === 'servePass' && hand?.kind === 'bakeDish') {
       if (isBakedDoria(hand) && hand.geta) return '左クリック：ドリアを提供台に出す（ドリアのメニューは未実装のため採点なし）';
       if (isBakedDoria(hand)) return '下駄に乗せてから出す（提供台の左の下駄の山をクリック）';
+      if (hand.state === 'burnt') return '焦げていて提供できない（右クリックで捨てる）';
+      if (hand.state === 'half') return '生焼けで提供できない（もう一度、入口に流して焼く）';
+      if (hand.state === 'raw') return '焼き上がっていない皿は出せない';
     }
     return null;
   }
@@ -607,11 +611,11 @@ export class Game {
   }
 
   // 手に持った焼き皿を、視点が合っている入口のベルトに置くとしたら、どこに置かれるか（縦は好きな位置、横は近い置き場にそろう）。
-  // 重なるときは valid = false。焼く前の焼き皿を持っていて、入口に視点が合っているとき以外は null
+  // 重なるときは valid = false。焼く前か生焼けの焼き皿（もう一度焼ける皿）を持っていて、入口に視点が合っているとき以外は null
   previewOven(target: Target | null): OvenPreview | null {
     const s = this.state;
     const hand = s.hand;
-    if (s.phase !== 'playing' || hand?.kind !== 'bakeDish' || hand.baked || target?.kind !== 'ovenInlet') return null;
+    if (s.phase !== 'playing' || hand?.kind !== 'bakeDish' || !(hand.state === 'raw' || hand.state === 'half') || target?.kind !== 'ovenInlet') return null;
     const p = resolvePlacement(s.oven, target.deck, hand.style, target);
     return { deck: target.deck, style: hand.style, x: p.x, s: p.s, valid: p.valid };
   }
@@ -623,19 +627,26 @@ export class Game {
     if (target?.kind === 'ovenInlet') {
       const name = `${OVEN_DECK_NAME[target.deck]}（${bakeTime(target.deck, this.cfg)}秒）`;
       if (hand?.kind !== 'bakeDish') return `ジェットオーブンの入口：${name}（ジェットに入る手前に置いた皿が、この秒数で出てくる）`;
-      if (hand.baked) return 'もう焼けている（入口には流せない）';
+      if (hand.state === 'baked') return 'もう焼けている（入口には流せない）';
+      if (hand.state === 'burnt') return '焦げている（入口には流せない。右クリックで捨てる）';
       const p = this.previewOven(target);
       if (!p?.valid) return 'ここには置けない（ほかの皿に重なる）';
-      return `左クリック：ここに流す（${name}。約${Math.ceil(timeToEmerge(p.deck, p.style, p.s, this.cfg))}秒で出てくる）`;
+      const result = BAKE_STATE_NAME[bakeState(hand.style, hand.cooked + bakeTime(target.deck, this.cfg), this.cfg)]; // この1周で出てきたときの焼け具合
+      return `左クリック：ここに流す（${name}。約${Math.ceil(timeToEmerge(p.deck, p.style, p.s, this.cfg))}秒で出てくる → ${result}）`;
     }
     if (target?.kind === 'ovenOutlet') {
       if (hand?.kind === 'geta') {
         const dish = peekDish(oven, target.deck, target.lane);
         if (!dish) return 'ジェットオーブンの出口：まだ出てきていない';
-        return dish.style === 'doria' ? '左クリック：焼けたドリアを下駄に乗せる' : '下駄に乗せられるのは、ドリア系だけ';
+        if (dish.style !== 'doria') return '下駄に乗せられるのは、ドリア系だけ';
+        const st = stateOnExit(dish, target.deck, this.cfg);
+        if (st === 'baked') return '左クリック：焼けたドリアを下駄に乗せる';
+        return st === 'burnt' ? '焦げている（下駄に乗せても提供できない）' : '生焼け（もう一度焼いてから、下駄に乗せる）';
       }
       if (hand) return '手がふさがっている';
-      return canTakeDish(oven, target.deck, target.lane) ? '左クリック：焼けた皿を取る' : 'ジェットオーブンの出口：まだ出てきていない';
+      const front = peekDish(oven, target.deck, target.lane);
+      if (!front) return 'ジェットオーブンの出口：まだ出てきていない';
+      return `左クリック：皿を取る（${BAKE_STATE_NAME[stateOnExit(front, target.deck, this.cfg)]}）`;
     }
     return null;
   }
@@ -946,7 +957,7 @@ export class Game {
       case 'ovenStock':
         // 具材台のテスト用の焼き皿。手が空なら1枚取る
         if (hand) return null;
-        return () => (s.hand = { kind: 'bakeDish', style: target.style, baked: false });
+        return () => (s.hand = bakeItem(target.style, 0, this.cfg));
 
       case 'getaStack':
         // 下駄の山（持ち上げている間は取れない）。手が空なら1枚取る。下駄を持っていれば戻す。焼き上がったドリアを持っていれば、下駄に乗せる
@@ -961,25 +972,30 @@ export class Game {
         const p = this.previewOven(target);
         if (hand?.kind !== 'bakeDish' || !p?.valid) return null;
         return () => {
-          placeDish(s.oven, target.deck, hand.style, p);
+          placeDish(s.oven, target.deck, hand.style, p, hand.cooked);
           s.hand = null;
           this.say(`${OVEN_DECK_NAME[target.deck]}に流した（ジェットに入る手前から ${bakeTime(target.deck, this.cfg)}秒）`, 'info');
         };
       }
 
       case 'ovenOutlet':
-        // 下駄を持っていれば、出てきたドリアを下駄に乗せて取る（ドリア系だけ）
+        // 下駄を持っていれば、出てきた焼き上がりのドリアを下駄に乗せて取る（ドリア系で、ちょうど焼き上がっているときだけ。生焼け・焦げは乗せられない）
         if (hand?.kind === 'geta') {
-          if (peekDish(s.oven, target.deck, target.lane)?.style !== 'doria') return null;
+          const front = peekDish(s.oven, target.deck, target.lane);
+          if (front?.style !== 'doria' || stateOnExit(front, target.deck, this.cfg) !== 'baked') return null;
           return () => {
-            if (takeDish(s.oven, target.deck, target.lane)) s.hand = { kind: 'bakeDish', style: 'doria', baked: true, geta: true };
+            const dish = takeDish(s.oven, target.deck, target.lane);
+            if (dish) s.hand = { ...bakeItem('doria', (dish.cooked ?? 0) + bakeTime(target.deck, this.cfg), this.cfg), geta: true };
           };
         }
-        // 出口に出てきた皿を、いちばん先のものから1枚取る
+        // 出口に出てきた皿を、いちばん先のものから1枚取る。この1周ぶんを足した、焼け具合の皿になる（生焼け・焦げもある）
         if (hand || !canTakeDish(s.oven, target.deck, target.lane)) return null;
         return () => {
           const dish = takeDish(s.oven, target.deck, target.lane);
-          if (dish) s.hand = { kind: 'bakeDish', style: dish.style, baked: true };
+          if (!dish) return;
+          s.hand = bakeItem(dish.style, (dish.cooked ?? 0) + bakeTime(target.deck, this.cfg), this.cfg);
+          if (s.hand.state === 'burnt') this.say('焦げた！ 提供できない（右クリックで捨てる）', 'bad');
+          else if (s.hand.state === 'half') this.say('生焼け（もう一度、入口に流して焼く）', 'info');
         };
 
       case 'washer': {
@@ -1072,8 +1088,8 @@ export function describeItem(item: Item | null): string {
     case 'geta':
       return '下駄';
     case 'bakeDish':
-      if (item.geta) return `${BAKE_DISHES[item.style].name}（焼き上がり・下駄つき）`;
-      return `焼き皿（${BAKE_DISHES[item.style].name}・${item.baked ? '焼き上がり' : '焼く前'}）`;
+      if (item.geta) return `${BAKE_DISHES[item.style].name}（${BAKE_STATE_NAME[item.state]}・下駄つき）`;
+      return `焼き皿（${BAKE_DISHES[item.style].name}・${BAKE_STATE_NAME[item.state]}）`;
     case 'pot': {
       const { pot } = item;
       if (pot.contents.length === 0) return pot.dirty ? '鍋（使用済み）' : '鍋';

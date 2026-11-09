@@ -18,8 +18,8 @@ export type GameConfig = {
   carbonaraStackMax: number; // カルボナーラのパックを一度に手に持てる数（ほかのパックは1つ）
 
   // ジェットオーブン（ベルトコンベア式。左の台のさらに左）。皿を入口に置いてから、出口に出てくるまでの秒数
-  ovenUpperTime: number; // 上段
-  ovenLowerTime: number; // 下段
+  ovenUpperTime: number; // 上段（ピザ系はこの時間で焼き上がる。ドリア系は、2周すると焼き上がる）
+  ovenLowerTime: number; // 下段（ドリア系はこの時間で焼き上がる。ピザ系を流すと焦げる）
 
   // 鍋とIH
   ihBurnerCount: number; // IHコンロの口数
@@ -74,7 +74,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   carbonaraStackMax: 3,
 
   ovenUpperTime: 30, // テスト用の仮の値（本番は 40秒）
-  ovenLowerTime: 50, // テスト用の仮の値（本番は 80秒）
+  ovenLowerTime: 60, // テスト用の仮の値（本番は 80秒）。上段2周分と同じ時間にしてある（ドリアはこの時間で焼き上がる）
 
   ihBurnerCount: 4,
   potCount: 5,
