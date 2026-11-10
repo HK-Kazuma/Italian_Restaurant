@@ -1,6 +1,6 @@
 import type { GameConfig } from './config';
 import { BAKE_DISHES, OVEN_BELT } from './layout';
-import type { BakeStyle, Oven, OvenDeck, OvenDish } from './types';
+import type { BakeState, BakeStyle, Item, Oven, OvenDeck, OvenDish, PizzaBuild } from './types';
 
 // ジェットオーブン（ベルトコンベア式）。上段・下段の2段があり、段ごとにベルトの速さが違う。
 //
@@ -76,6 +76,38 @@ export function clampPlacement(style: BakeStyle, x: number, s: number): DishPos 
   return { x: nearest, s: clampS(style, s) };
 }
 
+// --- 焼け具合 ---
+// ドリア系は、下段の時間（ovenLowerTime）で焼き上がる。上段（ovenUpperTime）だけだと生焼けで、もう一度上段に流すと焼き上がる（上段2周 = 下段1周）。
+// ピザ系は、上段の時間で焼き上がる。下段に流すと焦げる。
+// 焼いた秒数の合計が、必要な秒数にぴったりなら焼き上がり。足りなければ生焼け、BURN_RATIO 倍を超えると焦げて、提供できない（焦げたあとは戻らない）
+export const BURN_RATIO = 1.25;
+
+// その種類の皿が焼き上がるのに必要な秒数
+export function bakeNeed(style: BakeStyle, cfg: OvenTimes): number {
+  return style === 'doria' ? cfg.ovenLowerTime : cfg.ovenUpperTime;
+}
+
+// 焼いた秒数の合計（cooked）からわかる、焼け具合
+export function bakeState(style: BakeStyle, cooked: number, cfg: OvenTimes): BakeState {
+  const need = bakeNeed(style, cfg);
+  if (cooked <= EPS) return 'raw';
+  if (cooked < need - EPS) return 'half';
+  return cooked <= need * BURN_RATIO + EPS ? 'baked' : 'burnt';
+}
+
+export const BAKE_STATE_NAME: Record<BakeState, string> = { raw: '焼く前', half: '生焼け', baked: '焼き上がり', burnt: '焦げた' };
+
+// 手に持つ焼き皿（焼いた秒数と、その焼け具合）
+// pizza = ピザ系の皿にのっている物（省略 = 生地・ソース・チーズがのった、ふつうの焼き皿の見た目）
+export function bakeItem(style: BakeStyle, cooked: number, cfg: OvenTimes, pizza?: PizzaBuild): Extract<Item, { kind: 'bakeDish' }> {
+  return { kind: 'bakeDish', style, cooked, state: bakeState(style, cooked, cfg), ...(pizza ? { pizza } : {}) };
+}
+
+// 出口に出てきた皿を、いま取ったときの焼け具合（この1周ぶんを足す）
+export function stateOnExit(dish: Pick<OvenDish, 'style' | 'cooked'>, deck: OvenDeck, cfg: OvenTimes): BakeState {
+  return bakeState(dish.style, (dish.cooked ?? 0) + bakeTime(deck, cfg), cfg);
+}
+
 export function createOven(): Oven {
   return { decks: { upper: [], lower: [] }, nextId: 1 };
 }
@@ -128,10 +160,10 @@ export function canPlaceDish(oven: Oven, deck: OvenDeck, style: BakeStyle, pos: 
 }
 
 // 入口のベルトに皿を置く。置けたら true
-export function placeDish(oven: Oven, deck: OvenDeck, style: BakeStyle, pos: DishPos): boolean {
+export function placeDish(oven: Oven, deck: OvenDeck, style: BakeStyle, pos: DishPos, cooked = 0, pizza?: PizzaBuild): boolean {
   const p = resolvePlacement(oven, deck, style, pos);
   if (!p.valid) return false;
-  oven.decks[deck].push({ id: oven.nextId++, style, x: p.x, s: p.s });
+  oven.decks[deck].push({ id: oven.nextId++, style, x: p.x, s: p.s, cooked, ...(pizza ? { pizza } : {}) });
   return true;
 }
 

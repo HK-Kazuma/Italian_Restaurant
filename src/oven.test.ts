@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG as cfg } from './config';
 import { Game } from './game';
-import { BAKE_DISH, BAKE_DISHES, LEFT_COUNTER, OVEN, OVEN_BELT, OVEN_COUNTER, OVEN_COUNTER_SHELF, OVEN_Z, ROOM_MIN_X, SURFACES, WALL_HALF } from './layout';
+import { BAKE_DISH, BAKE_DISHES, LEFT_COUNTER, OVEN, OVEN_BELT, OVEN_COUNTER, OVEN_COUNTER_ROW, OVEN_COUNTER_SHELF, OVEN_COUNTER_ZS, OVEN_Z, ROOM_MIN_X, SURFACES, WALL_HALF } from './layout';
 import {
+  BURN_RATIO,
+  bakeItem,
+  bakeNeed,
+  bakeState,
   beltSpeed,
   canPlaceDish,
   canTakeDish,
@@ -69,6 +73,14 @@ describe('ジェットオーブンの大きさ・並び', () => {
     expect(OVEN_COUNTER.x - OVEN_COUNTER.width / 2).toBeCloseTo(ROOM_MIN_X + WALL_HALF);
     expect(OVEN_COUNTER.x + OVEN_COUNTER.width / 2).toBeCloseTo(LEFT_COUNTER.x + SURFACES.left.width / 2);
     expect(OVEN_COUNTER.width).toBeGreaterThan(SURFACES.left.width); // 伸びた
+  });
+
+  it('具材台は3台が、壁側（+z）へすき間なく横に並ぶ（1台目はオーブンの入口の先のまま）', () => {
+    expect(OVEN_COUNTER_ZS).toHaveLength(3);
+    expect(OVEN_COUNTER_ZS[0]).toBeCloseTo(OVEN_COUNTER.z);
+    OVEN_COUNTER_ZS.slice(1).forEach((z, i) => expect(z - OVEN_COUNTER_ZS[i]).toBeCloseTo(OVEN_COUNTER.depth));
+    expect(OVEN_COUNTER_ROW.depth).toBeCloseTo(OVEN_COUNTER.depth * 3);
+    expect(OVEN_COUNTER_ROW.maxZ).toBeCloseTo(OVEN_COUNTER_ZS[2] + OVEN_COUNTER.depth / 2);
   });
 
   it('具材台の下は2段の棚で、棚板の上に、ドリア系の皿の山が収まる（広さは具材台と同じ）', () => {
@@ -201,7 +213,8 @@ describe('ジェットオーブンのベルト（流れる秒数）', () => {
 
   it('テスト用の時間は 上段 30秒・下段 50秒（本番は 40秒・80秒）', () => {
     expect(cfg.ovenUpperTime).toBe(30);
-    expect(cfg.ovenLowerTime).toBe(50);
+    expect(cfg.ovenLowerTime).toBe(60);
+    expect(cfg.ovenLowerTime).toBe(cfg.ovenUpperTime * 2); // 下段 = 上段2周分
     expect(beltSpeed('upper', 'doria', cfg)).toBeGreaterThan(beltSpeed('lower', 'doria', cfg));
   });
 
@@ -317,30 +330,30 @@ describe('ジェットオーブンの操作（Game）', () => {
     return g;
   };
 
-  it('具材台で焼き皿を取り、入口に流して、時間がたつと出口で取れる（焼き上がり）', () => {
+  it('具材台でドリアの焼き皿を取り、下段に流して、時間がたつと出口で取れる（焼き上がり）', () => {
     const g = newGame();
     g.interact(stock());
-    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', baked: false });
-    g.interact(inlet('upper'));
+    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', cooked: 0, state: 'raw' });
+    g.interact(inlet('lower'));
     expect(g.state.hand).toBeNull();
-    expect(g.state.oven.decks.upper).toHaveLength(1);
+    expect(g.state.oven.decks.lower).toHaveLength(1);
 
-    expect(g.planInteract(outlet('upper'))).toBeNull(); // まだ出てきていない
-    for (let t = 0; t < cfg.ovenUpperTime + 1; t++) g.update(1);
-    g.interact(outlet('upper'));
-    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', baked: true });
-    expect(g.state.oven.decks.upper).toHaveLength(0);
-  });
-
-  it('ピザ系の皿も、同じように流せて、焼き上がった皿はピザ系のまま取れる', () => {
-    const g = newGame();
-    g.interact(stock('pizza'));
-    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'pizza', baked: false });
-    g.interact(inlet('lower', 0, frontS('pizza')));
-    expect(g.state.oven.decks.lower[0].style).toBe('pizza');
+    expect(g.planInteract(outlet('lower'))).toBeNull(); // まだ出てきていない
     for (let t = 0; t < cfg.ovenLowerTime + 1; t++) g.update(1);
     g.interact(outlet('lower'));
-    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'pizza', baked: true });
+    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', cooked: cfg.ovenLowerTime, state: 'baked' });
+    expect(g.state.oven.decks.lower).toHaveLength(0);
+  });
+
+  it('ピザ系の皿は、上段に流すと焼き上がって、ピザ系のまま取れる', () => {
+    const g = newGame();
+    g.interact(stock('pizza'));
+    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'pizza', cooked: 0, state: 'raw' });
+    g.interact(inlet('upper', 0, frontS('pizza')));
+    expect(g.state.oven.decks.upper[0].style).toBe('pizza');
+    for (let t = 0; t < cfg.ovenUpperTime + 1; t++) g.update(1);
+    g.interact(outlet('upper'));
+    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'pizza', cooked: cfg.ovenUpperTime, state: 'baked' });
   });
 
   it('入口のベルトの、視点が合っている場所に皿が置かれる（ジェットに入る手前より手前でも）', () => {
@@ -384,7 +397,7 @@ describe('ジェットオーブンの操作（Game）', () => {
     const g = newGame();
     g.interact(stock());
     expect(g.planInteract(stock())).toBeNull(); // 手がふさがっている
-    g.state.hand = { kind: 'bakeDish', style: 'doria', baked: true };
+    g.state.hand = bakeItem('doria', cfg.ovenLowerTime, cfg);
     expect(g.planInteract(inlet('upper'))).toBeNull();
     g.state.hand = null;
     expect(g.planInteract(inlet('upper'))).toBeNull(); // 手が空では流せない
@@ -404,7 +417,7 @@ describe('ジェットオーブンの操作（Game）', () => {
     g.interact(stock());
     g.interact(inlet('upper'));
     for (let t = 0; t < cfg.ovenUpperTime + 1; t++) g.update(1);
-    g.state.hand = { kind: 'bakeDish', style: 'doria', baked: false };
+    g.state.hand = bakeItem('doria', 0, cfg);
     expect(g.planInteract(outlet('upper'))).toBeNull();
   });
 
@@ -415,5 +428,112 @@ describe('ジェットオーブンの操作（Game）', () => {
     g.startPractice();
     expect(g.state.oven.decks.upper).toHaveLength(0);
     expect(g.state.oven.decks.lower).toHaveLength(0);
+  });
+});
+
+describe('焼け具合（ドリアは下段の時間、ピザ系は上段の時間で焼き上がる）', () => {
+  const inlet = (deck: 'upper' | 'lower', style: BakeStyle = 'doria'): Target => ({ kind: 'ovenInlet', deck, x: 0, s: frontS(style) });
+  const outlet = (deck: 'upper' | 'lower'): Target => ({ kind: 'ovenOutlet', deck, lane: 1 });
+  const newGame = () => {
+    const g = new Game(cfg, () => 0);
+    g.startPractice();
+    g.state.nextTicketAt = Infinity;
+    return g;
+  };
+  // 手の皿を、段に流して、出てきたところを取る（手に皿が残る）
+  const bakeOnce = (g: Game, deck: 'upper' | 'lower', style: BakeStyle = 'doria') => {
+    g.interact(inlet(deck, style));
+    for (let t = 0; t < (deck === 'upper' ? cfg.ovenUpperTime : cfg.ovenLowerTime) + 1; t++) g.update(1);
+    g.interact(outlet(deck));
+  };
+
+  it('焼き上がるのに必要な秒数：ドリア系は下段の時間、ピザ系は上段の時間', () => {
+    expect(bakeNeed('doria', cfg)).toBe(cfg.ovenLowerTime);
+    expect(bakeNeed('pizza', cfg)).toBe(cfg.ovenUpperTime);
+  });
+
+  it('焼いた秒数の合計から、焼く前・生焼け・焼き上がり・焦げた が決まる', () => {
+    expect(bakeState('doria', 0, cfg)).toBe('raw');
+    expect(bakeState('doria', cfg.ovenUpperTime, cfg)).toBe('half'); // 上段1周
+    expect(bakeState('doria', cfg.ovenUpperTime * 2, cfg)).toBe('baked'); // 上段2周
+    expect(bakeState('doria', cfg.ovenLowerTime, cfg)).toBe('baked'); // 下段1周
+    expect(bakeState('doria', cfg.ovenUpperTime + cfg.ovenLowerTime, cfg)).toBe('burnt'); // 上段1周 + 下段1周
+    expect(bakeState('doria', cfg.ovenLowerTime * 2, cfg)).toBe('burnt');
+    expect(bakeState('pizza', cfg.ovenUpperTime, cfg)).toBe('baked'); // 上段1周
+    expect(bakeState('pizza', cfg.ovenLowerTime, cfg)).toBe('burnt'); // 下段に流すと焦げる
+    expect(BURN_RATIO).toBeGreaterThan(1);
+  });
+
+  it('ドリアを下段に流すと、焼き上がる', () => {
+    const g = newGame();
+    g.interact({ kind: 'ovenStock', style: 'doria' });
+    bakeOnce(g, 'lower');
+    expect(g.state.hand).toMatchObject({ style: 'doria', state: 'baked' });
+  });
+
+  it('ドリアを上段に流すと生焼け。もう一度上段に流すと焼き上がる（上段2周 = 下段と同じ時間）', () => {
+    const g = newGame();
+    g.interact({ kind: 'ovenStock', style: 'doria' });
+    bakeOnce(g, 'upper');
+    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', cooked: cfg.ovenUpperTime, state: 'half' });
+    expect(g.planInteract(inlet('upper'))).not.toBeNull(); // 生焼けは、もう一度流せる
+    g.interact(inlet('upper'));
+    expect(g.state.oven.decks.upper[0].cooked).toBe(cfg.ovenUpperTime); // 流す前までの焼き時間を引き継ぐ
+    for (let t = 0; t < cfg.ovenUpperTime + 1; t++) g.update(1);
+    g.interact(outlet('upper'));
+    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', cooked: cfg.ovenUpperTime * 2, state: 'baked' });
+  });
+
+  it('生焼けのドリアを下段に流し直すと、焼きすぎで焦げる', () => {
+    const g = newGame();
+    g.interact({ kind: 'ovenStock', style: 'doria' });
+    bakeOnce(g, 'upper');
+    bakeOnce(g, 'lower');
+    expect(g.state.hand).toMatchObject({ style: 'doria', state: 'burnt' });
+  });
+
+  it('ピザ系は、上段で焼き上がる。下段に流すと焦げる', () => {
+    const g = newGame();
+    g.interact({ kind: 'ovenStock', style: 'pizza' });
+    bakeOnce(g, 'upper', 'pizza');
+    expect(g.state.hand).toMatchObject({ style: 'pizza', state: 'baked' });
+
+    const h = newGame();
+    h.interact({ kind: 'ovenStock', style: 'pizza' });
+    bakeOnce(h, 'lower', 'pizza');
+    expect(h.state.hand).toMatchObject({ style: 'pizza', state: 'burnt' });
+  });
+
+  it('焼き上がった皿・焦げた皿は、入口に流し直せない', () => {
+    const g = newGame();
+    g.state.hand = bakeItem('doria', cfg.ovenLowerTime, cfg);
+    expect(g.previewOven(inlet('upper'))).toBeNull();
+    expect(g.ovenHint(inlet('upper'))).toContain('もう焼けている');
+    g.state.hand = bakeItem('pizza', cfg.ovenLowerTime, cfg);
+    expect(g.planInteract(inlet('lower', 'pizza'))).toBeNull();
+    expect(g.ovenHint(inlet('upper', 'pizza'))).toContain('焦げている');
+  });
+
+  it('焦げた皿・生焼けの皿は、提供台に出せない（焦げた皿は捨てられる）', () => {
+    const g = newGame();
+    g.state.hand = bakeItem('pizza', cfg.ovenLowerTime, cfg);
+    expect(g.planInteract({ kind: 'servePass' })).toBeNull();
+    expect(g.getaHint({ kind: 'servePass' })).toContain('焦げて');
+    g.state.hand = bakeItem('doria', cfg.ovenUpperTime, cfg);
+    expect(g.planInteract({ kind: 'servePass' })).toBeNull();
+    expect(g.getaHint({ kind: 'servePass' })).toContain('生焼け');
+    g.state.hand = bakeItem('doria', cfg.ovenLowerTime * 2, cfg);
+    g.discard();
+    expect(g.state.hand).toBeNull();
+  });
+
+  it('入口の案内に、その段に流したときの焼け具合が出る', () => {
+    const g = newGame();
+    g.interact({ kind: 'ovenStock', style: 'doria' });
+    expect(g.ovenHint(inlet('upper'))).toContain('生焼け');
+    expect(g.ovenHint(inlet('lower'))).toContain('焼き上がり');
+    g.state.hand = bakeItem('pizza', 0, cfg);
+    expect(g.ovenHint(inlet('upper', 'pizza'))).toContain('焼き上がり');
+    expect(g.ovenHint(inlet('lower', 'pizza'))).toContain('焦げた');
   });
 });

@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG as cfg } from './config';
 import { Game } from './game';
 import { BAKE_DISHES, GETA, GETA_HOME, GETA_RANGE, LEFT_COUNTER, SERVE_PASS, SURFACES } from './layout';
-import { frontS } from './oven';
+import { bakeItem, frontS } from './oven';
 import type { Target } from './types';
 
 const stack: Target = { kind: 'getaStack' };
 const stock: Target = { kind: 'ovenStock', style: 'doria' };
-const inlet: Target = { kind: 'ovenInlet', deck: 'upper', x: 0, s: frontS('doria') };
-const outlet: Target = { kind: 'ovenOutlet', deck: 'upper', lane: 1 };
+const inlet: Target = { kind: 'ovenInlet', deck: 'lower', x: 0, s: frontS('doria') }; // ドリアは下段で焼き上がる
+const outlet: Target = { kind: 'ovenOutlet', deck: 'lower', lane: 1 };
 const pass: Target = { kind: 'servePass' };
 const tableTop = (x: number, z: number, surface: 'left' | 'salad' | 'hotWater' = 'left'): Target => ({ kind: 'tableTop', surface, x, z });
 
@@ -23,7 +23,7 @@ const newGame = () => {
 const bakeDoria = (g: Game) => {
   g.interact(stock);
   g.interact(inlet);
-  for (let t = 0; t < cfg.ovenUpperTime + 1; t++) g.update(1);
+  for (let t = 0; t < cfg.ovenLowerTime + 1; t++) g.update(1);
 };
 
 describe('下駄の置き場（layout.ts）', () => {
@@ -76,8 +76,8 @@ describe('ドリアを下駄に乗せる', () => {
     g.interact(stack);
     expect(g.planInteract(outlet)).not.toBeNull();
     g.interact(outlet);
-    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', baked: true, geta: true });
-    expect(g.state.oven.decks.upper).toHaveLength(0); // ベルトからは取れている
+    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', cooked: cfg.ovenLowerTime, state: 'baked', geta: true });
+    expect(g.state.oven.decks.lower).toHaveLength(0); // ベルトからは取れている
   });
 
   it('まだ出てきていないドリアには、乗せられない（下駄は手に残る）', () => {
@@ -95,17 +95,36 @@ describe('ドリアを下駄に乗せる', () => {
     g.interact({ kind: 'ovenInlet', deck: 'upper', x: 0, s: frontS('pizza') });
     for (let t = 0; t < cfg.ovenUpperTime + 1; t++) g.update(1);
     g.interact(stack);
-    expect(g.planInteract(outlet)).toBeNull();
+    const pizzaOutlet: Target = { kind: 'ovenOutlet', deck: 'upper', lane: 1 };
+    expect(g.planInteract(pizzaOutlet)).toBeNull();
     expect(g.state.oven.decks.upper).toHaveLength(1);
+  });
+
+  it('生焼け（上段1周）や焦げたドリアは、下駄に乗せられない', () => {
+    const g = newGame();
+    g.interact(stock);
+    g.interact({ kind: 'ovenInlet', deck: 'upper', x: 0, s: frontS('doria') }); // 上段：生焼け
+    for (let t = 0; t < cfg.ovenUpperTime + 1; t++) g.update(1);
+    g.interact(stack);
+    const upperOutlet: Target = { kind: 'ovenOutlet', deck: 'upper', lane: 1 };
+    expect(g.planInteract(upperOutlet)).toBeNull();
+    expect(g.ovenHint(upperOutlet)).toContain('生焼け');
+    // 手の下駄を戻して、生焼けのドリアを取り、下駄の山をクリックしても乗らない
+    g.interact(stack);
+    g.interact(upperOutlet);
+    expect(g.state.hand).toMatchObject({ state: 'half' });
+    expect(g.planInteract(stack)).toBeNull();
+    g.state.hand = bakeItem('doria', cfg.ovenLowerTime * 2, cfg); // 焦げた
+    expect(g.planInteract(stack)).toBeNull();
   });
 
   it('下駄なしで取った焼き上がりのドリアも、下駄の山に左クリックして、下駄に乗せられる', () => {
     const g = newGame();
     bakeDoria(g);
     g.interact(outlet);
-    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', baked: true });
+    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', cooked: cfg.ovenLowerTime, state: 'baked' });
     g.interact(stack);
-    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', baked: true, geta: true });
+    expect(g.state.hand).toEqual({ kind: 'bakeDish', style: 'doria', cooked: cfg.ovenLowerTime, state: 'baked', geta: true });
     expect(g.planInteract(stack)).toBeNull(); // もう乗っている
   });
 
@@ -157,7 +176,7 @@ describe('下駄の山を右クリックで置き直す', () => {
   it('台の上に右クリックすると、その場所に置ける（置ける範囲に収まる）', () => {
     const g = newGame();
     g.rightClick(stack);
-    const x = (GETA_RANGE.minX + GETA_RANGE.maxX) / 2 - 0.1;
+    const x = GETA_RANGE.maxX - 0.05; // ピザのお皿の山（左寄り）に重ならない側
     const z = GETA_RANGE.maxZ - 0.05;
     expect(g.previewGeta(tableTop(x, z))).toMatchObject({ valid: true, surface: 'left' });
     g.rightClick(tableTop(x, z));
@@ -245,7 +264,7 @@ describe('案内（HUD）', () => {
     expect(g.getaHint(stack)).toContain('下駄を取る');
     g.state.hand = { kind: 'geta' };
     expect(g.getaHint(stack)).toContain('戻す');
-    g.state.hand = { kind: 'bakeDish', style: 'doria', baked: true };
+    g.state.hand = bakeItem('doria', cfg.ovenLowerTime, cfg);
     expect(g.getaHint(stack)).toContain('下駄に乗せる');
     g.state.hand = null;
     expect(g.getaHint({ kind: 'noodleRack' })).toBeNull();
