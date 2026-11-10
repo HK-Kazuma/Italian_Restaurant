@@ -176,7 +176,7 @@ describe('下駄の山を右クリックで置き直す', () => {
   it('台の上に右クリックすると、その場所に置ける（置ける範囲に収まる）', () => {
     const g = newGame();
     g.rightClick(stack);
-    const x = (GETA_RANGE.minX + GETA_RANGE.maxX) / 2 - 0.1;
+    const x = GETA_RANGE.maxX - 0.05; // ピザのお皿の山（左寄り）に重ならない側
     const z = GETA_RANGE.maxZ - 0.05;
     expect(g.previewGeta(tableTop(x, z))).toMatchObject({ valid: true, surface: 'left' });
     g.rightClick(tableTop(x, z));

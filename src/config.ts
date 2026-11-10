@@ -33,6 +33,8 @@ export type GameConfig = {
   plateSlotCount: number; // 左の台：パスタの皿を置いて盛り付ける場所の数
   saladSlotCount: number; // サラダ台：サラダを作る場所の数
   maxPlateContents: number; // 皿に載せられる中身の上限
+  pizzaSlotCount: number; // 作業台：ピザの鉄板を置いて組み立てる場所の数
+  pizzaPanCount: number; // 作業台：ピザの鉄板のスタックの枚数（1山。取ると減り、0になったら使い終わった鉄板を戻して再利用する）
 
   // 伝票
   firstTicketAt: number; // 最初の伝票が届く時刻（秒）
@@ -86,6 +88,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   plateSlotCount: 3,
   saladSlotCount: 2,
   maxPlateContents: 8,
+  pizzaSlotCount: 2,
+  pizzaPanCount: 10,
 
   firstTicketAt: 3,
   ticketIntervalStart: 25,

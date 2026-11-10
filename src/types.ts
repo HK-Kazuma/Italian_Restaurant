@@ -37,8 +37,8 @@ export type BottleId = Extract<IngredientId, 'dressing' | 'paprika' | 'garum' | 
 // 最初は冷蔵庫にしまってあるボトル（取り出してから、台の上に置く）
 export type FridgeBottleId = Extract<BottleId, 'dressing' | 'paprika' | 'garum'>;
 
-// 物を置ける台。salad = 右のサラダ台、left = IHの左の台、hotWater = 湯煎器の奥と右の台
-export type SurfaceId = 'salad' | 'left' | 'hotWater';
+// 物を置ける台。salad = 右のサラダ台、left = IHの左の台、hotWater = 湯煎器の奥と右の台、prep = 作業台（オーブンの入口の先に並ぶ3台の具材台の天板。1つの面として扱う。ピザのお皿・鉄板だけが置ける）
+export type SurfaceId = 'salad' | 'left' | 'hotWater' | 'prep';
 
 // 台の上の置き場所。台の中心からの相対位置（x: 右、z: 手前）
 export type TableSpot = { surface: SurfaceId; x: number; z: number };
@@ -186,7 +186,28 @@ export type BakeState = 'raw' | 'half' | 'baked' | 'burnt';
 
 // ベルトに乗っている皿。x = ベルトの中心から皿の中心までの横のずれ（m）、s = 入口の端から皿の中心までの距離（m）。
 // cooked = 流す前までに焼いた秒数の合計（省略 = 0。今回の1周で出てくるまでの秒数は、まだ含まない）
-export type OvenDish = { id: number; style: BakeStyle; x: number; s: number; cooked?: number };
+export type OvenDish = { id: number; style: BakeStyle; x: number; s: number; cooked?: number; pizza?: PizzaBuild };
+
+// ピザ系の皿（鉄板）にのっている物。dough = ピザ生地、sauce = ピザソース（1杯）、cheese = ピザチーズ（1杯）、mozz = のっているモッツァレラチーズの数（0〜6。1個を3つ分に分けるので、2個で6つ）。
+// 鉄板だけ（dough = false）から、生地 → ソース → チーズ → モッツァレラ の順に重ねる（pizza.ts）
+export type PizzaBuild = { dough: boolean; sauce: boolean; cheese: boolean; mozz: number };
+
+// ピザのお皿に入っている、焼き上がったピザ（鉄板は含まない）
+export type PlateDish = { pizza: PizzaBuild; state: BakeState };
+
+// 台の上に置いたピザのお皿。spot = 置き場所、dish = 入っているピザ（空なら null）
+export type PizzaPlate = { id: number; spot: TableSpot; dish: PlateDish | null };
+
+// 台の上に積んだ、鉄板の山（使い終わった鉄板は、使う前の鉄板と同じ物）。spot = 置き場所、count = 枚数
+export type PanPile = { spot: TableSpot; count: number };
+
+// 手に持った物（ピザのお皿・空の鉄板・その山）を、台の上に置こうとしたときの様子（置く前の見せ方に使う）。
+// x, z は台の中心からの相対位置、r は丸い物の半径。valid = false のとき、reason は置けない理由
+// （gap: ほかの物に近すぎる、surface: この台には置けない、pile: 鉄板の山はもうある。そこに積む）
+export type PropPreview = { what: 'plate' | 'pan' | 'panPile'; surface: SurfaceId; x: number; z: number; r: number; valid: boolean; reason?: 'gap' | 'surface' | 'pile' };
+
+// ピザの具の取り出し元（作業台の容器）。sauce = 正方形の容器のピザソース、cheese = 長方形の容器のピザチーズ（どちらもレードルで1杯）、mozzarella = プラスチックの容器のモッツァレラチーズ（1個）
+export type PizzaTopping = 'sauce' | 'cheese' | 'mozzarella';
 
 export type Oven = {
   decks: Record<OvenDeck, OvenDish[]>;
@@ -220,8 +241,12 @@ export type Item =
   | { kind: 'bottle'; id: BottleId } // ドレッシング・パプリカパウダー・パセリ。右クリックで皿にかける・振る（なくならない）
   | { kind: 'pot'; pot: Pot }
   | { kind: 'ipad' } // 練習キッチンの壁にかかっている iPad。右クリックで画面を開く（ゲーム開始・レシピ）
-  | { kind: 'bakeDish'; style: BakeStyle; cooked: number; state: BakeState; geta?: boolean } // ジェットオーブンで焼く皿（ドリア系 = 長方形、ピザ系 = 丸）。cooked = これまでに焼いた秒数の合計、state = その焼け具合（oven.ts の bakeItem で作る）。geta = 下駄（木の台）に乗せてある（ドリア系の焼き上がりだけ。提供できる形）
-  | { kind: 'geta' }; // ドリアの下にひく下駄（木の台）1枚。焼き上がったドリアに左クリックで、ドリアを乗せられる
+  | { kind: 'bakeDish'; style: BakeStyle; cooked: number; state: BakeState; geta?: boolean; pizza?: PizzaBuild } // ジェットオーブンで焼く皿（ドリア系 = 長方形、ピザ系 = 丸）。cooked = これまでに焼いた秒数の合計、state = その焼け具合（oven.ts の bakeItem で作る）。geta = 下駄（木の台）に乗せてある（ドリア系の焼き上がりだけ。提供できる形）
+  | { kind: 'geta' } // ドリアの下にひく下駄（木の台）1枚。焼き上がったドリアに左クリックで、ドリアを乗せられる
+  | { kind: 'pizzaDough' } // ピザ生地1枚。ピザの鉄板にセットする
+  | { kind: 'pizzaTopping'; id: PizzaTopping } // ピザソース・ピザチーズ（レードル1杯）、モッツァレラチーズ（1個）。ピザ組み立て台の鉄板にのせる
+  | { kind: 'pizzaPlate'; dish?: PlateDish } // ピザのお皿1枚（焼き上がったピザが入っていることもある）。台に置いて、焼き上がったピザを入れる。ピザの入ったお皿は、提供台に出せる
+  | { kind: 'panPile'; count: number }; // 右クリックで持ち上げた、積んだ鉄板の山。台に置き直す・作業台の鉄板のスタックに戻す
 
 // 視点の先にあるクリック可能な設備
 export type Target =
@@ -243,6 +268,13 @@ export type Target =
   | { kind: 'ihBurner'; index: number }
   | { kind: 'hotWaterSlot'; index: number } // 熱湯に浸けるパックの置き場所
   | { kind: 'ovenStock'; style: BakeStyle } // 具材台のテスト用の焼き皿の山（クリックで手に取る）
+  | { kind: 'pizzaDoughStack' } // 作業台のピザ生地のスタック（左クリックで1枚取る）
+  | { kind: 'pizzaPanStack' } // 作業台のピザの鉄板のスタック（左クリックで1枚取る。生地を持っていれば、生地をのせた鉄板になる）
+  | { kind: 'pizzaSource'; id: PizzaTopping } // ピザソース・ピザチーズ・モッツァレラチーズの容器（左クリックで取る）
+  | { kind: 'pizzaPlateStack' } // 提供台の左のピザのお皿の山（左クリックで1枚取る）
+  | { kind: 'pizzaPlate'; id: number } // 台の上に置いたピザのお皿（左クリックで、焼き上がったピザを入れる・持ち上げる）
+  | { kind: 'panPile' } // 台の上の、使い終わった鉄板の山（左クリックで鉄板を積む、右クリックで山ごと持ち上げる）
+  | { kind: 'pizzaSlot'; index: number } // ピザ組み立て台（鉄板を置いて、生地・ソース・チーズ・モッツァレラをのせる）
   | { kind: 'getaStack' } // 提供台の左の下駄の山（左クリックで1枚取る、右クリックで持ち上げて置き直す）
   | { kind: 'ovenInlet'; deck: OvenDeck; x: number; s: number } // ジェットオーブンの入口のベルト（段）。x, s は視点が合っている点（x: ベルトの中心からの横のずれ、s: 入口の端からの距離）。皿を置くと流れていく
   | { kind: 'ovenOutlet'; deck: OvenDeck; lane: number } // ジェットオーブンの出口。出てきた皿を取る
@@ -283,6 +315,10 @@ export type GameState = {
   fridgeOpen: [boolean, boolean, boolean]; // 冷蔵庫の扉（添字 = FridgeUnit。最初はどれも閉まっている）
   fridgeItems: Record<FridgeItemId, FridgeSpot>; // 冷蔵庫の中の物の置き場所（トレー・ケースは、取ったあとは使わない）
   moving: FridgeItemId | null; // 右クリックで持ち上げている最中の物（手とは別。棚に右クリックで置く）
+  pizzaPanStock: number; // 作業台の鉄板のスタックの残り枚数（最初は config の pizzaPanCount。0 になったら、使い終わった鉄板を戻せる）
+  panPile: PanPile | null; // 台の上に積んだ、使い終わった鉄板の山
+  pizzaPlates: PizzaPlate[]; // 台の上に置いたピザのお皿
+  pizzaSlots: (Extract<Item, { kind: 'bakeDish' }> | null)[]; // ピザ組み立て台（作業台）に置いた鉄板。null = 空き
   getaSpot: TableSpot; // 下駄の山の置き場所（提供台の左）
   getaMoving: boolean; // 下駄の山を右クリックで持ち上げている最中（手とは別。台に右クリックで置く）
   bottles: Record<BottleId, BottleSpot>; // 台の上のボトル

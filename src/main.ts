@@ -142,6 +142,7 @@ function hintFor(target: Target | null): string {
     // ガーリック・唐辛子の容器：ボトルと同じように、台の上のどこにでも置ける
     const p = game.previewFreeTray(target);
     if (p?.valid) return '左クリック：ここに置く';
+    if (p?.reason === 'surface') return 'この台には置けない（作業台はピザ用）';
     if (p) return 'ここには置けない（ほかの容器・ボトルに近すぎる）';
     return '台の上の好きな場所に視点を合わせて、左クリックで置く';
   }
@@ -157,6 +158,8 @@ function hintFor(target: Target | null): string {
   if (placedTray) return `左クリック：${trayContentName(placedTray)}を取る　右クリック：持ち上げて、置き直す`;
   const geta = game.getaHint(target);
   if (geta) return geta;
+  const pizza = game.pizzaHint(target);
+  if (pizza) return pizza;
   const oven = game.ovenHint(target);
   if (oven) return oven;
   if (hand?.kind === 'bottle') {
@@ -262,7 +265,7 @@ function frame(): void {
   player.applyTo(camera);
   if (game.state.phase === 'playing' && !game.state.ipadOpen) interactor.update(game);
   else interactor.clear();
-  kitchen.sync(game.state, dt, game.previewPlacement(interactor.current), game.previewFridge(interactor.current), interactor.current, game.previewOven(interactor.current), game.previewGeta(interactor.current));
+  kitchen.sync(game.state, dt, game.previewPlacement(interactor.current), game.previewFridge(interactor.current), interactor.current, game.previewOven(interactor.current), game.previewGeta(interactor.current), game.previewProp(interactor.current));
   const tutorial = tutorialGuide();
   hud.update(game.state, best, hintFor(interactor.current), game.tutorialView());
   hud.setGuide(game.state.phase === 'playing' && !game.state.ipadOpen ? offscreenGuide(kitchen.trayGuide(game.state) ?? tutorial) : null);

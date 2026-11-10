@@ -22,16 +22,17 @@ import {
 import { BAKE_STATE_NAME, OVEN_DECK_NAME, bakeItem, bakeState, bakeTime, canTakeDish, createOven, peekDish, placeDish, resolvePlacement, stateOnExit, takeDish, timeToEmerge, updateOven } from './oven';
 import { canStackPack, createPack, findWarmPack, soakPack, stockItem } from './pack';
 import { MENU, findMatchingTicket, findSauceRecipe, getMenu } from './recipe';
+import { PIZZA_TOPPING_NAME, addTopping, canAddTopping, emptyPan, isBuffalo, pizzaName, pizzaOf, whyNotTopping } from './pizza';
 import { serveScore } from './score';
 import { createTicket, nextTicketInterval, pickMenu } from './tickets';
 import { tutorialSteps, type GuideAt, type TutorialStep, type TutorialView } from './tutorial';
 import { BOTTLE_FRIDGE_ITEM, BOTTLE_IDS, BOTTLE_PLATE, BOTTLE_SURFACES, BOTTLE_VERB, bottleOfFridgeItem, isFridgeBottle } from './bottle';
 import { FRIDGE_HOME, FRIDGE_ITEM_IDS, FRIDGE_ITEM_NAME, clampOnShelf, fitsOnShelf, fridgeItemOf, returnToFridge } from './fridge';
-import { BAKE_DISHES, BOTTLE_HOME, FREE_TRAY_HOME, GETA, GETA_HOME, GETA_RANGE, SURFACES } from './layout';
+import { BAKE_DISHES, BOTTLE_HOME, FREE_TRAY_HOME, GETA, GETA_HOME, GETA_RANGE, PIZZA_PLATE_R, PIZZA_PLATE_STACK, SURFACES, overlapsPrepFixture, propRange } from './layout';
 import { OPEN_WORLD, launchPot, stepThrownPot, type ThrowAim } from './throw';
 import type { World } from './world';
 import { FREE_TRAY_IDS, TRAY_CONTENT, TRAY_FRIDGE_ITEM, TRAY_IDS, TRAY_NAME, TRAY_ZONE, isFreeTray, trayAt, trayOfFridgeItem } from './tray';
-import type { BottleId, BottlePreview, GetaPreview, OvenPreview, BottleSpot, FreeTrayId, FridgeItemId, FridgePreview, FridgeSpot, FridgeUnit, GameState, IngredientId, Item, Mode, Phase, Pot, TableSpot, Target, Toast, TrayId } from './types';
+import type { BottleId, BottlePreview, GetaPreview, OvenPreview, PropPreview, BottleSpot, FreeTrayId, FridgeItemId, FridgePreview, FridgeSpot, FridgeUnit, GameState, IngredientId, Item, Mode, Phase, Pot, TableSpot, Target, Toast, TrayId } from './types';
 
 // クリックしたら起きること。null = 今の手持ちではこの設備に何もできない
 type Action = () => void;
@@ -52,6 +53,13 @@ const TOAST_SECONDS = 2.5;
 type BakedDoria = Extract<Item, { kind: 'bakeDish' }> & { style: 'doria'; state: 'baked' };
 const isBakedDoria = (item: Item): item is BakedDoria => item.kind === 'bakeDish' && item.style === 'doria' && item.state === 'baked';
 
+// 空の鉄板（スタックから取った物も、ピザを皿に移したあとの物も、同じ）
+const newPan = (cfg: GameConfig) => bakeItem('pizza', 0, cfg, emptyPan());
+
+// 生地がのっていない、空の鉄板か（ピザ系の焼き皿のうち、pizza を持ち、焼く前のもの）
+const isEmptyPan = (item: Item): item is Extract<Item, { kind: 'bakeDish' }> =>
+  item.kind === 'bakeDish' && item.style === 'pizza' && item.state === 'raw' && item.pizza !== undefined && !item.pizza.dough;
+
 const copySpot = (spot: BottleSpot): BottleSpot => (spot ? { ...spot } : null);
 
 // ボトルをサラダ台の上に置くときの決まり
@@ -68,6 +76,7 @@ export class Game {
   // 投げた鍋が当たる床・台・壁。厨房を作ったら main.ts が渡す（なければ、床だけの広い空間）
   world: World = OPEN_WORLD;
   private nextThrownId = 1;
+  private nextPlateId = 1;
 
   constructor(
     readonly cfg: GameConfig = DEFAULT_CONFIG,
@@ -96,6 +105,10 @@ export class Game {
       fridgeOpen: [false, false, false],
       fridgeItems: Object.fromEntries(FRIDGE_ITEM_IDS.map((id) => [id, { ...(fridge ?? FRIDGE_HOME)[id] }])) as Record<FridgeItemId, FridgeSpot>,
       moving: null,
+      pizzaPanStock: this.cfg.pizzaPanCount,
+      panPile: null,
+      pizzaPlates: [],
+      pizzaSlots: Array.from({ length: this.cfg.pizzaSlotCount }, () => null),
       getaSpot: { ...(layout?.getaSpot ?? GETA_HOME) },
       getaMoving: false,
       // 引き継ぎがなければ、冷蔵庫にしまってあるボトル（null）以外は、もとの場所の台の上
@@ -335,6 +348,13 @@ export class Game {
       this.say(`${TRAY_NAME[placed]}を持ち上げた（${where}）`, 'info');
       return;
     }
+    // 手が空で、使い終わった鉄板の山に視点が合っていれば、山ごと持ち上げる（台に置き直す・ストックが0のとき作業台の鉄板のスタックに戻す）
+    if (!s.hand && target?.kind === 'panPile' && s.panPile) {
+      s.hand = { kind: 'panPile', count: s.panPile.count };
+      s.panPile = null;
+      this.say(`使い終わった鉄板を${s.hand.count}枚持ち上げた（台に置く／鉄板のスタックが0枚なら、戻して再利用できる）`, 'info');
+      return;
+    }
     // 手が空で、下駄の山に視点が合っていれば、山ごと持ち上げる（台に右クリックで置き直せる）
     if (!s.hand && target?.kind === 'getaStack') {
       s.getaMoving = true;
@@ -446,6 +466,51 @@ export class Game {
     return Math.abs(getaSpot.x - x) < GETA.d / 2 + pad && Math.abs(getaSpot.z - z) < GETA.w / 2 + pad;
   }
 
+  // ピザのお皿・使い終わった鉄板の山・ピザのお皿の山（丸い物。半径 PIZZA_PLATE_R）が、点（surface, x, z）から r だけ離れた範囲にかかっているか
+  private propNear(surface: string, x: number, z: number, r: number): boolean {
+    const s = this.state;
+    const spots = [...s.pizzaPlates.map((p) => p.spot), ...(s.panPile ? [s.panPile.spot] : []), PIZZA_PLATE_STACK];
+    return spots.some((c) => c.surface === surface && Math.hypot(c.x - x, c.z - z) < PIZZA_PLATE_R + r);
+  }
+
+  // 同じく、中心が (x, z)、半分の大きさが (hx, hz) の長方形（下駄の山）にかかっているか
+  private propNearRect(surface: string, x: number, z: number, hx: number, hz: number): boolean {
+    const s = this.state;
+    const spots = [...s.pizzaPlates.map((p) => p.spot), ...(s.panPile ? [s.panPile.spot] : []), PIZZA_PLATE_STACK];
+    return spots.some((c) => c.surface === surface && Math.abs(c.x - x) < PIZZA_PLATE_R + hx && Math.abs(c.z - z) < PIZZA_PLATE_R + hz);
+  }
+
+  // 手に持ったピザのお皿・空の鉄板（またはその山）を、視点が合っている台の天板に置くとしたら、どこにどう置かれるか。
+  // 置けるのは、左の台の、提供台の左のあき地と、作業台（具材台の天板。layout.ts の propRange）。位置はその範囲に収める。
+  // ほかの物（作業台にもとから置いてある物も）に近すぎる場所では valid = false。鉄板の山は1つだけ（もうあるときは、その山に積む）
+  previewProp(target: Target | null): PropPreview | null {
+    const s = this.state;
+    const hand = s.hand;
+    if (s.phase !== 'playing' || target?.kind !== 'tableTop') return null;
+    const what = hand?.kind === 'pizzaPlate' ? 'plate' : hand && isEmptyPan(hand) && !hand.pizza?.dough ? 'pan' : hand?.kind === 'panPile' ? 'panPile' : null;
+    if (!what) return null;
+    const r = PIZZA_PLATE_R;
+    const { surface } = target;
+    const range = propRange(surface);
+    if (!range) return { what, surface, x: target.x, z: target.z, r, valid: false, reason: 'surface' };
+    const x = Math.min(range.maxX, Math.max(range.minX, target.x));
+    const z = Math.min(range.maxZ, Math.max(range.minZ, target.z));
+    if (what === 'pan' && s.panPile) return { what, surface, x, z, r, valid: false, reason: 'pile' };
+    const blocked =
+      BOTTLE_IDS.some((id) => {
+        const spot = s.bottles[id];
+        return spot?.surface === surface && Math.hypot(spot.x - x, spot.z - z) < r + 0.07;
+      }) ||
+      FREE_TRAY_IDS.some((id) => {
+        const spot = s.freeTraySpot[id];
+        return s.trays[id] === 'table' && spot.surface === surface && Math.hypot(spot.x - x, spot.z - z) < r + 0.17;
+      }) ||
+      this.getaNear(surface, x, z, r) ||
+      this.propNear(surface, x, z, r) ||
+      (surface === 'prep' && overlapsPrepFixture(x, z, r));
+    return { what, surface, x, z, r, valid: !blocked, ...(blocked ? { reason: 'gap' as const } : {}) };
+  }
+
   // 持ち上げた下駄の山を、視点が合っている台の天板に置くとしたら、どこにどう置かれるか。
   // 位置は置ける範囲（layout.ts の GETA_RANGE）に収める。左の台以外や、ボトル・容器に近すぎる場所では valid = false
   previewGeta(target: Target | null): GetaPreview | null {
@@ -462,6 +527,7 @@ export class Game {
         const spot = s.bottles[id];
         return spot?.surface === surface && Math.abs(spot.x - x) < hx + 0.06 && Math.abs(spot.z - z) < hz + 0.06;
       }) ||
+      this.propNearRect(surface, x, z, hx, hz) ||
       FREE_TRAY_IDS.some((id) => {
         const spot = s.freeTraySpot[id];
         return s.trays[id] === 'table' && spot.surface === surface && Math.abs(spot.x - x) < hx + 0.19 && Math.abs(spot.z - z) < hz + 0.19;
@@ -487,6 +553,79 @@ export class Game {
     this.say('置き直しをやめた', 'info');
   }
 
+  // ピザの材料・鉄板・組み立て台に視点が合っているときの案内（HUD 用）。関係なければ null
+  pizzaHint(target: Target | null): string | null {
+    const { hand, pizzaSlots } = this.state;
+    switch (target?.kind) {
+      case 'pizzaDoughStack':
+        if (!hand) return '左クリック：ピザ生地を取る';
+        if (hand.kind === 'pizzaDough') return '左クリック：ピザ生地を戻す（鉄板のスタックに生地をのせてもよい）';
+        if (isEmptyPan(hand)) return '左クリック：鉄板にピザ生地をセットする';
+        return null;
+      case 'pizzaPanStack': {
+        const left = this.state.pizzaPanStock;
+        if (!hand) return left > 0 ? `左クリック：ピザの鉄板を取る（残り${left}枚）` : '鉄板がない（積んだ鉄板の山を右クリックで持ち上げて、ここに戻す）';
+        if (hand.kind === 'pizzaDough') return left > 0 ? `左クリック：鉄板の上にピザ生地をセットする（鉄板 残り${left}枚）` : '鉄板がない（積んだ鉄板を戻す）';
+        if (isEmptyPan(hand) && !hand.pizza?.dough) return left < this.cfg.pizzaPanCount ? '左クリック：鉄板を戻す' : null;
+        if (hand.kind === 'panPile') return left < this.cfg.pizzaPanCount ? `左クリック：鉄板を戻す（再利用。残り${left}枚 → 最大${this.cfg.pizzaPanCount}枚）` : `スタックはいっぱい（${this.cfg.pizzaPanCount}枚）`;
+        return null;
+      }
+      case 'pizzaPlateStack':
+        if (!hand) return '左クリック：ピザのお皿を1枚取る（台のどこかに置く）';
+        if (hand.kind === 'pizzaPlate' && !hand.dish) return '左クリック：お皿を戻す';
+        return null;
+      case 'pizzaPlate': {
+        const plate = this.state.pizzaPlates.find((p) => p.id === target.id);
+        if (!plate) return null;
+        if (!hand) return plate.dish ? `ピザのお皿（${pizzaName(plate.dish.pizza)}）　左クリック：持ち上げる（提供台へ）` : 'ピザのお皿（空）　左クリック：持ち上げる';
+        if (hand.kind === 'bakeDish' && hand.style === 'pizza') {
+          if (plate.dish) return 'もうピザが入っている';
+          if (hand.state === 'baked') return '左クリック：焼き上がったピザをお皿に入れる（鉄板は手に残る）';
+          return hand.state === 'burnt' ? '焦げているので、お皿には入れられない（右クリックで捨てる）' : '焼き上がったピザだけ、お皿に入れられる';
+        }
+        return null;
+      }
+      case 'panPile':
+        if (hand && isEmptyPan(hand) && !hand.pizza?.dough) return '左クリック：鉄板を積む';
+        if (!hand) return `積んだ鉄板（${this.state.panPile?.count ?? 0}枚）　右クリック：山ごと持ち上げる`;
+        return null;
+      case 'tableTop': {
+        const p = this.previewProp(target);
+        if (!p) return null;
+        const name = p.what === 'plate' ? 'お皿' : p.what === 'pan' ? '鉄板' : '鉄板の山';
+        if (p.valid) return p.what === 'pan' ? '左クリック：ここに置く（鉄板の山になる）' : `左クリック：${name}をここに置く`;
+        if (p.reason === 'surface') return 'ここには置けない（提供台の左の台か、作業台の上にだけ置ける）';
+        if (p.reason === 'pile') return '鉄板の山がもうある（山に視点を合わせて積む）';
+        return 'ここには置けない（ほかの物に近すぎる）';
+      }
+      case 'pizzaSource': {
+        const name = PIZZA_TOPPING_NAME[target.id];
+        const unit = target.id === 'mozzarella' ? '1個' : '1杯';
+        if (!hand) return `左クリック：${name}を${unit}取る`;
+        if (hand.kind === 'pizzaTopping' && hand.id === target.id) return `左クリック：${name}を戻す`;
+        return null;
+      }
+      case 'pizzaSlot': {
+        const slot = pizzaSlots[target.index];
+        if (slot === undefined) return null;
+        if (!slot) {
+          if (hand?.kind === 'bakeDish' && hand.style === 'pizza' && hand.state === 'raw') return '左クリック：鉄板をここに置く';
+          return hand ? 'ピザ組み立て台（空き。焼く前の鉄板を置く）' : 'ピザ組み立て台（空き）。鉄板を取って、ここに置く';
+        }
+        const p = pizzaOf(slot);
+        if (hand?.kind === 'pizzaDough') return p.dough ? 'もう生地がのっている' : '左クリック：ピザ生地をのせる';
+        if (hand?.kind === 'pizzaTopping') {
+          const why = whyNotTopping(p, hand.id);
+          if (why) return `のせられない（${why}）`;
+          return hand.id === 'mozzarella' ? '左クリック：モッツァレラを3つ分に分けて、周囲にのせる' : hand.id === 'sauce' ? '左クリック：ピザソースを塗る' : '左クリック：ピザチーズを広げる';
+        }
+        if (!hand) return `${pizzaName(p)}　左クリック：持ち上げる`;
+        return null;
+      }
+    }
+    return null;
+  }
+
   // 下駄・焼き上がったドリアに関する案内（HUD 用）。関係なければ null
   getaHint(target: Target | null): string | null {
     const { hand, getaMoving } = this.state;
@@ -503,9 +642,15 @@ export class Game {
       if (isBakedDoria(hand) && !hand.geta) return '左クリック：ドリアを下駄に乗せる';
       return null;
     }
+    if (target?.kind === 'servePass' && hand?.kind === 'pizzaPlate') {
+      if (!hand.dish) return 'ピザが入っていないお皿は出せない';
+      if (hand.dish.state === 'baked' && isBuffalo(hand.dish.pizza)) return '左クリック：バッファローピザを提供台に出す（ピザのメニューは未実装のため採点なし）';
+      return 'バッファローピザの材料がそろっていない（モッツァレラ6つまでのせる）';
+    }
     if (target?.kind === 'servePass' && hand?.kind === 'bakeDish') {
       if (isBakedDoria(hand) && hand.geta) return '左クリック：ドリアを提供台に出す（ドリアのメニューは未実装のため採点なし）';
       if (isBakedDoria(hand)) return '下駄に乗せてから出す（提供台の左の下駄の山をクリック）';
+      if (hand.style === 'pizza' && hand.state === 'baked') return 'お皿に入れてから出す（提供台の左のピザのお皿を台に置いて、ピザを入れる）';
       if (hand.state === 'burnt') return '焦げていて提供できない（右クリックで捨てる）';
       if (hand.state === 'half') return '生焼けで提供できない（もう一度、入口に流して焼く）';
       if (hand.state === 'raw') return '焼き上がっていない皿は出せない';
@@ -573,7 +718,8 @@ export class Game {
         const spot = s.freeTraySpot[id];
         return s.trays[id] === 'table' && spot.surface === surface && Math.hypot(spot.x - x, spot.z - z) < FREE_TRAY_BOTTLE_GAP;
       }) ||
-      this.getaNear(surface, x, z, 0.06); // 下駄の山の上には置かない
+      this.getaNear(surface, x, z, 0.06) || // 下駄の山の上には置かない
+      this.propNear(surface, x, z, 0.06); // ピザのお皿・鉄板の山の上にも置かない
     return tooClose
       ? { id: hand.id, surface, x, z, valid: false, reason: 'gap' }
       : { id: hand.id, surface, x, z, valid: true };
@@ -592,6 +738,7 @@ export class Game {
     const halfD = size.depth / 2 - FREE_TRAY_EDGE;
     const x = Math.min(halfW, Math.max(-halfW, target.x));
     const z = Math.min(halfD, Math.max(-halfD, target.z));
+    if (surface === 'prep') return { id, surface, x, z, valid: false, reason: 'surface' }; // 作業台には、ピザの置き物がある。容器はほかの台に置く
     const tooClose =
       FREE_TRAY_IDS.some((other) => {
         const spot = s.freeTraySpot[other];
@@ -601,7 +748,8 @@ export class Game {
         const spot = s.bottles[b];
         return spot?.surface === surface && Math.hypot(spot.x - x, spot.z - z) < FREE_TRAY_BOTTLE_GAP;
       }) ||
-      this.getaNear(surface, x, z, 0.19); // 下駄の山の上には置かない（容器の半径ぶん離す）
+      this.getaNear(surface, x, z, 0.19) || // 下駄の山の上には置かない（容器の半径ぶん離す）
+      this.propNear(surface, x, z, 0.17); // ピザのお皿・鉄板の山の上にも置かない
     return tooClose ? { id, surface, x, z, valid: false, reason: 'gap' } : { id, surface, x, z, valid: true };
   }
 
@@ -616,6 +764,7 @@ export class Game {
     const s = this.state;
     const hand = s.hand;
     if (s.phase !== 'playing' || hand?.kind !== 'bakeDish' || !(hand.state === 'raw' || hand.state === 'half') || target?.kind !== 'ovenInlet') return null;
+    if (hand.style === 'pizza' && !pizzaOf(hand).dough) return null; // 生地のない鉄板は焼けない
     const p = resolvePlacement(s.oven, target.deck, hand.style, target);
     return { deck: target.deck, style: hand.style, x: p.x, s: p.s, valid: p.valid };
   }
@@ -629,6 +778,7 @@ export class Game {
       if (hand?.kind !== 'bakeDish') return `ジェットオーブンの入口：${name}（ジェットに入る手前に置いた皿が、この秒数で出てくる）`;
       if (hand.state === 'baked') return 'もう焼けている（入口には流せない）';
       if (hand.state === 'burnt') return '焦げている（入口には流せない。右クリックで捨てる）';
+      if (hand.style === 'pizza' && !pizzaOf(hand).dough) return 'ピザ生地をのせてから流す（生地のない鉄板は焼けない）';
       const p = this.previewOven(target);
       if (!p?.valid) return 'ここには置けない（ほかの皿に重なる）';
       const result = BAKE_STATE_NAME[bakeState(hand.style, hand.cooked + bakeTime(target.deck, this.cfg), this.cfg)]; // この1周で出てきたときの焼け具合
@@ -670,6 +820,22 @@ export class Game {
     if (s.hand.kind === 'pot') {
       // 鍋は総数が決まっているので、捨てると循環から消えてしまう
       this.say('鍋は捨てられない', 'info');
+      return;
+    }
+    if (s.hand.kind === 'panPile') {
+      this.say('鉄板の山は捨てられない（台の上に置く）', 'info');
+      return;
+    }
+    // 鉄板は枚数が決まっているので、ピザを捨てても鉄板は残る。焼く前の鉄板（まだ使っていない）はスタックに戻り、焼いたあとの鉄板は手に残る
+    if (s.hand.kind === 'bakeDish' && s.hand.style === 'pizza') {
+      if (s.hand.state === 'raw') {
+        s.pizzaPanStock = Math.min(this.cfg.pizzaPanCount, s.pizzaPanStock + 1);
+        s.hand = null;
+        this.say('ピザを捨てた（鉄板はスタックに戻した）', 'info');
+      } else {
+        s.hand = newPan(this.cfg);
+        this.say('ピザを捨てた（鉄板は手に残る。台に積むか、そのまま使う）', 'info');
+      }
       return;
     }
     s.hand = null;
@@ -762,6 +928,18 @@ export class Game {
       }
 
       case 'tableTop': {
+        // ピザのお皿・使い終わった鉄板（の山）を、台の上に置く
+        const prop = this.previewProp(target);
+        if (prop) {
+          if (!prop.valid || !hand) return null;
+          return () => {
+            const spot: TableSpot = { surface: prop.surface, x: prop.x, z: prop.z };
+            if (hand.kind === 'pizzaPlate') s.pizzaPlates.push({ id: this.nextPlateId++, spot, dish: hand.dish ?? null });
+            else if (hand.kind === 'bakeDish') s.panPile = { spot, count: 1 };
+            else if (hand.kind === 'panPile') s.panPile = { spot, count: hand.count };
+            s.hand = null;
+          };
+        }
         const p = this.previewPlacement(target);
         if (!p?.valid) return null;
         return () => {
@@ -856,6 +1034,13 @@ export class Game {
           return () => {
             s.hand = null;
             this.say('ドリアを提供台に出した（ドリアのメニューは未実装のため採点なし）', 'info');
+          };
+        }
+        // 焼き上がったバッファローピザが入ったお皿（ピザのメニューもまだないので、出すだけ。採点なし）
+        if (hand?.kind === 'pizzaPlate' && hand.dish && hand.dish.state === 'baked' && isBuffalo(hand.dish.pizza)) {
+          return () => {
+            s.hand = null;
+            this.say('バッファローピザを提供台に出した（ピザのメニューは未実装のため採点なし）', 'info');
           };
         }
         if (hand?.kind !== 'plate') return null;
@@ -959,6 +1144,119 @@ export class Game {
         if (hand) return null;
         return () => (s.hand = bakeItem(target.style, 0, this.cfg));
 
+      case 'pizzaDoughStack':
+        // ピザ生地のスタック。手が空なら1枚取る。鉄板を持っていれば、生地をセットする。生地を持っていれば戻す
+        if (!hand) return () => (s.hand = { kind: 'pizzaDough' });
+        if (hand.kind === 'pizzaDough') return () => (s.hand = null);
+        if (isEmptyPan(hand)) return () => (s.hand = { ...hand, pizza: { ...emptyPan(), dough: true } });
+        return null;
+
+      case 'pizzaPanStack':
+        // ピザの鉄板のスタック（枚数は決まっていて、取ると減る）。手が空なら1枚取る。生地を持っていれば、鉄板の上に生地をセットする。空の鉄板（使い終わった鉄板も同じ）を持っていれば戻す。
+        // 積んだ鉄板の山を持っていれば、スタックに空きがあるぶんだけ戻して、再利用できる（入りきらない分は手に残る）
+        if (!hand) {
+          if (s.pizzaPanStock <= 0) return null;
+          return () => {
+            s.pizzaPanStock--;
+            s.hand = bakeItem('pizza', 0, this.cfg, emptyPan());
+          };
+        }
+        if (hand.kind === 'pizzaDough') {
+          if (s.pizzaPanStock <= 0) return null;
+          return () => {
+            s.pizzaPanStock--;
+            s.hand = bakeItem('pizza', 0, this.cfg, { ...emptyPan(), dough: true });
+          };
+        }
+        if (isEmptyPan(hand) && !hand.pizza?.dough && s.pizzaPanStock < this.cfg.pizzaPanCount) {
+          return () => {
+            s.pizzaPanStock++;
+            s.hand = null;
+          };
+        }
+        if (hand.kind === 'panPile' && s.pizzaPanStock < this.cfg.pizzaPanCount) {
+          return () => {
+            const back = Math.min(hand.count, this.cfg.pizzaPanCount - s.pizzaPanStock);
+            s.pizzaPanStock += back;
+            s.hand = hand.count > back ? { kind: 'panPile', count: hand.count - back } : null;
+            this.say(`鉄板を${back}枚、スタックに戻した（また使える）`, 'info');
+          };
+        }
+        return null;
+
+      case 'pizzaPlateStack':
+        // 提供台の左のピザのお皿の山（なくならない）。手が空なら1枚取る。空のお皿を持っていれば戻す
+        if (!hand) return () => (s.hand = { kind: 'pizzaPlate' });
+        if (hand.kind === 'pizzaPlate' && !hand.dish) return () => (s.hand = null);
+        return null;
+
+      case 'pizzaPlate': {
+        // 台の上のピザのお皿。焼き上がったピザを持っていれば、お皿に入れる（鉄板だけが手に残る）。手が空なら、お皿を持ち上げる（ピザが入っていれば、そのまま提供台へ）
+        const plate = s.pizzaPlates.find((p) => p.id === target.id);
+        if (!plate) return null;
+        if (!hand) {
+          return () => {
+            s.hand = plate.dish ? { kind: 'pizzaPlate', dish: plate.dish } : { kind: 'pizzaPlate' };
+            s.pizzaPlates = s.pizzaPlates.filter((p) => p !== plate);
+          };
+        }
+        if (hand.kind === 'bakeDish' && hand.style === 'pizza' && hand.state === 'baked' && !plate.dish) {
+          return () => {
+            plate.dish = { pizza: pizzaOf(hand), state: 'baked' };
+            s.hand = newPan(this.cfg);
+            this.say('ピザをお皿に入れた（鉄板は、台に積むか、そのままピザに使える）', 'info');
+          };
+        }
+        return null;
+      }
+
+      case 'panPile':
+        // 台の上の、鉄板の山。空の鉄板を持っていれば、積む（右クリックで山ごと持ち上げる）
+        if (!s.panPile || !hand || !isEmptyPan(hand) || hand.pizza?.dough || s.panPile.count >= this.cfg.pizzaPanCount) return null;
+        return () => {
+          if (s.panPile) s.panPile.count++;
+          s.hand = null;
+        };
+
+      case 'pizzaSource':
+        // ピザソース・ピザチーズ（レードル1杯）、モッツァレラチーズ（1個）の容器。手が空なら取る。同じ物を持っていれば戻す
+        if (!hand) return () => (s.hand = { kind: 'pizzaTopping', id: target.id });
+        if (hand.kind === 'pizzaTopping' && hand.id === target.id) return () => (s.hand = null);
+        return null;
+
+      case 'pizzaSlot': {
+        // ピザ組み立て台。焼く前の鉄板（ピザ系）を置く／持ち上げる。置いた鉄板に、生地 → ソース → チーズ → モッツァレラ の順にのせる
+        const slot = s.pizzaSlots[target.index];
+        if (slot === undefined) return null;
+        if (!hand && slot) {
+          return () => {
+            s.hand = slot;
+            s.pizzaSlots[target.index] = null;
+          };
+        }
+        if (hand?.kind === 'bakeDish' && hand.style === 'pizza' && hand.state === 'raw' && !slot) {
+          return () => {
+            s.pizzaSlots[target.index] = hand;
+            s.hand = null;
+          };
+        }
+        if (!slot) return null;
+        if (hand?.kind === 'pizzaDough' && !pizzaOf(slot).dough) {
+          return () => {
+            s.pizzaSlots[target.index] = { ...slot, pizza: { ...pizzaOf(slot), dough: true } };
+            s.hand = null;
+          };
+        }
+        if (hand?.kind === 'pizzaTopping' && canAddTopping(pizzaOf(slot), hand.id)) {
+          const id = hand.id;
+          return () => {
+            s.pizzaSlots[target.index] = { ...slot, pizza: addTopping(pizzaOf(slot), id) };
+            s.hand = null;
+          };
+        }
+        return null;
+      }
+
       case 'getaStack':
         // 下駄の山（持ち上げている間は取れない）。手が空なら1枚取る。下駄を持っていれば戻す。焼き上がったドリアを持っていれば、下駄に乗せる
         if (s.getaMoving) return null;
@@ -972,7 +1270,7 @@ export class Game {
         const p = this.previewOven(target);
         if (hand?.kind !== 'bakeDish' || !p?.valid) return null;
         return () => {
-          placeDish(s.oven, target.deck, hand.style, p, hand.cooked);
+          placeDish(s.oven, target.deck, hand.style, p, hand.cooked, hand.pizza);
           s.hand = null;
           this.say(`${OVEN_DECK_NAME[target.deck]}に流した（ジェットに入る手前から ${bakeTime(target.deck, this.cfg)}秒）`, 'info');
         };
@@ -993,7 +1291,7 @@ export class Game {
         return () => {
           const dish = takeDish(s.oven, target.deck, target.lane);
           if (!dish) return;
-          s.hand = bakeItem(dish.style, (dish.cooked ?? 0) + bakeTime(target.deck, this.cfg), this.cfg);
+          s.hand = bakeItem(dish.style, (dish.cooked ?? 0) + bakeTime(target.deck, this.cfg), this.cfg, dish.pizza);
           if (s.hand.state === 'burnt') this.say('焦げた！ 提供できない（右クリックで捨てる）', 'bad');
           else if (s.hand.state === 'half') this.say('生焼け（もう一度、入口に流して焼く）', 'info');
         };
@@ -1087,8 +1385,17 @@ export function describeItem(item: Item | null): string {
       return 'iPad';
     case 'geta':
       return '下駄';
+    case 'pizzaDough':
+      return 'ピザ生地';
+    case 'pizzaPlate':
+      return item.dish ? `ピザのお皿（${pizzaName(item.dish.pizza)}）` : 'ピザのお皿（空）';
+    case 'panPile':
+      return `使い終わった鉄板（${item.count}枚）`;
+    case 'pizzaTopping':
+      return item.id === 'mozzarella' ? 'モッツァレラチーズ（1個）' : `${PIZZA_TOPPING_NAME[item.id]}（1杯）`;
     case 'bakeDish':
       if (item.geta) return `${BAKE_DISHES[item.style].name}（${BAKE_STATE_NAME[item.state]}・下駄つき）`;
+      if (item.style === 'pizza') return `${pizzaName(pizzaOf(item))}（${BAKE_STATE_NAME[item.state]}）`;
       return `焼き皿（${BAKE_DISHES[item.style].name}・${BAKE_STATE_NAME[item.state]}）`;
     case 'pot': {
       const { pot } = item;

@@ -1,6 +1,6 @@
 import type { GameConfig } from './config';
 import { BAKE_DISHES, OVEN_BELT } from './layout';
-import type { BakeState, BakeStyle, Item, Oven, OvenDeck, OvenDish } from './types';
+import type { BakeState, BakeStyle, Item, Oven, OvenDeck, OvenDish, PizzaBuild } from './types';
 
 // ジェットオーブン（ベルトコンベア式）。上段・下段の2段があり、段ごとにベルトの速さが違う。
 //
@@ -98,8 +98,9 @@ export function bakeState(style: BakeStyle, cooked: number, cfg: OvenTimes): Bak
 export const BAKE_STATE_NAME: Record<BakeState, string> = { raw: '焼く前', half: '生焼け', baked: '焼き上がり', burnt: '焦げた' };
 
 // 手に持つ焼き皿（焼いた秒数と、その焼け具合）
-export function bakeItem(style: BakeStyle, cooked: number, cfg: OvenTimes): Extract<Item, { kind: 'bakeDish' }> {
-  return { kind: 'bakeDish', style, cooked, state: bakeState(style, cooked, cfg) };
+// pizza = ピザ系の皿にのっている物（省略 = 生地・ソース・チーズがのった、ふつうの焼き皿の見た目）
+export function bakeItem(style: BakeStyle, cooked: number, cfg: OvenTimes, pizza?: PizzaBuild): Extract<Item, { kind: 'bakeDish' }> {
+  return { kind: 'bakeDish', style, cooked, state: bakeState(style, cooked, cfg), ...(pizza ? { pizza } : {}) };
 }
 
 // 出口に出てきた皿を、いま取ったときの焼け具合（この1周ぶんを足す）
@@ -159,10 +160,10 @@ export function canPlaceDish(oven: Oven, deck: OvenDeck, style: BakeStyle, pos: 
 }
 
 // 入口のベルトに皿を置く。置けたら true
-export function placeDish(oven: Oven, deck: OvenDeck, style: BakeStyle, pos: DishPos, cooked = 0): boolean {
+export function placeDish(oven: Oven, deck: OvenDeck, style: BakeStyle, pos: DishPos, cooked = 0, pizza?: PizzaBuild): boolean {
   const p = resolvePlacement(oven, deck, style, pos);
   if (!p.valid) return false;
-  oven.decks[deck].push({ id: oven.nextId++, style, x: p.x, s: p.s, cooked });
+  oven.decks[deck].push({ id: oven.nextId++, style, x: p.x, s: p.s, cooked, ...(pizza ? { pizza } : {}) });
   return true;
 }
 
